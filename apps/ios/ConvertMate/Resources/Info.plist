@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key><string>ConvertMate</string>
+    <key>CFBundleIdentifier</key><string>com.convertmate</string>
+    <key>CFBundleShortVersionString</key><string>0.1.0</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>ConvertMate uses your photo library to convert images and videos.</string>
+    <key>UIApplicationSupportsIndirectInputEvents</key><true/>
+    <key>UILaunchScreen</key><dict/>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key><string>Media</string>
+            <key>LSHandlerRank</key><string>Alternate</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.image</string>
+                <string>public.movie</string>
+                <string>com.apple.heic</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>

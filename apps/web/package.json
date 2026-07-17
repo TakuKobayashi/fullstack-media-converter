@@ -1,0 +1,33 @@
+{
+  "name": "@convertmate/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "postinstall": "node scripts/copy-ffmpeg-core.mjs"
+  },
+  "dependencies": {
+    "@convertmate/shared": "workspace:*",
+    "@convertmate/image": "workspace:*",
+    "@convertmate/video": "workspace:*",
+    "@convertmate/exif": "workspace:*",
+    "@convertmate/core": "workspace:*",
+    "next": "^15.3.3",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "exifreader": "^4.31.0",
+    "jszip": "^3.10.1",
+    "heic2any": "^0.0.4",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/core": "^0.12.10",
+    "@ffmpeg/util": "^0.12.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.8.0"
+  }
+}

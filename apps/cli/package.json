@@ -1,0 +1,26 @@
+{
+  "name": "@convertmate/cli",
+  "version": "0.1.0",
+  "bin": { "cm": "./src/index.ts" },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@convertmate/shared": "workspace:*",
+    "commander": "^13.1.0",
+    "sharp": "^0.34.1",
+    "exifreader": "^4.31.0",
+    "fast-glob": "^3.3.3",
+    "cli-progress": "^3.12.0",
+    "jszip": "^3.10.1",
+    "p-limit": "^6.2.0",
+    "chalk": "^5.4.1"
+  },
+  "devDependencies": {
+    "@types/cli-progress": "^3.11.6",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.0"
+  }
+}

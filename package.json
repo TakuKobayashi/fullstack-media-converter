@@ -1,0 +1,10 @@
+{
+  "name": "convertmate",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @convertmate/web dev",
+    "build": "pnpm --filter @convertmate/web build",
+    "build:cli": "pnpm --filter @convertmate/cli build"
+  }
+}

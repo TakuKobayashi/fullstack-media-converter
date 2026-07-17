@@ -1,0 +1,13 @@
+# Cloudflare Pages custom headers
+# Required for ffmpeg.wasm (SharedArrayBuffer) to work in the browser.
+# Next.js `headers()` in next.config.ts is IGNORED under `output: 'export'`
+# (static export has no server to run header middleware), so Cloudflare
+# Pages must apply these itself via this file.
+/*
+  Cross-Origin-Embedder-Policy: require-corp
+  Cross-Origin-Opener-Policy: same-origin
+
+# ffmpeg-core.wasm must be served with the correct MIME type and CORP
+# header so it can be fetched under COEP.
+/ffmpeg/*
+  Cross-Origin-Resource-Policy: same-origin

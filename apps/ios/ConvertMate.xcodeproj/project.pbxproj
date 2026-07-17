@@ -1,0 +1,3 @@
+// Minimal stub — regenerate with: xcodegen generate
+// !$*UTF8*$!
+{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {}; rootObject = ""; }

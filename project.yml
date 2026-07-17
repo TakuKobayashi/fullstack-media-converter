@@ -1,0 +1,15 @@
+name: fullstack-image-converter
+slug: fullstack-image-converter
+description: ConvertMate is a browser-based platform for batch file conversion, supporting images, videos, and documents with no uploads.
+description_ja: ConvertMateは、アップロードなしで画像、動画、ドキュメントをバッチ変換できるブラウザベースのプラットフォームです。
+translation_locked: false
+status: incubating
+repo: ''
+tags:
+  - image
+  - video
+  - conversion
+  - browser
+  - cli
+  - nextjs
+  - cloudflare

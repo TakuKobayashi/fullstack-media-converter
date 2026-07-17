@@ -1,0 +1,25 @@
+name: ConvertMate
+options:
+  bundleIdPrefix: com.convertmate
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "15.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: 5.9
+    TARGETED_DEVICE_FAMILY: "1,2"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: 1
+targets:
+  ConvertMate:
+    type: application
+    platform: iOS
+    sources:
+      - ConvertMate
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.convertmate
+        INFOPLIST_FILE: ConvertMate/Resources/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
