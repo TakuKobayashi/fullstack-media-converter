@@ -1,5 +1,7 @@
 # ConvertMate
 
+**Repository:** `fullstack-media-converter`
+
 Batch file conversion platform. Images, videos, documents — all processed in the browser. No uploads.
 
 ## Architecture
@@ -22,10 +24,12 @@ convertmate/
 Video conversion runs FFmpeg compiled to WebAssembly, entirely in the browser.
 This requires two things to actually work:
 
-1. **Self-hosted core files** — `pnpm install` runs `apps/web/scripts/copy-ffmpeg-core.mjs`
-   automatically, which copies `ffmpeg-core.js`/`.wasm` from `@ffmpeg/core` into
+1. **Self-hosted core files** — `pnpm install` runs `apps/web/scripts/copy-ffmpeg-core.ts`
+   (via `tsx`) automatically, which copies `ffmpeg-core.js`/`.wasm` from `@ffmpeg/core` into
    `apps/web/public/ffmpeg/`. Loading these from a CDN (e.g. unpkg) breaks under
    the COEP header required below, so they must be served same-origin.
+   If it reports "not found", run `pnpm add @ffmpeg/core --filter @convertmate/web`
+   then `pnpm --filter @convertmate/web run postinstall` again.
 2. **COOP/COEP headers** — required for `SharedArrayBuffer`, which ffmpeg.wasm
    needs. Since the site is statically exported (`output: 'export'`), Next.js's
    `headers()` config has no effect on the deployed site — Cloudflare Pages reads

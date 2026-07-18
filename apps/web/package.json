@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "postinstall": "node scripts/copy-ffmpeg-core.mjs"
+    "postinstall": "tsx scripts/copy-ffmpeg-core.ts"
   },
   "dependencies": {
     "@convertmate/shared": "workspace:*",
@@ -28,6 +28,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "tsx": "^4.19.4"
   }
 }
