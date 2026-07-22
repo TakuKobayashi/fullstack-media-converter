@@ -31,18 +31,8 @@ export default function UniversalVideoConverter() {
   // instance — keep concurrency low by default to avoid tab freezes.
   const [concurrency, setConcurrency] = useState(1);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [engineWarning, setEngineWarning] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const queueRef = useRef<ConversionQueue | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && typeof SharedArrayBuffer === 'undefined') {
-      setEngineWarning(
-        'This page is not cross-origin isolated, so video conversion cannot run in this browser tab. ' +
-        'Try reloading the page. If the problem persists, this deployment may be missing the required COOP/COEP headers.'
-      );
-    }
-  }, []);
 
   const updateJob = useCallback((id: string, patch: Partial<ConversionJob>) => {
     setJobs(prev => prev.map(j => j.id === id ? { ...j, ...patch } : j));
@@ -163,12 +153,6 @@ export default function UniversalVideoConverter() {
       </section>
 
       <div className="container">
-        {engineWarning && (
-          <div className={s.errorDetail} style={{ padding: 14, background: 'var(--navy-2)', border: '1px solid var(--coral)', borderRadius: 12, marginBottom: 16, paddingLeft: 14 }}>
-            {engineWarning}
-          </div>
-        )}
-
         <div className={s.adSlot} aria-hidden="true">Advertisement</div>
 
         <div

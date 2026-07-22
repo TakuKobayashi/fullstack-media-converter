@@ -9,7 +9,7 @@ Batch file conversion platform. Images, videos, documents — all processed in t
 ```
 convertmate/
 ├── apps/
-│   ├── web/        Next.js 15 SSG → Cloudflare Pages
+│   ├── web/        Next.js 15 SSG → Cloudflare Workers Assets
 │   └── cli/        Node.js CLI (spiritual successor to image-processing-utility-cli)
 └── packages/
     ├── shared/     Types, interfaces, conversion route map
@@ -19,26 +19,23 @@ convertmate/
     └── exif/       EXIF reader (exifreader)
 ```
 
-## Video conversion setup (ffmpeg.wasm)
+## Video conversion (ffmpeg.wasm)
 
-Video conversion runs FFmpeg compiled to WebAssembly, entirely in the browser.
-This requires two things to actually work:
+Video conversion runs FFmpeg compiled to WebAssembly, entirely in the browser
+— no upload, no server. It loads the single-thread `@ffmpeg/core` build from
+a CDN (unpkg) at runtime. The single-thread build doesn't need
+`SharedArrayBuffer`, so it works with zero special hosting requirements —
+no COOP/COEP headers, no self-hosting the wasm binary. This matches how the
+site is deployed: a plain static export served as-is via Cloudflare Workers
+Assets, with no control over (or need for) custom response headers.
 
-1. **Self-hosted core files** — `pnpm install` runs `apps/web/scripts/copy-ffmpeg-core.ts`
-   (via `tsx`) automatically, which copies `ffmpeg-core.js`/`.wasm` from `@ffmpeg/core` into
-   `apps/web/public/ffmpeg/`. Loading these from a CDN (e.g. unpkg) breaks under
-   the COEP header required below, so they must be served same-origin.
-   If it reports "not found", run `pnpm add @ffmpeg/core --filter @convertmate/web`
-   then `pnpm --filter @convertmate/web run postinstall` again.
-2. **COOP/COEP headers** — required for `SharedArrayBuffer`, which ffmpeg.wasm
-   needs. Since the site is statically exported (`output: 'export'`), Next.js's
-   `headers()` config has no effect on the deployed site — Cloudflare Pages reads
-   `apps/web/public/_headers` directly instead. If deploying elsewhere (Vercel,
-   a custom Node server, etc.), configure equivalent headers on your host.
+The tradeoff is that the engine downloads (~25MB) on first use each session,
+so the first conversion takes a few seconds longer while it loads. That's
+expected and fine — see `packages/video/src/browser-engine.ts`.
 
-If video conversion fails, check the browser console for `[ffmpeg]` logs and
-confirm `typeof SharedArrayBuffer !== 'undefined'` in devtools — if it's
-`undefined`, the COOP/COEP headers aren't reaching the browser.
+If video conversion fails, check the browser console for `[ffmpeg]` logs
+and confirm the CDN request to `unpkg.com` isn't being blocked (ad blockers,
+corporate proxies, or offline use can prevent it from loading).
 
 ## Quick Start
 
@@ -52,9 +49,9 @@ cd apps/cli
 pnpm dev convert -i photo.webp -f jpg
 pnpm dev bulk-convert -i ./photos --if webp -f jpg -o ./out -z --concurrency 6
 
-# Deploy
+# Deploy (static site via Cloudflare Workers Assets)
 pnpm build
-wrangler pages deploy apps/web/out --project-name=convertmate
+cd apps/web && wrangler deploy
 ```
 
 ## CLI Commands

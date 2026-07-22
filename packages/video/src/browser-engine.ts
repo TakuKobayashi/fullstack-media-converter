@@ -4,12 +4,12 @@ import { ConversionEngine, ConversionJob, ConversionOptions, InputFormat, Output
  * Browser video conversion engine using @ffmpeg/ffmpeg (WASM).
  * Loaded lazily — only when a video conversion is triggered.
  *
- * IMPORTANT: ffmpeg-core.js/.wasm must be served SAME-ORIGIN (e.g. /ffmpeg/*).
- * The app sets Cross-Origin-Embedder-Policy: require-corp (required for the
- * SharedArrayBuffer that ffmpeg.wasm's multi-thread runtime needs). Under COEP,
- * cross-origin resources are blocked unless they send matching CORP/CORS
- * headers — CDNs like unpkg do not — so loading the core from a CDN fails
- * silently and every video conversion errors out. Self-hosting avoids this.
+ * Loads the single-thread ffmpeg-core build from a CDN (unpkg). The
+ * single-thread build does not need SharedArrayBuffer, so it works
+ * without COOP/COEP headers or same-origin hosting — it's slightly
+ * slower than the multi-thread build, which is an acceptable tradeoff
+ * for a static site with no server-side control over response headers
+ * (this app deploys as a plain static site via Cloudflare Workers Assets).
  */
 export class BrowserVideoEngine implements ConversionEngine {
   private ffmpeg: any = null;
@@ -29,20 +29,15 @@ export class BrowserVideoEngine implements ConversionEngine {
     if (this.loadPromise) return this.loadPromise;
 
     this.loadPromise = (async () => {
-      if (typeof SharedArrayBuffer === 'undefined') {
-        throw new Error(
-          'This browser tab is missing cross-origin isolation (SharedArrayBuffer unavailable). ' +
-          'Video conversion requires COOP/COEP headers — try reloading the page, or use a browser that supports it.'
-        );
-      }
-
       const { FFmpeg } = await import('@ffmpeg/ffmpeg');
       const { fetchFile, toBlobURL } = await import('@ffmpeg/util');
       this._fetchFile = fetchFile;
 
       const ffmpeg = new FFmpeg();
-      // Self-hosted, same-origin — see class doc comment for why.
-      const baseURL = `${window.location.origin}/ffmpeg`;
+      // Single-thread build from CDN — no SharedArrayBuffer, no COOP/COEP,
+      // no same-origin hosting required. First load takes a few seconds
+      // while the ~25MB wasm binary downloads; that's expected.
+      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
 
       let coreURL: string;
       let wasmURL: string;
@@ -51,8 +46,8 @@ export class BrowserVideoEngine implements ConversionEngine {
         wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
       } catch (e) {
         throw new Error(
-          `Failed to fetch ffmpeg engine files from ${baseURL}. ` +
-          `If self-hosting, ensure /public/ffmpeg/ffmpeg-core.js and .wasm exist (see postinstall script). Original error: ${e instanceof Error ? e.message : e}`
+          `Could not download the video engine from ${baseURL}. ` +
+          `Check your internet connection and try again. (${e instanceof Error ? e.message : e})`
         );
       }
 

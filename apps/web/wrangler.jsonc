@@ -1,9 +1,10 @@
 {
   "name": "fullstack-media-converter",
   "compatibility_date": "2025-06-01",
-  "pages_build_output_dir": "./out",
+  // Deployed as a plain static site via Workers Assets — no Worker code,
+  // just the Next.js static export served directly.
   "assets": {
     "directory": "./out",
-    "binding": "ASSETS"
+    "not_found_handling": "404-page"
   }
 }
