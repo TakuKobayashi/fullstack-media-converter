@@ -1,0 +1,4 @@
+# The browser downloads ffmpeg-core from jsDelivr at runtime. This local
+# directory may exist after earlier self-hosting experiments, but its WASM
+# file exceeds Cloudflare Static Assets' per-file upload limit.
+ffmpeg/

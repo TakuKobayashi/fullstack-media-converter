@@ -1,6 +1,6 @@
 {
   "name": "fullstack-media-converter",
-  "compatibility_date": "2025-06-01",
+  "compatibility_date": "2026-08-11",
   // Deployed as a plain static site via Workers Assets — no Worker code,
   // just the Next.js static export served directly.
   "assets": {
