@@ -16,6 +16,15 @@ export class BrowserVideoEngine implements ConversionEngine {
   private loadPromise: Promise<void> | null = null;
   private _fetchFile: any = null;
 
+  private errorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    if (error && typeof error === 'object' && 'message' in error) {
+      return String(error.message);
+    }
+    return String(error);
+  }
+
   canConvert(inputFormat: InputFormat, outputFormat: OutputFormat): boolean {
     const videoFormats = ['mp4', 'mov', 'gif'] as const;
     return (videoFormats as readonly string[]).includes(inputFormat) &&
@@ -37,9 +46,12 @@ export class BrowserVideoEngine implements ConversionEngine {
       // Single-thread build from CDN — no SharedArrayBuffer, no COOP/COEP,
       // no same-origin hosting required. First load takes a few seconds
       // while the ~25MB wasm binary downloads; that's expected.
+      // Next.js uses webpack, so use the UMD core. The ESM build is intended
+      // for Vite and can fail when dynamically imported inside ffmpeg's
+      // webpack-generated module worker.
       // Keep this on @ffmpeg/core (not @ffmpeg/core-mt): only the latter
       // requires cross-origin isolation and SharedArrayBuffer.
-      const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm';
+      const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd';
 
       let coreURL: string;
       let wasmURL: string;
@@ -49,11 +61,9 @@ export class BrowserVideoEngine implements ConversionEngine {
       } catch (e) {
         throw new Error(
           `Could not download the video engine from ${baseURL}. ` +
-          `Check your internet connection and try again. (${e instanceof Error ? e.message : e})`
+          `Check your internet connection and try again. (${this.errorMessage(e)})`
         );
       }
-
-      await ffmpeg.load({ coreURL, wasmURL });
 
       if (onProgress) {
         ffmpeg.on('progress', ({ progress }: { progress: number }) => {
@@ -66,6 +76,12 @@ export class BrowserVideoEngine implements ConversionEngine {
         // eslint-disable-next-line no-console
         console.debug('[ffmpeg]', message);
       });
+
+      try {
+        await ffmpeg.load({ coreURL, wasmURL });
+      } catch (error) {
+        throw new Error(`Could not initialize the video engine: ${this.errorMessage(error)}`);
+      }
 
       this.ffmpeg = ffmpeg;
     })();
@@ -84,7 +100,7 @@ export class BrowserVideoEngine implements ConversionEngine {
       return {
         ...job,
         status: 'error',
-        error: e instanceof Error ? e.message : 'Failed to load video engine',
+        error: this.errorMessage(e),
       };
     }
 
