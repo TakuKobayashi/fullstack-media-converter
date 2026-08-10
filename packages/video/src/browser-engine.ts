@@ -4,7 +4,7 @@ import { ConversionEngine, ConversionJob, ConversionOptions, InputFormat, Output
  * Browser video conversion engine using @ffmpeg/ffmpeg (WASM).
  * Loaded lazily — only when a video conversion is triggered.
  *
- * Loads the single-thread ffmpeg-core build from a CDN (unpkg). The
+ * Loads the single-thread ffmpeg-core build from a CDN. The
  * single-thread build does not need SharedArrayBuffer, so it works
  * without COOP/COEP headers or same-origin hosting — it's slightly
  * slower than the multi-thread build, which is an acceptable tradeoff
@@ -37,7 +37,9 @@ export class BrowserVideoEngine implements ConversionEngine {
       // Single-thread build from CDN — no SharedArrayBuffer, no COOP/COEP,
       // no same-origin hosting required. First load takes a few seconds
       // while the ~25MB wasm binary downloads; that's expected.
-      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+      // Keep this on @ffmpeg/core (not @ffmpeg/core-mt): only the latter
+      // requires cross-origin isolation and SharedArrayBuffer.
+      const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm';
 
       let coreURL: string;
       let wasmURL: string;
@@ -112,7 +114,11 @@ export class BrowserVideoEngine implements ConversionEngine {
       const mime = job.outputFormat === 'gif' ? 'image/gif'
                    : job.outputFormat === 'mov' ? 'video/quicktime'
                    : 'video/mp4';
-      const blob = new Blob([result.buffer], { type: mime });
+      // `readFile` may expose an ArrayBufferLike (including SharedArrayBuffer
+      // in its type). Copy into an ordinary ArrayBuffer-backed view so Blob
+      // construction is portable and type-safe in browsers.
+      const outputBytes = Uint8Array.from(result);
+      const blob = new Blob([outputBytes], { type: mime });
       const resultUrl = URL.createObjectURL(blob);
 
       return { ...job, resultUrl, status: 'done', progress: 100 };

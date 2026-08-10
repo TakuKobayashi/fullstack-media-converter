@@ -23,7 +23,7 @@ convertmate/
 
 Video conversion runs FFmpeg compiled to WebAssembly, entirely in the browser
 — no upload, no server. It loads the single-thread `@ffmpeg/core` build from
-a CDN (unpkg) at runtime. The single-thread build doesn't need
+a CDN (jsDelivr) at runtime. The single-thread build doesn't need
 `SharedArrayBuffer`, so it works with zero special hosting requirements —
 no COOP/COEP headers, no self-hosting the wasm binary. This matches how the
 site is deployed: a plain static export served as-is via Cloudflare Workers
@@ -34,7 +34,7 @@ so the first conversion takes a few seconds longer while it loads. That's
 expected and fine — see `packages/video/src/browser-engine.ts`.
 
 If video conversion fails, check the browser console for `[ffmpeg]` logs
-and confirm the CDN request to `unpkg.com` isn't being blocked (ad blockers,
+and confirm the CDN request to `cdn.jsdelivr.net` isn't being blocked (ad blockers,
 corporate proxies, or offline use can prevent it from loading).
 
 ## Quick Start

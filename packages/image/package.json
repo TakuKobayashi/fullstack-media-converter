@@ -5,6 +5,8 @@
   "types": "./src/index.ts",
   "dependencies": {
     "@convertmate/shared": "workspace:*",
-    "@convertmate/core": "workspace:*"
+    "@convertmate/core": "workspace:*",
+    "exifreader": "^4.31.0",
+    "heic2any": "^0.0.4"
   }
 }
