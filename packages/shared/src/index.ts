@@ -56,6 +56,8 @@ export interface VideoConvertOptions {
 export interface ConversionOptions {
   image?: ImageConvertOptions;
   video?: VideoConvertOptions;
+  /** Runtime progress hook used by queues and interactive clients. */
+  onProgress?: (progress: number) => void;
 }
 
 // ─── Engine Interface (platform-agnostic) ────────────────────────────

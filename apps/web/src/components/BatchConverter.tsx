@@ -101,6 +101,7 @@ export default function BatchConverter({
     const unsub = queue.on(({ type, job }) => {
       if (!job) return;
       if (type === 'job:start') updateJob(job.id, { status: 'processing', progress: 0 });
+      if (type === 'job:progress') updateJob(job.id, { progress: job.progress });
       if (type === 'job:done')  updateJob(job.id, { status: 'done', progress: 100, resultUrl: job.resultUrl });
       if (type === 'job:error') updateJob(job.id, { status: 'error', error: job.error });
     });

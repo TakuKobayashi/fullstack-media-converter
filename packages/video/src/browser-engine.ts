@@ -32,7 +32,7 @@ export class BrowserVideoEngine implements ConversionEngine {
            canConvert(inputFormat, outputFormat);
   }
 
-  private async load(onProgress?: (p: number) => void): Promise<void> {
+  private async load(): Promise<void> {
     if (this.ffmpeg) return;
     // Avoid double-loading if multiple jobs start concurrently
     if (this.loadPromise) return this.loadPromise;
@@ -65,13 +65,6 @@ export class BrowserVideoEngine implements ConversionEngine {
         );
       }
 
-      if (onProgress) {
-        ffmpeg.on('progress', ({ progress }: { progress: number }) => {
-          // ffmpeg reports 0-1, occasionally >1 or NaN on some codecs — clamp defensively
-          const pct = Number.isFinite(progress) ? Math.min(100, Math.max(0, progress * 100)) : 0;
-          onProgress(pct);
-        });
-      }
       ffmpeg.on('log', ({ message }: { message: string }) => {
         // eslint-disable-next-line no-console
         console.debug('[ffmpeg]', message);
@@ -95,7 +88,7 @@ export class BrowserVideoEngine implements ConversionEngine {
 
   async convert(job: ConversionJob, options: ConversionOptions = {}): Promise<ConversionJob> {
     try {
-      await this.load((p) => { job.progress = p; });
+      await this.load();
     } catch (e) {
       return {
         ...job,
@@ -106,6 +99,15 @@ export class BrowserVideoEngine implements ConversionEngine {
 
     const inputName = `input_${job.id}.${job.inputFormat}`;
     const outputName = `output_${job.id}.${job.outputFormat}`;
+    let progressStart = 0;
+    let progressSpan = 99;
+    const handleProgress = ({ progress }: { progress: number }) => {
+      if (!Number.isFinite(progress)) return;
+      const fraction = Math.min(1, Math.max(0, progress));
+      options.onProgress?.(progressStart + fraction * progressSpan);
+    };
+
+    this.ffmpeg.on('progress', handleProgress);
 
     try {
       const source = job.file.source;
@@ -115,8 +117,26 @@ export class BrowserVideoEngine implements ConversionEngine {
 
       await this.ffmpeg.writeFile(inputName, data);
 
-      const args = this.buildArgs(job.outputFormat, inputName, outputName);
-      const exitCode = await this.ffmpeg.exec(args);
+      let exitCode: number;
+      if (job.inputFormat === 'mov' && job.outputFormat === 'mp4') {
+        // Most MOV files already contain streams that MP4 can carry. Copying
+        // them into a new container is dramatically faster than re-encoding.
+        // Reserve a small progress segment for this quick compatibility try.
+        progressSpan = 10;
+        exitCode = await this.ffmpeg.exec(this.buildRemuxArgs(inputName, outputName));
+
+        if (exitCode !== 0) {
+          // A partial output may remain after a failed mux. Remove it before
+          // falling back to the broadly compatible H.264/AAC encode.
+          try { await this.ffmpeg.deleteFile(outputName); } catch { /* noop */ }
+          progressStart = 10;
+          progressSpan = 89;
+          options.onProgress?.(progressStart);
+          exitCode = await this.ffmpeg.exec(this.buildArgs(job.outputFormat, inputName, outputName));
+        }
+      } else {
+        exitCode = await this.ffmpeg.exec(this.buildArgs(job.outputFormat, inputName, outputName));
+      }
 
       if (exitCode !== 0) {
         throw new Error(`ffmpeg exited with code ${exitCode}. Check console for [ffmpeg] logs.`);
@@ -145,10 +165,24 @@ export class BrowserVideoEngine implements ConversionEngine {
         error: err instanceof Error ? err.message : String(err),
       };
     } finally {
+      this.ffmpeg.off('progress', handleProgress);
       // Best-effort cleanup — ignore errors (file may not have been created)
       try { await this.ffmpeg.deleteFile(inputName); } catch { /* noop */ }
       try { await this.ffmpeg.deleteFile(outputName); } catch { /* noop */ }
     }
+  }
+
+  private buildRemuxArgs(inputName: string, outputName: string): string[] {
+    return [
+      '-i', inputName,
+      // Copy the playable streams and omit MOV-only data/timecode tracks
+      // which commonly make an otherwise valid MP4 mux fail.
+      '-map', '0:v?',
+      '-map', '0:a?',
+      '-c', 'copy',
+      '-movflags', '+faststart',
+      outputName,
+    ];
   }
 
   private buildArgs(output: string, inputName: string, outputName: string): string[] {
