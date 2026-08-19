@@ -6,3 +6,4 @@ allowBuilds:
   esbuild: false
   exifreader: false
   sharp: false
+  workerd: true

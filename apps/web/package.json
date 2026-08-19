@@ -5,23 +5,25 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "@convertmate/shared": "workspace:*",
-    "@convertmate/image": "workspace:*",
-    "@convertmate/video": "workspace:*",
-    "@convertmate/exif": "workspace:*",
     "@convertmate/core": "workspace:*",
+    "@convertmate/exif": "workspace:*",
+    "@convertmate/image": "workspace:*",
+    "@convertmate/shared": "workspace:*",
+    "@convertmate/video": "workspace:*",
+    "jszip": "^3.10.1",
     "next": "^15.3.3",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "jszip": "^3.10.1"
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "wrangler": "4.124.0"
   }
 }

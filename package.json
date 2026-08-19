@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "pnpm --filter @convertmate/web dev",
     "build": "pnpm --filter @convertmate/web build",
-    "build:cli": "pnpm --filter @convertmate/cli build"
+    "build:cli": "pnpm --filter @convertmate/cli build",
+    "test:action": "node --test action/test/*.test.js"
   }
 }
