@@ -20,6 +20,8 @@ import { ConversionQueue } from '@convertmate/core';
 import { BrowserImageEngine } from '@convertmate/image';
 import s from '@/styles/converter.module.css';
 import { useTranslation } from '@/i18n';
+import { useAtom } from 'jotai';
+import { imageQualityAtom } from '@/state/preferences';
 
 const engine = new BrowserImageEngine();
 
@@ -36,7 +38,7 @@ export default function UniversalImageConverter() {
   const [targetFormat, setTargetFormat] = useState<OutputFormat>('jpg');
   const [running, setRunning] = useState(false);
   const [concurrency, setConcurrency] = useState(3);
-  const [quality, setQuality] = useState(92);
+  const [quality, setQuality] = useAtom(imageQualityAtom);
   const [isDragOver, setIsDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const queueRef = useRef<ConversionQueue | null>(null);

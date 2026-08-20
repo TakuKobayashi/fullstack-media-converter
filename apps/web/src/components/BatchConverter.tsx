@@ -14,6 +14,8 @@ import { ConversionQueue } from '@convertmate/core';
 import type { ConversionEngine, ConversionOptions } from '@convertmate/shared';
 import s from '@/styles/converter.module.css';
 import { useTranslation } from '@/i18n';
+import { useAtom } from 'jotai';
+import { imageQualityAtom } from '@/state/preferences';
 
 export interface BatchConverterProps {
   engine: ConversionEngine;
@@ -52,7 +54,7 @@ export default function BatchConverter({
   const [jobs, setJobs] = useState<ConversionJob[]>([]);
   const [running, setRunning] = useState(false);
   const [concurrency, setConcurrency] = useState(3);
-  const [quality, setQuality] = useState(92);
+  const [quality, setQuality] = useAtom(imageQualityAtom);
   const [isDragOver, setIsDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const queueRef = useRef<ConversionQueue | null>(null);

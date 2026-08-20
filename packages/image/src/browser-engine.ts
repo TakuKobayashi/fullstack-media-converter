@@ -26,7 +26,7 @@ export class BrowserImageEngine implements ConversionEngine {
 
   async convert(job: ConversionJob, options: ConversionOptions = {}): Promise<ConversionJob> {
     try {
-      const { quality = 92, keepExif: _keepExif = true } = options.image ?? {};
+      const { quality = 100, keepExif: _keepExif = true } = options.image ?? {};
       const source = job.file.source;
       const inputFormat = job.inputFormat;
       const outputMime = getMimeType(job.outputFormat);

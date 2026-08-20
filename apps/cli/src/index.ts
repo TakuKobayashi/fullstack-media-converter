@@ -30,7 +30,7 @@ program
   .requiredOption('-i, --input <path>', 'Input file path')
   .requiredOption('-f, --format <format>', 'Output format (jpg|png|webp|avif|mp4|gif…)')
   .option('-o, --output <path>', 'Output file path (defaults alongside input)')
-  .option('-q, --quality <number>', 'Quality 1-100 (default: 92)', '92')
+  .option('-q, --quality <number>', 'Quality 1-100 (default: 100)', '100')
   .option('--no-exif', 'Strip EXIF metadata')
   .action(async (opts) => {
     const inputPath = path.resolve(opts.input);
@@ -66,7 +66,7 @@ program
   .requiredOption('-f, --format <fmt>', 'Output format (e.g. jpg)')
   .option('-o, --output <dir>', 'Output directory (default: input dir)')
   .option('-c, --concurrency <n>', 'Max parallel jobs (default: 4)', '4')
-  .option('-q, --quality <n>', 'Quality 1-100 (default: 92)', '92')
+  .option('-q, --quality <n>', 'Quality 1-100 (default: 100)', '100')
   .option('-z, --zip [name]', 'Package output files into a ZIP archive')
   .option('-r, --recursive', 'Search subdirectories recursively', true)
   .option('--no-exif', 'Strip EXIF metadata')

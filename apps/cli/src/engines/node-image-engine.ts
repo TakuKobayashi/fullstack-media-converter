@@ -10,7 +10,7 @@ export class NodeImageEngine implements ConversionEngine {
   }
 
   async convert(job: ConversionJob, options: ConversionOptions = {}): Promise<ConversionJob> {
-    const { quality = 92, keepExif = true } = options.image ?? {};
+    const { quality = 100, keepExif = true } = options.image ?? {};
     const inputPath = job.file.source as string;
     const outputPath = job.resultUrl ?? this.deriveOutputPath(inputPath, job.outputFormat);
 
