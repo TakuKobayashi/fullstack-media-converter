@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     images: [`${SITE_URL}/og/home.png`],
   },
   manifest: '/manifest.json',
-  icons: { icon: '/icon.svg', apple: '/apple-touch-icon.png' },
+  icons: { icon: [{ url: '/icon.svg', type: 'image/svg+xml' }] },
 };
 
 export const viewport: Viewport = {
