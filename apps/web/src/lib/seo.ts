@@ -9,18 +9,21 @@ export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://fullstack-
 const tools = {
   image: {
     path: '/image-converter',
-    en: { title: 'Free Image Converter — JPG, PNG, WebP, HEIC & AVIF', description: 'Convert JPG, PNG, WebP, HEIC, AVIF and GIF images in bulk for free. Files stay on your device and are never uploaded.', keywords: ['free image converter', 'bulk image converter', 'JPG PNG WebP converter', 'HEIC converter', 'AVIF converter'] },
-    ja: { title: '無料画像変換ツール｜JPG・PNG・WebP・HEIC・AVIF対応', description: 'JPG、PNG、WebP、HEIC、AVIF、GIF画像を無料で一括変換。ファイルをアップロードせず、ブラウザ内で安全に処理します。', keywords: ['画像変換', '画像変換 無料', '画像 一括変換', 'WebP JPG 変換', 'HEIC 変換'] },
+    image: '/og/image-converter.png',
+    en: { title: 'Free Image Converter — JPG, PNG, WebP, HEIC & AVIF', description: 'Convert JPG, PNG, WebP, HEIC, AVIF and GIF images in bulk for free. Files stay on your device and are never uploaded.', imageAlt: 'Abstract image files transforming between formats', keywords: ['free image converter', 'bulk image converter', 'JPG PNG WebP converter', 'HEIC converter', 'AVIF converter'] },
+    ja: { title: '無料画像変換ツール｜JPG・PNG・WebP・HEIC・AVIF対応', description: 'JPG、PNG、WebP、HEIC、AVIF、GIF画像を無料で一括変換。ファイルをアップロードせず、ブラウザ内で安全に処理します。', imageAlt: '複数の画像ファイルを別形式へ変換するイメージ', keywords: ['画像変換', '画像変換 無料', '画像 一括変換', 'WebP JPG 変換', 'HEIC 変換'] },
   },
   video: {
     path: '/video-converter',
-    en: { title: 'Free Video Converter — Convert MOV, MP4 & GIF Online', description: 'Convert MOV and MP4 videos or create GIFs for free with FFmpeg WebAssembly. Private browser-based processing with no uploads.', keywords: ['free video converter', 'MOV to MP4', 'MP4 to GIF', 'bulk video converter', 'private video converter'] },
-    ja: { title: '無料動画変換ツール｜MOV・MP4・GIF対応・アップロード不要', description: 'MOVとMP4の相互変換やGIF作成を無料で実行。動画をアップロードせず、ブラウザ内のFFmpegで安全に変換します。', keywords: ['動画変換', '動画変換 無料', 'MOV MP4 変換', 'MP4 GIF 変換', '動画 一括変換'] },
+    image: '/og/video-converter.png',
+    en: { title: 'Free Video Converter — Convert MOV, MP4 & GIF Online', description: 'Convert MOV and MP4 videos or create GIFs for free with FFmpeg WebAssembly. Private browser-based processing with no uploads.', imageAlt: 'Abstract video frames transforming into a playback file', keywords: ['free video converter', 'MOV to MP4', 'MP4 to GIF', 'bulk video converter', 'private video converter'] },
+    ja: { title: '無料動画変換ツール｜MOV・MP4・GIF対応・アップロード不要', description: 'MOVとMP4の相互変換やGIF作成を無料で実行。動画をアップロードせず、ブラウザ内のFFmpegで安全に変換します。', imageAlt: '複数の動画フレームを別形式へ変換するイメージ', keywords: ['動画変換', '動画変換 無料', 'MOV MP4 変換', 'MP4 GIF 変換', '動画 一括変換'] },
   },
   exif: {
     path: '/export-exif',
-    en: { title: 'Free EXIF Viewer & Bulk Metadata Export', description: 'View EXIF metadata from JPG, PNG, WebP, HEIC and AVIF photos and export multiple records as JSON. No upload required.', keywords: ['EXIF viewer', 'EXIF extractor', 'photo metadata viewer', 'bulk EXIF export', 'EXIF JSON'] },
-    ja: { title: 'EXIF情報確認・一括抽出ツール｜JSON書き出し無料', description: 'JPG、PNG、WebP、HEIC、AVIF画像のEXIF情報を確認し、複数ファイルのメタデータをJSONへ無料で一括書き出しできます。', keywords: ['EXIF 確認', 'EXIF 抽出', '画像 メタデータ', 'EXIF JSON', 'EXIF 一括'] },
+    image: '/og/exif-export.png',
+    en: { title: 'Free EXIF Viewer & Bulk Metadata Export', description: 'View EXIF metadata from JPG, PNG, WebP, HEIC and AVIF photos and export multiple records as JSON. No upload required.', imageAlt: 'Photo metadata being extracted into organized data fields', keywords: ['EXIF viewer', 'EXIF extractor', 'photo metadata viewer', 'bulk EXIF export', 'EXIF JSON'] },
+    ja: { title: 'EXIF情報確認・一括抽出ツール｜JSON書き出し無料', description: 'JPG、PNG、WebP、HEIC、AVIF画像のEXIF情報を確認し、複数ファイルのメタデータをJSONへ無料で一括書き出しできます。', imageAlt: '写真からEXIFメタデータを抽出するイメージ', keywords: ['EXIF 確認', 'EXIF 抽出', '画像 メタデータ', 'EXIF JSON', 'EXIF 一括'] },
   },
 } as const;
 
@@ -35,6 +38,7 @@ function url(path: string) {
 export function createToolMetadata(tool: ToolName, locale: SeoLocale): Metadata {
   const content = tools[tool][locale];
   const canonical = routeFor(tool, locale);
+  const imageUrl = url(tools[tool].image);
   return {
     title: content.title,
     description: content.description,
@@ -43,8 +47,8 @@ export function createToolMetadata(tool: ToolName, locale: SeoLocale): Metadata 
       canonical: url(canonical),
       languages: { 'en-US': url(routeFor(tool, 'en')), 'ja-JP': url(routeFor(tool, 'ja')), 'x-default': url(routeFor(tool, 'en')) },
     },
-    openGraph: { type: 'website', locale: locale === 'ja' ? 'ja_JP' : 'en_US', url: url(canonical), title: content.title, description: content.description, siteName: 'Fullstack Media Converter' },
-    twitter: { card: 'summary', title: content.title, description: content.description },
+    openGraph: { type: 'website', locale: locale === 'ja' ? 'ja_JP' : 'en_US', url: url(canonical), title: content.title, description: content.description, siteName: 'Fullstack Media Converter', images: [{ url: imageUrl, width: 1536, height: 864, alt: content.imageAlt, type: 'image/png' }] },
+    twitter: { card: 'summary_large_image', title: content.title, description: content.description, images: [imageUrl] },
   };
 }
 

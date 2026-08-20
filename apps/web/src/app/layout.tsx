@@ -14,6 +14,13 @@ export const metadata: Metadata = {
     siteName: 'Fullstack Media Converter',
     title: 'Fullstack Media Converter — Private Image & Video Converter',
     description: 'Convert image and video batches locally. Works offline. No uploads.',
+    images: [{ url: `${SITE_URL}/og/home.png`, width: 1536, height: 864, alt: 'Image, video and metadata conversion in one private browser tool', type: 'image/png' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Fullstack Media Converter — Private Image & Video Converter',
+    description: 'Convert image and video batches locally. Works offline. No uploads.',
+    images: [`${SITE_URL}/og/home.png`],
   },
   manifest: '/manifest.json',
   icons: { icon: '/icon.svg', apple: '/apple-touch-icon.png' },

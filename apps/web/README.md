@@ -17,6 +17,8 @@ https://fullstack-media-converter.taptappun.workers.dev/
 
 canonical、`hreflang`、Open Graph、FAQ構造化データ、`robots.txt`、`sitemap.xml`を生成します。公開URLを変更する場合は、ビルド時に`NEXT_PUBLIC_SITE_URL`を指定してください。
 
+機能別のOpen Graph／Twitter Card画像は`public/og/`にあります。画像変換、動画変換、EXIF抽出、トップページで異なる画像を使用しています。
+
 ## ローカル実行
 
 ```bash
