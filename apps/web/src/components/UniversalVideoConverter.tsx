@@ -6,8 +6,9 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import JSZip from 'jszip';
 import {
-  ConversionJob, ConversionFile, OutputFormat, InputFormat,
-  generateId, guessFormat, canConvert,
+  ConversionJob, ConversionFile, OutputFormat, InputFormat, VideoOutputFormat,
+  generateId, guessFormat, canConvert, VIDEO_INPUT_EXTENSIONS,
+  VIDEO_INPUT_FORMAT_LABELS, VIDEO_OUTPUT_FORMATS,
 } from '@convertmate/shared';
 import { ConversionQueue } from '@convertmate/core';
 import { BrowserVideoEngine } from '@convertmate/video';
@@ -15,9 +16,6 @@ import s from '@/styles/converter.module.css';
 import { useTranslation } from '@/i18n';
 
 const engine = new BrowserVideoEngine();
-const VIDEO_INPUT_EXTENSIONS = ['.mp4', '.MP4', '.mov', '.MOV'];
-const VIDEO_OUTPUT_FORMATS: OutputFormat[] = ['mp4', 'mov', 'gif'];
-
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -25,9 +23,11 @@ function formatBytes(bytes: number): string {
 }
 
 export default function UniversalVideoConverter() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
+  const inputFormatList = VIDEO_INPUT_FORMAT_LABELS.join(locale === 'ja' ? '・' : ' · ');
+  const outputFormatList = VIDEO_OUTPUT_FORMATS.map(format => format.toUpperCase()).join(locale === 'ja' ? '・' : ' · ');
   const [jobs, setJobs] = useState<ConversionJob[]>([]);
-  const [targetFormat, setTargetFormat] = useState<OutputFormat>('mp4');
+  const [targetFormat, setTargetFormat] = useState<VideoOutputFormat>('mp4');
   const [running, setRunning] = useState(false);
   // Video transcoding is CPU-heavy and ffmpeg.wasm is single-threaded per
   // instance — keep concurrency low by default to avoid tab freezes.
@@ -61,7 +61,7 @@ export default function UniversalVideoConverter() {
     });
   }, [targetFormat]);
 
-  const handleTargetFormatChange = useCallback((fmt: OutputFormat) => {
+  const handleTargetFormatChange = useCallback((fmt: VideoOutputFormat) => {
     setTargetFormat(fmt);
     setJobs(prev => prev.map(j => j.status === 'pending' ? { ...j, outputFormat: fmt } : j));
   }, []);
@@ -149,7 +149,7 @@ export default function UniversalVideoConverter() {
         <div className="container">
           <span className={s.badge}>{t('video.badge')}</span>
           <h1 className={s.title}><em>{t('video.title')}</em> {t('video.suffix')}</h1>
-          <p className={s.subtitle}>{t('video.subtitle')}</p>
+          <p className={s.subtitle}>{t('video.subtitle', { inputs: inputFormatList, outputs: outputFormatList })}</p>
         </div>
       </section>
 
@@ -169,7 +169,7 @@ export default function UniversalVideoConverter() {
         >
           <span className={s.dropIcon}>🎬</span>
           <p className={s.dropTitle}>{t('video.drop')}</p>
-          <p className={s.dropSub}>{t('video.dropSub')}</p>
+          <p className={s.dropSub}>{t('video.dropSub', { formats: inputFormatList })}</p>
           <span className={s.browseBtn}>{t('common.browse')}</span>
           <input
             ref={inputRef}
@@ -187,7 +187,7 @@ export default function UniversalVideoConverter() {
           <select
             className={s.formatSelect}
             value={targetFormat}
-            onChange={e => handleTargetFormatChange(e.target.value as OutputFormat)}
+            onChange={e => handleTargetFormatChange(e.target.value as VideoOutputFormat)}
             disabled={running}
           >
             {VIDEO_OUTPUT_FORMATS.map(fmt => (
@@ -319,7 +319,7 @@ export default function UniversalVideoConverter() {
           <h2>{t('video.proseTitle')}</h2>
           <p>{t('video.prose')}</p>
           <ul>
-            {(t('video.bullets', { returnObjects: true }) as unknown as string[]).map(item => <li key={item}>{item}</li>)}
+            {(t('video.bullets', { returnObjects: true, inputs: inputFormatList, outputs: outputFormatList }) as unknown as string[]).map(item => <li key={item}>{item}</li>)}
           </ul>
         </div>
       </div>

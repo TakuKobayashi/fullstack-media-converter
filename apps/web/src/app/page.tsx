@@ -6,14 +6,14 @@ import Footer from '@/components/Footer';
 import s from '@/styles/home.module.css';
 import { useTranslation } from '@/i18n';
 import { useLocalizedPath } from '@/hooks/useLocalizedPath';
-import { IMAGE_INPUT_FORMAT_LABELS } from '@convertmate/shared';
+import { IMAGE_INPUT_FORMAT_LABELS, VIDEO_INPUT_FORMAT_LABELS } from '@convertmate/shared';
 
 export default function HomePage() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const localizedPath = useLocalizedPath();
   const converters = [
     { href: '/image-converter', number: '01', icon: '◫', formats: IMAGE_INPUT_FORMAT_LABELS, accent: 'violet' },
-    { href: '/video-converter', number: '02', icon: '▶', formats: ['MOV', 'MP4', 'GIF'], accent: 'coral' },
+    { href: '/video-converter', number: '02', icon: '▶', formats: VIDEO_INPUT_FORMAT_LABELS, accent: 'coral' },
   ] as const;
   return (
     <div className={s.page}>
@@ -52,7 +52,7 @@ export default function HomePage() {
               {converters.map((converter, index) => (
                 <Link key={converter.href} href={localizedPath(converter.href)} className={`${s.converterCard} ${s[converter.accent]}`}>
                   <div className={s.cardTop}><span className={s.cardNumber}>{converter.number}</span><span className={s.cardIcon}>{converter.icon}</span></div>
-                  <h3>{t(`home.converters.${index}.title`)}</h3><p>{t(`home.converters.${index}.description`, { formats: converter.formats.join(', ') })}</p>
+                  <h3>{t(`home.converters.${index}.title`)}</h3><p>{t(`home.converters.${index}.description`, { formats: converter.formats.join(locale === 'ja' ? '・' : ', ') })}</p>
                   <div className={s.formatList}>{converter.formats.map(format => <span key={format}>{format}</span>)}</div>
                   <div className={s.cardAction}>{t('home.open')} <span>↗</span></div>
                 </Link>

@@ -1,9 +1,13 @@
 import type { Metadata } from 'next';
 import { createElement } from 'react';
-import { IMAGE_INPUT_FORMAT_LABELS } from '@convertmate/shared';
+import { IMAGE_INPUT_FORMAT_LABELS, VIDEO_INPUT_FORMAT_LABELS, VIDEO_OUTPUT_FORMATS } from '@convertmate/shared';
 
 const imageFormatsEn = IMAGE_INPUT_FORMAT_LABELS.join(', ');
 const imageFormatsJa = IMAGE_INPUT_FORMAT_LABELS.join('、');
+const videoInputsEn = VIDEO_INPUT_FORMAT_LABELS.join(', ');
+const videoInputsJa = VIDEO_INPUT_FORMAT_LABELS.join('、');
+const videoOutputsEn = VIDEO_OUTPUT_FORMATS.map(format => format.toUpperCase()).join(', ');
+const videoOutputsJa = VIDEO_OUTPUT_FORMATS.map(format => format.toUpperCase()).join('・');
 
 export type ToolName = 'image' | 'video' | 'exif';
 export type SeoLocale = 'en' | 'ja';
@@ -20,8 +24,8 @@ const tools = {
   video: {
     path: '/video-converter',
     image: '/og/video-converter.png',
-    en: { title: 'Free Video Converter — Convert MOV, MP4 & GIF Online', description: 'Convert MOV and MP4 videos or create GIFs for free with FFmpeg WebAssembly. Private browser-based processing with no uploads.', imageAlt: 'Abstract video frames transforming into a playback file', keywords: ['free video converter', 'MOV to MP4', 'MP4 to GIF', 'bulk video converter', 'private video converter'] },
-    ja: { title: '無料動画変換ツール｜MOV・MP4・GIF対応・アップロード不要', description: 'MOVとMP4の相互変換やGIF作成を無料で実行。動画をアップロードせず、ブラウザ内のFFmpegで安全に変換します。', imageAlt: '複数の動画フレームを別形式へ変換するイメージ', keywords: ['動画変換', '動画変換 無料', 'MOV MP4 変換', 'MP4 GIF 変換', '動画 一括変換'] },
+    en: { title: 'Free Video Converter — MP4, WebM, MKV, AVI & More', description: `Convert ${videoInputsEn} videos to ${videoOutputsEn} with FFmpeg WebAssembly. Private browser processing with no uploads.`, imageAlt: 'Abstract video frames transforming into a playback file', keywords: ['free video converter', 'MOV to MP4', 'WebM MKV converter', 'MP4 to GIF', 'bulk video converter'] },
+    ja: { title: `無料動画変換ツール｜MP4・WebM・MKVなど${VIDEO_INPUT_FORMAT_LABELS.length}形式に対応`, description: `${videoInputsJa}を${videoOutputsJa}へ無料で変換。動画をアップロードせず、ブラウザ内のFFmpegで処理します。`, imageAlt: '複数の動画フレームを別形式へ変換するイメージ', keywords: ['動画変換', '動画変換 無料', 'MOV MP4 変換', 'WebM MKV 変換', '動画 一括変換'] },
   },
   exif: {
     path: '/export-exif',
@@ -62,8 +66,8 @@ const faq = {
     ja: [['画像はサーバーへアップロードされますか？', 'いいえ。画像変換はすべてブラウザ内で実行されます。'], ['どの画像形式に対応していますか？', `${imageFormatsJa}の入力に対応しています。`], ['複数の画像を一括変換できますか？', 'はい。異なる画像形式をまとめて追加し、指定した形式へ一括変換できます。']],
   },
   video: {
-    en: [['Are videos uploaded?', 'No. FFmpeg WebAssembly processes videos locally in your browser.'], ['Which conversions are supported?', 'MOV and MP4 conversion and MP4 or MOV to GIF are supported.'], ['Why is the first conversion slower?', 'The browser downloads and initializes FFmpeg before the first conversion.']],
-    ja: [['動画はアップロードされますか？', 'いいえ。WebAssembly版FFmpegがブラウザ内で動画を処理します。'], ['どの動画変換に対応していますか？', 'MOVとMP4の変換、MP4またはMOVからGIFへの変換に対応しています。'], ['初回の変換に時間がかかるのはなぜですか？', '最初の変換前にブラウザがFFmpegを読み込み、初期化するためです。']],
+    en: [['Are videos uploaded?', 'No. FFmpeg WebAssembly processes videos locally in your browser.'], ['Which conversions are supported?', `${videoInputsEn} input is supported, with ${videoOutputsEn} output.`], ['Why is the first conversion slower?', 'The browser downloads and initializes FFmpeg before the first conversion.']],
+    ja: [['動画はアップロードされますか？', 'いいえ。WebAssembly版FFmpegがブラウザ内で動画を処理します。'], ['どの動画変換に対応していますか？', `${videoInputsJa}の入力と、${videoOutputsJa}の出力に対応しています。`], ['初回の変換に時間がかかるのはなぜですか？', '最初の変換前にブラウザがFFmpegを読み込み、初期化するためです。']],
   },
   exif: {
     en: [['What EXIF data can I view?', 'Available camera, lens, exposure, timestamp and GPS metadata can be extracted.'], ['Can I export multiple files?', 'Yes. Metadata from multiple images can be exported as JSON files.'], ['Are photos uploaded?', 'No. EXIF extraction runs locally in your browser.']],

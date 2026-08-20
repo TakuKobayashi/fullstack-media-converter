@@ -1,4 +1,7 @@
-import { ConversionEngine, ConversionJob, ConversionOptions, InputFormat, OutputFormat, canConvert } from '@convertmate/shared';
+import {
+  ConversionEngine, ConversionJob, ConversionOptions, InputFormat, OutputFormat,
+  VIDEO_INPUT_FORMATS, VIDEO_OUTPUT_FORMATS, canConvert, getMimeType,
+} from '@convertmate/shared';
 
 /**
  * Browser video conversion engine using @ffmpeg/ffmpeg (WASM).
@@ -26,9 +29,11 @@ export class BrowserVideoEngine implements ConversionEngine {
   }
 
   canConvert(inputFormat: InputFormat, outputFormat: OutputFormat): boolean {
-    const videoFormats = ['mp4', 'mov', 'gif'] as const;
-    return (videoFormats as readonly string[]).includes(inputFormat) &&
-           (videoFormats as readonly string[]).includes(outputFormat) &&
+    const inputFormats: readonly string[] = VIDEO_INPUT_FORMATS.flatMap(({ extensions }) =>
+      extensions.map(extension => extension.slice(1))
+    );
+    return inputFormats.includes(inputFormat) &&
+           (VIDEO_OUTPUT_FORMATS as readonly string[]).includes(outputFormat) &&
            canConvert(inputFormat, outputFormat);
   }
 
@@ -147,9 +152,7 @@ export class BrowserVideoEngine implements ConversionEngine {
         throw new Error('Conversion produced an empty file — the input may be unsupported or corrupted.');
       }
 
-      const mime = job.outputFormat === 'gif' ? 'image/gif'
-                   : job.outputFormat === 'mov' ? 'video/quicktime'
-                   : 'video/mp4';
+      const mime = getMimeType(job.outputFormat);
       // `readFile` may expose an ArrayBufferLike (including SharedArrayBuffer
       // in its type). Copy into an ordinary ArrayBuffer-backed view so Blob
       // construction is portable and type-safe in browsers.
@@ -199,6 +202,15 @@ export class BrowserVideoEngine implements ConversionEngine {
     }
     if (output === 'mov') {
       return ['-i', inputName, '-c:v', 'libx264', '-c:a', 'aac', '-movflags', '+faststart', outputName];
+    }
+    if (output === 'webm') {
+      return ['-i', inputName, '-c:v', 'libvpx-vp9', '-crf', '32', '-b:v', '0', '-c:a', 'libopus', outputName];
+    }
+    if (output === 'mkv') {
+      return ['-i', inputName, '-c:v', 'libx264', '-crf', '23', '-preset', 'fast', '-c:a', 'aac', outputName];
+    }
+    if (output === 'avi') {
+      return ['-i', inputName, '-c:v', 'mpeg4', '-q:v', '5', '-c:a', 'libmp3lame', outputName];
     }
     return ['-i', inputName, outputName];
   }

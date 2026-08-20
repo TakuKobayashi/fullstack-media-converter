@@ -9,7 +9,16 @@ export interface ImageInputFormatDefinition {
   label: string;
   extensions: readonly `.${string}`[];
 }
-export type VideoFormat = 'mp4' | 'mov' | 'gif';
+export type VideoFormat =
+  | 'mp4' | 'mov' | 'webm' | 'mkv' | 'avi' | 'flv'
+  | 'mpeg' | 'mpg' | 'm4v' | '3gp'
+  | 'ts' | 'mts' | 'm2ts' | 'ogv' | 'ogg' | 'wmv';
+export type VideoOutputFormat = 'mp4' | 'mov' | 'webm' | 'mkv' | 'avi' | 'gif';
+export interface VideoInputFormatDefinition {
+  format: VideoFormat;
+  label: string;
+  extensions: readonly `.${string}`[];
+}
 export type DocumentFormat = 'pdf';
 export type OutputFormat = ImageFormat | VideoFormat | DocumentFormat;
 export type InputFormat = ImageFormat | VideoFormat | DocumentFormat;
@@ -104,6 +113,20 @@ export function getMimeType(format: OutputFormat): string {
     psd: 'image/vnd.adobe.photoshop',
     mp4: 'video/mp4',
     mov: 'video/quicktime',
+    webm: 'video/webm',
+    mkv: 'video/x-matroska',
+    avi: 'video/x-msvideo',
+    flv: 'video/x-flv',
+    mpeg: 'video/mpeg',
+    mpg: 'video/mpeg',
+    m4v: 'video/x-m4v',
+    '3gp': 'video/3gpp',
+    ts: 'video/mp2t',
+    mts: 'video/mp2t',
+    m2ts: 'video/mp2t',
+    ogv: 'video/ogg',
+    ogg: 'video/ogg',
+    wmv: 'video/x-ms-wmv',
     pdf: 'application/pdf',
   };
   return map[format] ?? 'application/octet-stream';
@@ -114,7 +137,8 @@ export function guessFormat(filename: string): InputFormat | null {
   const valid: InputFormat[] = [
     'jpg', 'jpeg', 'png', 'webp', 'avif', 'heic', 'gif',
     'bmp', 'svg', 'ico', 'tif', 'tiff', 'psd',
-    'mp4', 'mov', 'pdf',
+    'mp4', 'mov', 'webm', 'mkv', 'avi', 'flv', 'mpeg', 'mpg', 'm4v', '3gp',
+    'ts', 'mts', 'm2ts', 'ogv', 'ogg', 'wmv', 'pdf',
   ];
   return (valid.includes(ext as InputFormat) ? ext : null) as InputFormat | null;
 }
@@ -147,14 +171,41 @@ function buildImageRoutes(): Array<{ from: InputFormat; to: OutputFormat; type: 
   return routes;
 }
 
+/** Single source of truth for video inputs accepted by the FFmpeg engine. */
+export const VIDEO_INPUT_FORMATS = [
+  { format: 'mp4', label: 'MP4', extensions: ['.mp4'] },
+  { format: 'mov', label: 'MOV', extensions: ['.mov'] },
+  { format: 'webm', label: 'WebM', extensions: ['.webm'] },
+  { format: 'mkv', label: 'MKV', extensions: ['.mkv'] },
+  { format: 'avi', label: 'AVI', extensions: ['.avi'] },
+  { format: 'flv', label: 'FLV', extensions: ['.flv'] },
+  { format: 'mpeg', label: 'MPEG', extensions: ['.mpeg', '.mpg'] },
+  { format: 'm4v', label: 'M4V', extensions: ['.m4v'] },
+  { format: '3gp', label: '3GP', extensions: ['.3gp'] },
+  { format: 'ts', label: 'TS', extensions: ['.ts', '.mts', '.m2ts'] },
+  { format: 'ogv', label: 'OGV/OGG', extensions: ['.ogv', '.ogg'] },
+  { format: 'wmv', label: 'WMV', extensions: ['.wmv'] },
+] as const satisfies readonly VideoInputFormatDefinition[];
+
+export const VIDEO_INPUT_FORMAT_LABELS = VIDEO_INPUT_FORMATS.map(({ label }) => label);
+export const VIDEO_INPUT_EXTENSIONS = VIDEO_INPUT_FORMATS.flatMap(({ extensions }) => [...extensions]);
+export const VIDEO_OUTPUT_FORMATS = ['mp4', 'mov', 'webm', 'mkv', 'avi', 'gif'] as const satisfies readonly VideoOutputFormat[];
+
+function buildVideoRoutes(): Array<{ from: InputFormat; to: OutputFormat; type: ConversionType }> {
+  return VIDEO_INPUT_FORMATS.flatMap(({ extensions, format }) => {
+    const inputs = extensions.map(extension => extension.slice(1) as InputFormat);
+    if (!inputs.includes(format)) inputs.push(format);
+    return inputs.flatMap(from => VIDEO_OUTPUT_FORMATS
+      .filter(to => from !== to)
+      .map(to => ({ from, to, type: 'video' as const })));
+  });
+}
+
 export const SUPPORTED_CONVERSIONS: Array<{ from: InputFormat; to: OutputFormat; type: ConversionType }> = [
   // Image ↔ Image (all pairwise combinations, see buildImageRoutes)
   ...buildImageRoutes(),
   // Video
-  { from: 'mov', to: 'mp4', type: 'video' },
-  { from: 'mp4', to: 'mov', type: 'video' },
-  { from: 'mov', to: 'gif', type: 'video' },
-  { from: 'mp4', to: 'gif', type: 'video' },
+  ...buildVideoRoutes(),
   // Document
   { from: 'jpg', to: 'pdf', type: 'document' },
   { from: 'jpeg', to: 'pdf', type: 'document' },
