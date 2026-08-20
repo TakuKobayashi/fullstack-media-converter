@@ -1,6 +1,6 @@
 {
-  "name": "ConvertMate",
-  "short_name": "ConvertMate",
+  "name": "Fullstack Media Converter",
+  "short_name": "Media Converter",
   "description": "Private batch image and video conversion in your browser.",
   "start_url": "/",
   "display": "standalone",

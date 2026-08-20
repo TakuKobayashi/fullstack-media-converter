@@ -125,7 +125,7 @@ export default function UniversalImageConverter() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `convertmate-images-${Date.now()}.zip`;
+    a.download = `FullstackMediaConverter-images-${Date.now()}.zip`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   }, [jobs]);

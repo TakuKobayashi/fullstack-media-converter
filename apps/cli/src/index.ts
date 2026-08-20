@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ConvertMate CLI
+ * Fullstack Media Converter CLI
  * The spiritual successor to image-processing-utility-cli.
  * Now with: concurrency control, ZIP output, video, documents, EXIF, progress bars.
  */
@@ -20,7 +20,7 @@ const engine = new NodeImageEngine();
 
 program
   .name('cm')
-  .description(chalk.cyan('ConvertMate') + ' — batch file conversion platform')
+  .description(chalk.cyan('Fullstack Media Converter') + ' — batch file conversion platform')
   .version('0.1.0', '-v, --version');
 
 // ─── convert (single file) ───────────────────────────────────────────
@@ -92,7 +92,7 @@ program
       console.log(chalk.yellow(`⚠ No .${inputFmt} files found in ${inputDir}`)); return;
     }
 
-    console.log(chalk.cyan(`\n ConvertMate Batch Convert`));
+    console.log(chalk.cyan(`\n Fullstack Media Converter — Batch Convert`));
     console.log(chalk.dim(`  ${files.length} files  •  ${inputFmt} → ${outputFmt}  •  concurrency ${concurrency}\n`));
 
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
@@ -138,7 +138,7 @@ program
     bar.stop();
 
     if (zip && opts.zip) {
-      const zipName = typeof opts.zip === 'string' ? opts.zip : `convertmate-${Date.now()}.zip`;
+      const zipName = typeof opts.zip === 'string' ? opts.zip : `FullstackMediaConverter-${Date.now()}.zip`;
       const zipPath = path.join(outputDir, zipName);
       const content = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
       fs.writeFileSync(zipPath, content);
@@ -228,7 +228,7 @@ program
   .command('list')
   .description('List all supported conversions')
   .action(() => {
-    console.log(chalk.cyan('\n ConvertMate — Supported Conversions\n'));
+    console.log(chalk.cyan('\n Fullstack Media Converter — Supported Conversions\n'));
     const byType: Record<string, typeof SUPPORTED_CONVERSIONS> = {};
     for (const c of SUPPORTED_CONVERSIONS) {
       if (!byType[c.type]) byType[c.type] = [];

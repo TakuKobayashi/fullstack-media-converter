@@ -17,7 +17,7 @@ export default function Nav() {
       <div className={`container ${s.inner}`}>
         <Link href="/" className={s.logo}>
           <span className={s.logoMark}>⚡</span>
-          ConvertMate
+          <span className={s.logoText}>Fullstack Media Converter</span>
         </Link>
         <div className={s.links}>
           {LINKS.map(l => (

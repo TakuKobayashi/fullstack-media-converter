@@ -117,7 +117,7 @@ export default function UniversalVideoConverter() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `convertmate-videos-${Date.now()}.zip`;
+    a.download = `FullstackMediaConverter-videos-${Date.now()}.zip`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   }, [jobs]);

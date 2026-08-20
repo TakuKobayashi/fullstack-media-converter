@@ -1,6 +1,6 @@
 name: Ollama README Generator
 description: Generate a repository-aware README with a local Ollama model
-author: ConvertMate contributors
+author: Fullstack Media Converter contributors
 
 inputs:
   model:

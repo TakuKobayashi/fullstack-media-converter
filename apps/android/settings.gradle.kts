@@ -9,5 +9,5 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories { google(); mavenCentral() }
 }
-rootProject.name = "ConvertMate"
+rootProject.name = "Fullstack Media Converter"
 include(":app")

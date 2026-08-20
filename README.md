@@ -1,4 +1,4 @@
-# ConvertMate
+# Fullstack Media Converter
 
 **Repository:** `fullstack-media-converter`
 
@@ -7,7 +7,7 @@ Batch file conversion platform. Images, videos, documents — all processed in t
 ## Architecture
 
 ```
-convertmate/
+fullstack-media-converter/
 ├── apps/
 │   ├── web/        Next.js 15 SSG → Cloudflare Workers Assets
 │   └── cli/        Node.js CLI (spiritual successor to image-processing-utility-cli)

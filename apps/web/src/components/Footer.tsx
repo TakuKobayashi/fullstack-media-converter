@@ -12,7 +12,7 @@ export default function Footer() {
     <footer className={s.footer}>
       <div className={`container ${s.inner}`}>
         <p className={s.copy}>
-          © {new Date().getFullYear()} ConvertMate · All processing happens in your browser · No uploads
+          © {new Date().getFullYear()} Fullstack Media Converter · All processing happens in your browser · No uploads
         </p>
         <div className={s.tools}>
           {TOOLS.map(t => (

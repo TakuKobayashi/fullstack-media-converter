@@ -1,5 +1,5 @@
 /**
- * ConvertMate Service Worker — offline-first PWA
+ * Fullstack Media Converter Service Worker — offline-first PWA
  * Cache-first for static assets, network-first for navigation.
  */
 // Bump this whenever the app's loading/runtime behaviour changes. In

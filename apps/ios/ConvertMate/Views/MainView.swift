@@ -129,7 +129,7 @@ struct MainView: View {
                         .frame(width: 28, height: 28)
                     Text("⚡").font(.system(size: 13))
                 }
-                Text("ConvertMate")
+                Text("Fullstack Media Converter")
                     .displayFont(size: 17, weight: .bold)
                     .foregroundStyle(AppColors.cream)
             }

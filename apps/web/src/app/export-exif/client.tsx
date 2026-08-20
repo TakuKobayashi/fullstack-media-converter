@@ -36,7 +36,7 @@ export default function ExifClient() {
         prose={
           <>
             <h2>What is EXIF data?</h2>
-            <p>EXIF (Exchangeable Image File Format) stores metadata embedded in photo files: camera model, lens, aperture, shutter speed, ISO, GPS coordinates, and more. ConvertMate extracts this data from multiple photos at once and exports it as structured JSON.</p>
+            <p>EXIF (Exchangeable Image File Format) stores metadata embedded in photo files: camera model, lens, aperture, shutter speed, ISO, GPS coordinates, and more. Fullstack Media Converter extracts this data from multiple photos at once and exports it as structured JSON.</p>
             <ul>
               <li>Bulk extract metadata from entire photo libraries</li>
               <li>Export as clean JSON for further processing</li>

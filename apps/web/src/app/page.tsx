@@ -5,7 +5,7 @@ import Footer from '@/components/Footer';
 import s from '@/styles/home.module.css';
 
 export const metadata: Metadata = {
-  title: 'ConvertMate — Private Image & Video Converter',
+  title: 'Fullstack Media Converter — Private Image & Video Converter',
   description: 'Convert images and videos in bulk, entirely in your browser. No uploads, no account, and no watermarks.',
 };
 

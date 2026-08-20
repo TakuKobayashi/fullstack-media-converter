@@ -112,7 +112,7 @@ final class ConversionViewModel: ObservableObject {
         guard !done.isEmpty else { return }
 
         let zipURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ConvertMate_\(Int(Date().timeIntervalSince1970)).zip")
+            .appendingPathComponent("FullstackMediaConverter_\(Int(Date().timeIntervalSince1970)).zip")
 
         do {
             try ZipHelper.createZip(at: zipURL, entries: done)

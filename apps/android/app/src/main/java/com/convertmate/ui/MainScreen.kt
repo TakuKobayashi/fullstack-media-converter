@@ -61,7 +61,7 @@ fun MainScreen(viewModel: ConversionViewModel) {
                                 ),
                             contentAlignment = Alignment.Center,
                         ) { Text("⚡", fontSize = 14.sp) }
-                        Text("ConvertMate", fontWeight = FontWeight.Bold, color = AppColors.cream)
+                        Text("Fullstack Media Converter", fontWeight = FontWeight.Bold, color = AppColors.cream)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
