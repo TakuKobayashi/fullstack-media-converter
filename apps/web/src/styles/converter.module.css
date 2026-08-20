@@ -145,7 +145,8 @@
   font-weight: 600;
   transition: opacity 0.15s;
 }
-.downloadAllBtn:hover { opacity: 0.85; }
+.downloadAllBtn:hover:not(:disabled) { opacity: 0.85; }
+.downloadAllBtn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* File list */
 .fileList {

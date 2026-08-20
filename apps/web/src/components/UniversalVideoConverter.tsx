@@ -4,7 +4,6 @@
  * for MOV/MP4 ↔ MP4/MOV/GIF.
  */
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import JSZip from 'jszip';
 import {
   ConversionJob, ConversionFile, InputFormat, VideoOutputFormat,
   generateId, guessFormat, canConvert, VIDEO_INPUT_EXTENSIONS,
@@ -16,6 +15,7 @@ import s from '@/styles/converter.module.css';
 import { useTranslation } from '@/i18n';
 import { useAtom } from 'jotai';
 import { videoOutputFormatAtom } from '@/state/preferences';
+import { useBatchDownload } from '@/hooks/useBatchDownload';
 
 const engine = new BrowserVideoEngine();
 function formatBytes(bytes: number): string {
@@ -100,31 +100,8 @@ export default function UniversalVideoConverter() {
     setRunning(false);
   }, [jobs, concurrency, updateJob]);
 
-  const downloadAll = useCallback(async () => {
-    const done = jobs.filter(j => j.status === 'done' && j.resultUrl);
-    if (done.length === 0) return;
-    if (done.length === 1) {
-      const a = document.createElement('a');
-      a.href = done[0].resultUrl!;
-      a.download = done[0].file.name.replace(/\.[^.]+$/, `.${done[0].outputFormat}`);
-      a.click();
-      return;
-    }
-    const zip = new JSZip();
-    await Promise.all(done.map(async job => {
-      const res = await fetch(job.resultUrl!);
-      const buf = await res.arrayBuffer();
-      const name = job.file.name.replace(/\.[^.]+$/, `.${job.outputFormat}`);
-      zip.file(name, buf);
-    }));
-    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `FullstackMediaConverter-videos-${Date.now()}.zip`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-  }, [jobs]);
+  const { downloadAll, isAllComplete, isPackaging, packageProgress, packageError } =
+    useBatchDownload(jobs, 'FullstackMediaConverter-videos');
 
   const clearAll = () => {
     if (running && queueRef.current) queueRef.current.abort();
@@ -227,20 +204,23 @@ export default function UniversalVideoConverter() {
               {running ? <><span className={s.spinner} /> {t('common.converting')}</> : t('common.convertCount', { count: pendingCount })}
             </button>
 
-            {doneCount > 0 && (
-              <button className={s.downloadAllBtn} onClick={downloadAll}>
-                ⬇ {t(doneCount > 1 ? 'common.downloadZip' : 'common.download')}
+            {jobs.length > 0 && (
+              <button className={s.downloadAllBtn} onClick={downloadAll} disabled={!isAllComplete || isPackaging}>
+                {isPackaging ? t('common.zipProgress', { progress: packageProgress }) : `⬇ ${t(jobs.length > 1 ? 'common.downloadZip' : 'common.download')}`}
               </button>
             )}
 
             <button
               onClick={clearAll}
+              disabled={isPackaging}
               style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--muted)', background: 'none', padding: '6px 8px' }}
             >
               {t('common.clear')}
             </button>
           </div>
         )}
+
+        {packageError && <p className={s.errorDetail}>{t('common.zipError', { error: packageError })}</p>}
 
         {jobs.length > 0 && (
           <div className={s.summary}>

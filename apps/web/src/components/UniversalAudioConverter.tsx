@@ -2,7 +2,6 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useAtom } from 'jotai';
-import JSZip from 'jszip';
 import {
   AUDIO_INPUT_EXTENSIONS,
   AUDIO_INPUT_FORMAT_LABELS,
@@ -19,6 +18,7 @@ import { ConversionQueue } from '@convertmate/core';
 import { BrowserAudioEngine } from '@convertmate/video';
 import { audioBitrateAtom, audioOutputFormatAtom } from '@/state/preferences';
 import { useTranslation } from '@/i18n';
+import { useBatchDownload } from '@/hooks/useBatchDownload';
 import s from '@/styles/converter.module.css';
 
 const engine = new BrowserAudioEngine();
@@ -88,29 +88,8 @@ export default function UniversalAudioConverter() {
     setRunning(false);
   }, [bitrate, jobs, targetFormat, updateJob]);
 
-  const downloadAll = useCallback(async () => {
-    const done = jobs.filter(job => job.status === 'done' && job.resultUrl);
-    if (done.length === 1) {
-      const anchor = document.createElement('a');
-      anchor.href = done[0].resultUrl!;
-      anchor.download = done[0].file.name.replace(/\.[^.]+$/, `.${done[0].outputFormat}`);
-      anchor.click();
-      return;
-    }
-    if (!done.length) return;
-    const zip = new JSZip();
-    await Promise.all(done.map(async job => {
-      const data = await fetch(job.resultUrl!).then(response => response.arrayBuffer());
-      zip.file(job.file.name.replace(/\.[^.]+$/, `.${job.outputFormat}`), data);
-    }));
-    const blob = await zip.generateAsync({ type: 'blob' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `FullstackMediaConverter-audio-${Date.now()}.zip`;
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-  }, [jobs]);
+  const { downloadAll, isAllComplete, isPackaging, packageProgress, packageError } =
+    useBatchDownload(jobs, 'FullstackMediaConverter-audio');
 
   const clear = () => {
     if (running) queueRef.current?.abort();
@@ -166,9 +145,11 @@ export default function UniversalAudioConverter() {
             {[96, 128, 192, 256, 320].map(value => <option key={value} value={value}>{value} kbps</option>)}
           </select>
           <button className={s.convertBtn} onClick={convert} disabled={running || pending === 0}>{running ? t('common.converting') : t('common.convertCount', { count: pending })}</button>
-          {done > 0 && <button className={s.downloadAllBtn} onClick={downloadAll}>{t(done > 1 ? 'common.downloadZip' : 'common.download')}</button>}
-          <button onClick={clear} style={{ marginLeft: 'auto', background: 'none', color: 'var(--muted)' }}>{t('common.clear')}</button>
+          <button className={s.downloadAllBtn} onClick={downloadAll} disabled={!isAllComplete || isPackaging}>{isPackaging ? t('common.zipProgress', { progress: packageProgress }) : t(jobs.length > 1 ? 'common.downloadZip' : 'common.download')}</button>
+          <button onClick={clear} disabled={isPackaging} style={{ marginLeft: 'auto', background: 'none', color: 'var(--muted)' }}>{t('common.clear')}</button>
         </div>}
+
+        {packageError && <p className={s.errorDetail}>{t('common.zipError', { error: packageError })}</p>}
 
         {jobs.length > 0 && <div className={s.summary}>
           <div><div className={s.summaryNum}>{jobs.length}</div><div className={s.summaryLabel}>{t('common.total')}</div></div>
