@@ -3,7 +3,7 @@ export type ImageFormat =
   | 'jpg' | 'jpeg' | 'png' | 'webp' | 'avif' | 'heic' | 'gif'
   | 'bmp' | 'svg' | 'ico' | 'tif' | 'tiff' | 'psd';
 export type CanonicalImageInputFormat = Exclude<ImageFormat, 'jpeg' | 'tif'>;
-export type ImageOutputFormat = 'jpg' | 'png' | 'webp' | 'gif';
+export type ImageOutputFormat = 'jpg' | 'png' | 'webp' | 'gif' | 'avif' | 'svg';
 
 export interface ImageInputFormatDefinition {
   format: CanonicalImageInputFormat;
@@ -149,11 +149,11 @@ export function guessFormat(filename: string): InputFormat | null {
 // interchangeable (any → any, excluding same-format) for the universal
 // image converter. Individual SEO landing pages still only advertise
 // their specific route, but the underlying capability is symmetric.
-const CANVAS_IMAGE_FORMATS: ImageFormat[] = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+const CANVAS_IMAGE_FORMATS: ImageFormat[] = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'svg'];
 // Formats the engine can *decode* but browsers generally can't *encode*
 // back out via Canvas — these are one-directional inputs only.
 const DECODE_ONLY_IMAGE_FORMATS: ImageFormat[] = [
-  'heic', 'avif', 'bmp', 'svg', 'ico', 'tif', 'tiff', 'psd',
+  'heic', 'bmp', 'ico', 'tif', 'tiff', 'psd',
 ];
 
 function buildImageRoutes(): Array<{ from: InputFormat; to: OutputFormat; type: ConversionType }> {
@@ -218,7 +218,7 @@ export function canConvert(inputFormat: InputFormat, outputFormat: OutputFormat)
   return SUPPORTED_CONVERSIONS.some(c => c.from === inputFormat && c.to === outputFormat);
 }
 
-export const IMAGE_OUTPUT_FORMATS = ['jpg', 'png', 'webp', 'gif'] as const satisfies readonly ImageOutputFormat[];
+export const IMAGE_OUTPUT_FORMATS = ['jpg', 'png', 'webp', 'gif', 'avif', 'svg'] as const satisfies readonly ImageOutputFormat[];
 /** Single source of truth for accepted image inputs and their UI labels. */
 export const IMAGE_INPUT_FORMATS = [
   { format: 'jpg', label: 'JPG', extensions: ['.jpg', '.jpeg'] },

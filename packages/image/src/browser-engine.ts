@@ -103,7 +103,44 @@ export class BrowserImageEngine implements ConversionEngine {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas 2D context unavailable in this browser.');
     ctx.putImageData(imageData, 0, 0);
+    return this.encodeCanvas(canvas, outputMime, quality);
+  }
+
+  private async encodeCanvas(
+    canvas: OffscreenCanvas,
+    outputMime: string,
+    quality: number,
+  ): Promise<Blob> {
+    if (outputMime === 'image/avif') {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas 2D context unavailable in this browser.');
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const { default: encode } = await import('@jsquash/avif/encode.js');
+      const encoded = await encode(pixels, {
+        quality,
+        qualityAlpha: quality,
+        lossless: quality === 100,
+      });
+      return new Blob([encoded], { type: outputMime });
+    }
+
+    if (outputMime === 'image/svg+xml') {
+      const png = await canvas.convertToBlob({ type: 'image/png' });
+      const dataUrl = await this.blobToDataUrl(png);
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${canvas.width}" height="${canvas.height}" viewBox="0 0 ${canvas.width} ${canvas.height}"><image width="100%" height="100%" href="${dataUrl}"/></svg>`;
+      return new Blob([svg], { type: outputMime });
+    }
+
     return canvas.convertToBlob({ type: outputMime, quality: quality / 100 });
+  }
+
+  private blobToDataUrl(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error ?? new Error('Could not encode the SVG image.'));
+      reader.readAsDataURL(blob);
+    });
   }
 
   private async convertFromHeic(
@@ -160,7 +197,7 @@ export class BrowserImageEngine implements ConversionEngine {
     ctx.drawImage(bitmap, 0, 0);
     bitmap.close();
 
-    const result = await canvas.convertToBlob({ type: outputMime, quality: quality / 100 });
+    const result = await this.encodeCanvas(canvas, outputMime, quality);
     if (!result) throw new Error(`This browser cannot encode ${outputMime} images.`);
     return result;
   }

@@ -6,6 +6,7 @@
   "dependencies": {
     "@convertmate/core": "workspace:*",
     "@convertmate/shared": "workspace:*",
+    "@jsquash/avif": "^2.1.1",
     "ag-psd": "^31.0.2",
     "exifreader": "^4.31.0",
     "heic2any": "^0.0.4",
