@@ -19,6 +19,7 @@ import {
 import { ConversionQueue } from '@convertmate/core';
 import { BrowserImageEngine } from '@convertmate/image';
 import s from '@/styles/converter.module.css';
+import { useTranslation } from '@/i18n';
 
 const engine = new BrowserImageEngine();
 
@@ -29,6 +30,7 @@ function formatBytes(bytes: number): string {
 }
 
 export default function UniversalImageConverter() {
+  const { t } = useTranslation();
   const [jobs, setJobs] = useState<ConversionJob[]>([]);
   const [targetFormat, setTargetFormat] = useState<OutputFormat>('jpg');
   const [running, setRunning] = useState(false);
@@ -154,18 +156,18 @@ export default function UniversalImageConverter() {
       {/* Hero */}
       <section className={s.hero}>
         <div className="container">
-          <span className={s.badge}>Image Converter</span>
+          <span className={s.badge}>{t('image.badge')}</span>
           <h1 className={s.title}>
-            <em>Universal Image</em> Converter
+            <em>{t('image.title')}</em> {t('image.suffix')}
           </h1>
           <p className={s.subtitle}>
-            Drop any mix of JPG, PNG, WebP, HEIC, AVIF or GIF files — pick one output format, convert them all at once.
+            {t('image.subtitle')}
           </p>
         </div>
       </section>
 
       <div className="container">
-        <div className={s.adSlot} aria-hidden="true">Advertisement</div>
+        <div className={s.adSlot} aria-hidden="true">{t('common.ad')}</div>
 
         {/* Drop zone */}
         <div
@@ -177,12 +179,12 @@ export default function UniversalImageConverter() {
           role="button"
           tabIndex={0}
           onKeyDown={e => e.key === 'Enter' && inputRef.current?.click()}
-          aria-label="Drop image files here or click to browse"
+          aria-label={t('image.dropAria')}
         >
           <span className={s.dropIcon}>📂</span>
-          <p className={s.dropTitle}>Drop images here</p>
-          <p className={s.dropSub}>JPG · PNG · WebP · HEIC · AVIF · GIF — any mix, any number of files</p>
-          <span className={s.browseBtn}>Browse Files</span>
+          <p className={s.dropTitle}>{t('image.drop')}</p>
+          <p className={s.dropSub}>{t('image.dropSub')}</p>
+          <span className={s.browseBtn}>{t('common.browse')}</span>
           <input
             ref={inputRef}
             type="file"
@@ -195,7 +197,7 @@ export default function UniversalImageConverter() {
 
         {/* Output format selector — the core of this page */}
         <div className={s.formatBar}>
-          <span className={s.formatBarLabel}>Convert everything to</span>
+          <span className={s.formatBarLabel}>{t('image.to')}</span>
           <span className={s.formatArrowIcon}>→</span>
           <select
             className={s.formatSelect}
@@ -210,21 +212,21 @@ export default function UniversalImageConverter() {
 
           {jobs.length > 0 && (
             <span style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--muted)' }}>
-              {jobs.length} file{jobs.length !== 1 ? 's' : ''} queued
+              {t('image.queued', { count: jobs.length })}
             </span>
           )}
         </div>
 
         {incompatibleCount > 0 && (
           <p className={s.mixedHint}>
-            ⚠ {incompatibleCount} file{incompatibleCount !== 1 ? 's' : ''} can&apos;t convert to {targetFormat.toUpperCase()} and will be skipped — pick a different format or remove them.
+            ⚠ {t('image.incompatible', { count: incompatibleCount, format: targetFormat.toUpperCase() })}
           </p>
         )}
 
         {/* Controls */}
         {jobs.length > 0 && (
           <div className={s.controls}>
-            <span className={s.controlLabel}>Quality</span>
+            <span className={s.controlLabel}>{t('common.quality')}</span>
             <input
               type="range" min={60} max={100} value={quality}
               onChange={e => setQuality(Number(e.target.value))}
@@ -233,7 +235,7 @@ export default function UniversalImageConverter() {
             />
             <span style={{ fontSize: '0.8rem', color: 'var(--muted)', minWidth: 28 }}>{quality}</span>
 
-            <span className={s.controlLabel} style={{ marginLeft: 12 }}>Threads</span>
+            <span className={s.controlLabel} style={{ marginLeft: 12 }}>{t('common.threads')}</span>
             <select
               className={s.select} value={concurrency}
               onChange={e => setConcurrency(Number(e.target.value))}
@@ -243,12 +245,12 @@ export default function UniversalImageConverter() {
             </select>
 
             <button className={s.convertBtn} onClick={startConversion} disabled={running || pendingCount === 0}>
-              {running ? <><span className={s.spinner} /> Converting…</> : `Convert ${pendingCount} file${pendingCount !== 1 ? 's' : ''}`}
+              {running ? <><span className={s.spinner} /> {t('common.converting')}</> : t('common.convertCount', { count: pendingCount })}
             </button>
 
             {doneCount > 0 && (
               <button className={s.downloadAllBtn} onClick={downloadAll}>
-                ⬇ Download {doneCount > 1 ? `All as ZIP` : ''}
+                ⬇ {t(doneCount > 1 ? 'common.downloadZip' : 'common.download')}
               </button>
             )}
 
@@ -256,7 +258,7 @@ export default function UniversalImageConverter() {
               onClick={clearAll}
               style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--muted)', background: 'none', padding: '6px 8px' }}
             >
-              Clear
+              {t('common.clear')}
             </button>
           </div>
         )}
@@ -264,13 +266,13 @@ export default function UniversalImageConverter() {
         {/* Summary */}
         {jobs.length > 0 && (
           <div className={s.summary}>
-            <div><div className={s.summaryNum}>{jobs.length}</div><div className={s.summaryLabel}>Total</div></div>
-            <div><div className={s.summaryNum} style={{ color: '#22c55e' }}>{doneCount}</div><div className={s.summaryLabel}>Done</div></div>
+            <div><div className={s.summaryNum}>{jobs.length}</div><div className={s.summaryLabel}>{t('common.total')}</div></div>
+            <div><div className={s.summaryNum} style={{ color: '#22c55e' }}>{doneCount}</div><div className={s.summaryLabel}>{t('common.done')}</div></div>
             {processingCount > 0 && (
-              <div><div className={s.summaryNum} style={{ color: 'var(--indigo-3)' }}>{processingCount}</div><div className={s.summaryLabel}>Processing</div></div>
+              <div><div className={s.summaryNum} style={{ color: 'var(--indigo-3)' }}>{processingCount}</div><div className={s.summaryLabel}>{t('common.processing')}</div></div>
             )}
             {errorCount > 0 && (
-              <div><div className={s.summaryNum} style={{ color: 'var(--coral)' }}>{errorCount}</div><div className={s.summaryLabel}>Errors</div></div>
+              <div><div className={s.summaryNum} style={{ color: 'var(--coral)' }}>{errorCount}</div><div className={s.summaryLabel}>{t('common.errors')}</div></div>
             )}
           </div>
         )}
@@ -312,7 +314,7 @@ export default function UniversalImageConverter() {
                       download={job.file.name.replace(/\.[^.]+$/, `.${job.outputFormat}`)}
                       className={s.dlLink}
                     >
-                      Save
+                      {t('common.save')}
                     </a>
                   )}
 
@@ -320,7 +322,7 @@ export default function UniversalImageConverter() {
                     <button
                       onClick={() => removeJob(job.id)}
                       style={{ background: 'none', color: 'var(--muted)', fontSize: '0.9rem', padding: '2px 8px' }}
-                      aria-label={`Remove ${job.file.name}`}
+                      aria-label={t('common.remove', { name: job.file.name })}
                     >
                       ✕
                     </button>
@@ -335,22 +337,14 @@ export default function UniversalImageConverter() {
         )}
 
         {jobs.length > 0 && (
-          <div className={s.adSlot} style={{ marginTop: 32 }} aria-hidden="true">Advertisement</div>
+          <div className={s.adSlot} style={{ marginTop: 32 }} aria-hidden="true">{t('common.ad')}</div>
         )}
 
         <div className={s.prose}>
-          <h2>One page, every image format</h2>
-          <p>
-            Most converters make you pick a specific tool for WebP→JPG, another for HEIC→PNG, and so on.
-            This page detects each file&apos;s format automatically and lets you pick a single destination
-            format from the dropdown — convert a mixed folder of JPGs, PNGs, HEICs and WebPs to WebP in one batch.
-          </p>
+          <h2>{t('image.proseTitle')}</h2>
+          <p>{t('image.prose')}</p>
           <ul>
-            <li>Auto-detects input format from each file&apos;s extension</li>
-            <li>One dropdown controls the output format for the whole batch</li>
-            <li>Mixed-format folders are fully supported</li>
-            <li>100% browser-side — nothing is uploaded</li>
-            <li>Download individually or as a single ZIP</li>
+            {(t('image.bullets', { returnObjects: true }) as unknown as string[]).map(item => <li key={item}>{item}</li>)}
           </ul>
         </div>
       </div>

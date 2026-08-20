@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import '@/styles/globals.css';
 import SwRegister from '@/components/SwRegister';
+import LocaleDocument from '@/components/LocaleDocument';
 
 export const metadata: Metadata = {
   title: { default: 'Fullstack Media Converter — Private Image & Video Converter', template: '%s | Fullstack Media Converter' },
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <SwRegister />
+        <LocaleDocument />
         {children}
       </body>
     </html>

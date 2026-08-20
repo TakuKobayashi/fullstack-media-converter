@@ -1,21 +1,24 @@
+'use client';
+
 import Link from 'next/link';
 import s from '@/styles/footer.module.css';
-
-const TOOLS = [
-  { href: '/image-converter', label: 'Image Converter' },
-  { href: '/video-converter', label: 'Video Converter' },
-  { href: '/export-exif', label: 'Export EXIF' },
-];
+import { useTranslation } from '@/i18n';
 
 export default function Footer() {
+  const { t } = useTranslation();
+  const tools = [
+    { href: '/image-converter', label: t('footer.image') },
+    { href: '/video-converter', label: t('footer.video') },
+    { href: '/export-exif', label: t('footer.exif') },
+  ];
   return (
     <footer className={s.footer}>
       <div className={`container ${s.inner}`}>
         <p className={s.copy}>
-          © {new Date().getFullYear()} Fullstack Media Converter · All processing happens in your browser · No uploads
+          © {new Date().getFullYear()} Fullstack Media Converter · {t('footer.privacy')}
         </p>
         <div className={s.tools}>
-          {TOOLS.map(t => (
+          {tools.map(t => (
             <Link key={t.href} href={t.href} className={s.toolLink}>{t.label}</Link>
           ))}
         </div>

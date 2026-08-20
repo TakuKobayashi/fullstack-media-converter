@@ -13,6 +13,7 @@ import {
 import { ConversionQueue } from '@convertmate/core';
 import type { ConversionEngine, ConversionOptions } from '@convertmate/shared';
 import s from '@/styles/converter.module.css';
+import { useTranslation } from '@/i18n';
 
 export interface BatchConverterProps {
   engine: ConversionEngine;
@@ -47,6 +48,7 @@ export default function BatchConverter({
   engine, acceptedFormats, outputFormat, options = {},
   title, subtitle, badge, prose, crossLinkHref, crossLinkLabel,
 }: BatchConverterProps) {
+  const { t } = useTranslation();
   const [jobs, setJobs] = useState<ConversionJob[]>([]);
   const [running, setRunning] = useState(false);
   const [concurrency, setConcurrency] = useState(3);
@@ -166,7 +168,7 @@ export default function BatchConverter({
           {crossLinkHref && (
             <p style={{ marginTop: 12 }}>
               <a href={crossLinkHref} style={{ fontSize: '0.85rem', color: 'var(--indigo-3)' }}>
-                {crossLinkLabel ?? 'Have a mix of formats? Try the universal converter →'}
+                {crossLinkLabel ?? t('common.crossLink')}
               </a>
             </p>
           )}
@@ -175,7 +177,7 @@ export default function BatchConverter({
 
       <div className="container">
         {/* Ad slot top */}
-        <div className={s.adSlot} aria-hidden="true">Advertisement</div>
+        <div className={s.adSlot} aria-hidden="true">{t('common.ad')}</div>
 
         {/* Drop zone */}
         <div
@@ -187,14 +189,14 @@ export default function BatchConverter({
           role="button"
           tabIndex={0}
           onKeyDown={e => e.key === 'Enter' && inputRef.current?.click()}
-          aria-label="Drop files here or click to browse"
+          aria-label={t('common.dropAria')}
         >
           <span className={s.dropIcon}>📂</span>
-          <p className={s.dropTitle}>Drop files here</p>
+          <p className={s.dropTitle}>{t('common.drop')}</p>
           <p className={s.dropSub}>
-            Accepts {acceptedFormats.join(', ')} · Multiple files · Entire folders
+            {t('common.accepts', { formats: acceptedFormats.join(', ') })}
           </p>
-          <span className={s.browseBtn}>Browse Files</span>
+          <span className={s.browseBtn}>{t('common.browse')}</span>
           <input
             ref={inputRef}
             type="file"
@@ -209,7 +211,7 @@ export default function BatchConverter({
         {/* Controls */}
         {jobs.length > 0 && (
           <div className={s.controls}>
-            <span className={s.controlLabel}>Quality</span>
+            <span className={s.controlLabel}>{t('common.quality')}</span>
             <input
               type="range" min={60} max={100} value={quality}
               onChange={e => setQuality(Number(e.target.value))}
@@ -218,7 +220,7 @@ export default function BatchConverter({
             />
             <span style={{ fontSize: '0.8rem', color: 'var(--muted)', minWidth: 28 }}>{quality}</span>
 
-            <span className={s.controlLabel} style={{ marginLeft: 12 }}>Threads</span>
+            <span className={s.controlLabel} style={{ marginLeft: 12 }}>{t('common.threads')}</span>
             <select
               className={s.select} value={concurrency}
               onChange={e => setConcurrency(Number(e.target.value))}
@@ -228,12 +230,12 @@ export default function BatchConverter({
             </select>
 
             <button className={s.convertBtn} onClick={startConversion} disabled={running || pendingCount === 0}>
-              {running ? <><span className={s.spinner} /> Converting…</> : `Convert ${pendingCount} file${pendingCount !== 1 ? 's' : ''}`}
+              {running ? <><span className={s.spinner} /> {t('common.converting')}</> : t('common.convertCount', { count: pendingCount })}
             </button>
 
             {doneCount > 0 && (
               <button className={s.downloadAllBtn} onClick={downloadAll}>
-                ⬇ Download {doneCount > 1 ? `All as ZIP` : ''}
+                ⬇ {t(doneCount > 1 ? 'common.downloadZip' : 'common.download')}
               </button>
             )}
 
@@ -241,7 +243,7 @@ export default function BatchConverter({
               onClick={clearAll}
               style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--muted)', background: 'none', padding: '6px 8px' }}
             >
-              Clear
+              {t('common.clear')}
             </button>
           </div>
         )}
@@ -251,22 +253,22 @@ export default function BatchConverter({
           <div className={s.summary}>
             <div>
               <div className={s.summaryNum}>{jobs.length}</div>
-              <div className={s.summaryLabel}>Total</div>
+              <div className={s.summaryLabel}>{t('common.total')}</div>
             </div>
             <div>
               <div className={s.summaryNum} style={{ color: '#22c55e' }}>{doneCount}</div>
-              <div className={s.summaryLabel}>Done</div>
+              <div className={s.summaryLabel}>{t('common.done')}</div>
             </div>
             {processingCount > 0 && (
               <div>
                 <div className={s.summaryNum} style={{ color: 'var(--indigo-3)' }}>{processingCount}</div>
-                <div className={s.summaryLabel}>Processing</div>
+                <div className={s.summaryLabel}>{t('common.processing')}</div>
               </div>
             )}
             {errorCount > 0 && (
               <div>
                 <div className={s.summaryNum} style={{ color: 'var(--coral)' }}>{errorCount}</div>
-                <div className={s.summaryLabel}>Errors</div>
+                <div className={s.summaryLabel}>{t('common.errors')}</div>
               </div>
             )}
           </div>
@@ -302,7 +304,7 @@ export default function BatchConverter({
                       download={job.file.name.replace(/\.[^.]+$/, `.${outputFormat}`)}
                       className={s.dlLink}
                     >
-                      Save
+                      {t('common.save')}
                     </a>
                   )}
                 </div>
@@ -316,7 +318,7 @@ export default function BatchConverter({
 
         {/* Ad slot bottom */}
         {jobs.length > 0 && (
-          <div className={s.adSlot} style={{ marginTop: 32 }} aria-hidden="true">Advertisement</div>
+          <div className={s.adSlot} style={{ marginTop: 32 }} aria-hidden="true">{t('common.ad')}</div>
         )}
 
         {/* SEO prose */}

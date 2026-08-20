@@ -8,6 +8,7 @@ import s from '@/styles/converter.module.css';
 // For EXIF export we use a pass-through "engine" that reads exif and returns JSON
 import type { ConversionEngine, ConversionJob, ConversionOptions, InputFormat, OutputFormat } from '@convertmate/shared';
 import { readExif } from '@convertmate/image';
+import { useTranslation } from '@/i18n';
 
 class ExifExportEngine implements ConversionEngine {
   canConvert(_i: InputFormat, _o: OutputFormat) { return true; }
@@ -23,6 +24,7 @@ class ExifExportEngine implements ConversionEngine {
 const engine = new ExifExportEngine();
 
 export default function ExifClient() {
+  const { t } = useTranslation();
   return (
     <div className={s.page}>
       <Nav />
@@ -30,18 +32,15 @@ export default function ExifClient() {
         engine={engine}
         acceptedFormats={['.jpg', '.jpeg', '.png', '.webp', '.heic', '.avif']}
         outputFormat={'json' as OutputFormat}
-        badge="Metadata Tool"
-        title="<em>EXIF</em> Data Viewer & Bulk Export"
-        subtitle="Drop any number of photos to extract and export EXIF metadata as JSON files — camera settings, GPS, timestamps and more."
+        badge={t('exif.badge')}
+        title={t('exif.title')}
+        subtitle={t('exif.subtitle')}
         prose={
           <>
-            <h2>What is EXIF data?</h2>
-            <p>EXIF (Exchangeable Image File Format) stores metadata embedded in photo files: camera model, lens, aperture, shutter speed, ISO, GPS coordinates, and more. Fullstack Media Converter extracts this data from multiple photos at once and exports it as structured JSON.</p>
+            <h2>{t('exif.heading')}</h2>
+            <p>{t('exif.description')}</p>
             <ul>
-              <li>Bulk extract metadata from entire photo libraries</li>
-              <li>Export as clean JSON for further processing</li>
-              <li>GPS coordinates, timestamp, camera model, and more</li>
-              <li>Fully private — processed in your browser</li>
+              {(t('exif.bullets', { returnObjects: true }) as unknown as string[]).map(item => <li key={item}>{item}</li>)}
             </ul>
           </>
         }

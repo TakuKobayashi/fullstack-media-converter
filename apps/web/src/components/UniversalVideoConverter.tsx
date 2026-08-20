@@ -12,6 +12,7 @@ import {
 import { ConversionQueue } from '@convertmate/core';
 import { BrowserVideoEngine } from '@convertmate/video';
 import s from '@/styles/converter.module.css';
+import { useTranslation } from '@/i18n';
 
 const engine = new BrowserVideoEngine();
 const VIDEO_INPUT_EXTENSIONS = ['.mp4', '.MP4', '.mov', '.MOV'];
@@ -24,6 +25,7 @@ function formatBytes(bytes: number): string {
 }
 
 export default function UniversalVideoConverter() {
+  const { t } = useTranslation();
   const [jobs, setJobs] = useState<ConversionJob[]>([]);
   const [targetFormat, setTargetFormat] = useState<OutputFormat>('mp4');
   const [running, setRunning] = useState(false);
@@ -145,16 +147,14 @@ export default function UniversalVideoConverter() {
     <div className={s.main}>
       <section className={s.hero}>
         <div className="container">
-          <span className={s.badge}>Video Converter</span>
-          <h1 className={s.title}><em>Universal Video</em> Converter</h1>
-          <p className={s.subtitle}>
-            Drop MOV or MP4 files, pick MP4, MOV or GIF as the target, convert the whole batch — powered by FFmpeg WebAssembly, entirely in your browser.
-          </p>
+          <span className={s.badge}>{t('video.badge')}</span>
+          <h1 className={s.title}><em>{t('video.title')}</em> {t('video.suffix')}</h1>
+          <p className={s.subtitle}>{t('video.subtitle')}</p>
         </div>
       </section>
 
       <div className="container">
-        <div className={s.adSlot} aria-hidden="true">Advertisement</div>
+        <div className={s.adSlot} aria-hidden="true">{t('common.ad')}</div>
 
         <div
           className={`${s.dropZone} ${isDragOver ? s.dropZoneActive : ''}`}
@@ -165,12 +165,12 @@ export default function UniversalVideoConverter() {
           role="button"
           tabIndex={0}
           onKeyDown={e => e.key === 'Enter' && inputRef.current?.click()}
-          aria-label="Drop video files here or click to browse"
+          aria-label={t('video.dropAria')}
         >
           <span className={s.dropIcon}>🎬</span>
-          <p className={s.dropTitle}>Drop videos here</p>
-          <p className={s.dropSub}>MP4 · MOV — any mix, any number of files</p>
-          <span className={s.browseBtn}>Browse Files</span>
+          <p className={s.dropTitle}>{t('video.drop')}</p>
+          <p className={s.dropSub}>{t('video.dropSub')}</p>
+          <span className={s.browseBtn}>{t('common.browse')}</span>
           <input
             ref={inputRef}
             type="file"
@@ -182,7 +182,7 @@ export default function UniversalVideoConverter() {
         </div>
 
         <div className={s.formatBar}>
-          <span className={s.formatBarLabel}>Convert everything to</span>
+          <span className={s.formatBarLabel}>{t('video.to')}</span>
           <span className={s.formatArrowIcon}>→</span>
           <select
             className={s.formatSelect}
@@ -196,20 +196,20 @@ export default function UniversalVideoConverter() {
           </select>
           {jobs.length > 0 && (
             <span style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--muted)' }}>
-              {jobs.length} file{jobs.length !== 1 ? 's' : ''} queued
+              {t('video.queued', { count: jobs.length })}
             </span>
           )}
         </div>
 
         {incompatibleCount > 0 && (
           <p className={s.mixedHint}>
-            ⚠ {incompatibleCount} file{incompatibleCount !== 1 ? 's' : ''} can&apos;t convert to {targetFormat.toUpperCase()} and will be skipped.
+            ⚠ {t('video.incompatible', { count: incompatibleCount, format: targetFormat.toUpperCase() })}
           </p>
         )}
 
         {jobs.length > 0 && (
           <div className={s.controls}>
-            <span className={s.controlLabel}>Threads</span>
+            <span className={s.controlLabel}>{t('common.threads')}</span>
             <select
               className={s.select} value={concurrency}
               onChange={e => setConcurrency(Number(e.target.value))}
@@ -218,16 +218,16 @@ export default function UniversalVideoConverter() {
               {[1, 2].map(n => <option key={n} value={n}>{n}</option>)}
             </select>
             <span style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
-              (video encoding is CPU-heavy — higher isn&apos;t always faster)
+              {t('video.cpu')}
             </span>
 
             <button className={s.convertBtn} onClick={startConversion} disabled={running || pendingCount === 0}>
-              {running ? <><span className={s.spinner} /> Converting…</> : `Convert ${pendingCount} file${pendingCount !== 1 ? 's' : ''}`}
+              {running ? <><span className={s.spinner} /> {t('common.converting')}</> : t('common.convertCount', { count: pendingCount })}
             </button>
 
             {doneCount > 0 && (
               <button className={s.downloadAllBtn} onClick={downloadAll}>
-                ⬇ Download {doneCount > 1 ? `All as ZIP` : ''}
+                ⬇ {t(doneCount > 1 ? 'common.downloadZip' : 'common.download')}
               </button>
             )}
 
@@ -235,20 +235,20 @@ export default function UniversalVideoConverter() {
               onClick={clearAll}
               style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--muted)', background: 'none', padding: '6px 8px' }}
             >
-              Clear
+              {t('common.clear')}
             </button>
           </div>
         )}
 
         {jobs.length > 0 && (
           <div className={s.summary}>
-            <div><div className={s.summaryNum}>{jobs.length}</div><div className={s.summaryLabel}>Total</div></div>
-            <div><div className={s.summaryNum} style={{ color: '#22c55e' }}>{doneCount}</div><div className={s.summaryLabel}>Done</div></div>
+            <div><div className={s.summaryNum}>{jobs.length}</div><div className={s.summaryLabel}>{t('common.total')}</div></div>
+            <div><div className={s.summaryNum} style={{ color: '#22c55e' }}>{doneCount}</div><div className={s.summaryLabel}>{t('common.done')}</div></div>
             {processingCount > 0 && (
-              <div><div className={s.summaryNum} style={{ color: 'var(--indigo-3)' }}>{processingCount}</div><div className={s.summaryLabel}>Processing</div></div>
+              <div><div className={s.summaryNum} style={{ color: 'var(--indigo-3)' }}>{processingCount}</div><div className={s.summaryLabel}>{t('common.processing')}</div></div>
             )}
             {errorCount > 0 && (
-              <div><div className={s.summaryNum} style={{ color: 'var(--coral)' }}>{errorCount}</div><div className={s.summaryLabel}>Errors</div></div>
+              <div><div className={s.summaryNum} style={{ color: 'var(--coral)' }}>{errorCount}</div><div className={s.summaryLabel}>{t('common.errors')}</div></div>
             )}
           </div>
         )}
@@ -289,7 +289,7 @@ export default function UniversalVideoConverter() {
                       download={job.file.name.replace(/\.[^.]+$/, `.${job.outputFormat}`)}
                       className={s.dlLink}
                     >
-                      Save
+                      {t('common.save')}
                     </a>
                   )}
 
@@ -297,7 +297,7 @@ export default function UniversalVideoConverter() {
                     <button
                       onClick={() => removeJob(job.id)}
                       style={{ background: 'none', color: 'var(--muted)', fontSize: '0.9rem', padding: '2px 8px' }}
-                      aria-label={`Remove ${job.file.name}`}
+                      aria-label={t('common.remove', { name: job.file.name })}
                     >
                       ✕
                     </button>
@@ -312,22 +312,14 @@ export default function UniversalVideoConverter() {
         )}
 
         {jobs.length > 0 && (
-          <div className={s.adSlot} style={{ marginTop: 32 }} aria-hidden="true">Advertisement</div>
+          <div className={s.adSlot} style={{ marginTop: 32 }} aria-hidden="true">{t('common.ad')}</div>
         )}
 
         <div className={s.prose}>
-          <h2>Video conversion, entirely in your browser</h2>
-          <p>
-            This tool uses FFmpeg compiled to WebAssembly, so nothing is ever uploaded to a server.
-            MOV↔MP4 conversion is a fast container remux; MP4/MOV→GIF re-encodes frames, which takes longer.
-            Large files or many files at once will use significant CPU and memory — this is normal for
-            in-browser video processing.
-          </p>
+          <h2>{t('video.proseTitle')}</h2>
+          <p>{t('video.prose')}</p>
           <ul>
-            <li>No upload — 100% local processing via WebAssembly</li>
-            <li>MOV → MP4 and MP4 → MOV for cross-platform compatibility</li>
-            <li>MP4/MOV → GIF for quick animated clips</li>
-            <li>First conversion on a page load takes a few seconds longer while the engine initializes</li>
+            {(t('video.bullets', { returnObjects: true }) as unknown as string[]).map(item => <li key={item}>{item}</li>)}
           </ul>
         </div>
       </div>
