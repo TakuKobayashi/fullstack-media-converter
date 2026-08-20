@@ -12,7 +12,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import JSZip from 'jszip';
 import {
-  ConversionJob, ConversionFile, OutputFormat, InputFormat,
+  ConversionJob, ConversionFile, InputFormat, ImageOutputFormat,
   generateId, guessFormat, IMAGE_OUTPUT_FORMATS, IMAGE_INPUT_EXTENSIONS, IMAGE_INPUT_FORMAT_LABELS,
   canConvert,
 } from '@convertmate/shared';
@@ -21,7 +21,7 @@ import { BrowserImageEngine } from '@convertmate/image';
 import s from '@/styles/converter.module.css';
 import { useTranslation } from '@/i18n';
 import { useAtom } from 'jotai';
-import { imageQualityAtom } from '@/state/preferences';
+import { imageOutputFormatAtom, imageQualityAtom } from '@/state/preferences';
 
 const engine = new BrowserImageEngine();
 
@@ -35,7 +35,7 @@ export default function UniversalImageConverter() {
   const { t, locale } = useTranslation();
   const formatList = IMAGE_INPUT_FORMAT_LABELS.join(locale === 'ja' ? '・' : ' · ');
   const [jobs, setJobs] = useState<ConversionJob[]>([]);
-  const [targetFormat, setTargetFormat] = useState<OutputFormat>('jpg');
+  const [targetFormat, setTargetFormat] = useAtom(imageOutputFormatAtom);
   const [running, setRunning] = useState(false);
   const [concurrency, setConcurrency] = useState(3);
   const [quality, setQuality] = useAtom(imageQualityAtom);
@@ -72,7 +72,7 @@ export default function UniversalImageConverter() {
   }, [targetFormat]);
 
   // Keep pending jobs' outputFormat in sync with the dropdown
-  const handleTargetFormatChange = useCallback((fmt: OutputFormat) => {
+  const handleTargetFormatChange = useCallback((fmt: ImageOutputFormat) => {
     setTargetFormat(fmt);
     setJobs(prev => prev.map(j => j.status === 'pending' ? { ...j, outputFormat: fmt } : j));
   }, []);
@@ -205,7 +205,7 @@ export default function UniversalImageConverter() {
           <select
             className={s.formatSelect}
             value={targetFormat}
-            onChange={e => handleTargetFormatChange(e.target.value as OutputFormat)}
+            onChange={e => handleTargetFormatChange(e.target.value as ImageOutputFormat)}
             disabled={running}
           >
             {IMAGE_OUTPUT_FORMATS.map(fmt => (

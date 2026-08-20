@@ -3,6 +3,7 @@ export type ImageFormat =
   | 'jpg' | 'jpeg' | 'png' | 'webp' | 'avif' | 'heic' | 'gif'
   | 'bmp' | 'svg' | 'ico' | 'tif' | 'tiff' | 'psd';
 export type CanonicalImageInputFormat = Exclude<ImageFormat, 'jpeg' | 'tif'>;
+export type ImageOutputFormat = 'jpg' | 'png' | 'webp' | 'gif';
 
 export interface ImageInputFormatDefinition {
   format: CanonicalImageInputFormat;
@@ -217,7 +218,7 @@ export function canConvert(inputFormat: InputFormat, outputFormat: OutputFormat)
   return SUPPORTED_CONVERSIONS.some(c => c.from === inputFormat && c.to === outputFormat);
 }
 
-export const IMAGE_OUTPUT_FORMATS: ImageFormat[] = ['jpg', 'png', 'webp', 'gif'];
+export const IMAGE_OUTPUT_FORMATS = ['jpg', 'png', 'webp', 'gif'] as const satisfies readonly ImageOutputFormat[];
 /** Single source of truth for accepted image inputs and their UI labels. */
 export const IMAGE_INPUT_FORMATS = [
   { format: 'jpg', label: 'JPG', extensions: ['.jpg', '.jpeg'] },

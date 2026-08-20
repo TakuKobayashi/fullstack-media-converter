@@ -6,7 +6,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import JSZip from 'jszip';
 import {
-  ConversionJob, ConversionFile, OutputFormat, InputFormat, VideoOutputFormat,
+  ConversionJob, ConversionFile, InputFormat, VideoOutputFormat,
   generateId, guessFormat, canConvert, VIDEO_INPUT_EXTENSIONS,
   VIDEO_INPUT_FORMAT_LABELS, VIDEO_OUTPUT_FORMATS,
 } from '@convertmate/shared';
@@ -14,6 +14,8 @@ import { ConversionQueue } from '@convertmate/core';
 import { BrowserVideoEngine } from '@convertmate/video';
 import s from '@/styles/converter.module.css';
 import { useTranslation } from '@/i18n';
+import { useAtom } from 'jotai';
+import { videoOutputFormatAtom } from '@/state/preferences';
 
 const engine = new BrowserVideoEngine();
 function formatBytes(bytes: number): string {
@@ -27,7 +29,7 @@ export default function UniversalVideoConverter() {
   const inputFormatList = VIDEO_INPUT_FORMAT_LABELS.join(locale === 'ja' ? '・' : ' · ');
   const outputFormatList = VIDEO_OUTPUT_FORMATS.map(format => format.toUpperCase()).join(locale === 'ja' ? '・' : ' · ');
   const [jobs, setJobs] = useState<ConversionJob[]>([]);
-  const [targetFormat, setTargetFormat] = useState<VideoOutputFormat>('mp4');
+  const [targetFormat, setTargetFormat] = useAtom(videoOutputFormatAtom);
   const [running, setRunning] = useState(false);
   // Video transcoding is CPU-heavy and ffmpeg.wasm is single-threaded per
   // instance — keep concurrency low by default to avoid tab freezes.
