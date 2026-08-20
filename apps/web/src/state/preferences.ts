@@ -3,8 +3,10 @@ import { atomWithStorage } from 'jotai/utils';
 import {
   IMAGE_OUTPUT_FORMATS,
   VIDEO_OUTPUT_FORMATS,
+  AUDIO_OUTPUT_FORMATS,
   type ImageOutputFormat,
   type VideoOutputFormat,
+  type AudioOutputFormat,
 } from '@convertmate/shared';
 
 const MIN_IMAGE_QUALITY = 60;
@@ -58,4 +60,38 @@ export const videoOutputFormatAtom = atom(
     return isVideoOutputFormat(format) ? format : 'mp4';
   },
   (_get, set, format: VideoOutputFormat) => set(storedVideoOutputFormatAtom, format),
+);
+
+function isAudioOutputFormat(value: string): value is AudioOutputFormat {
+  return (AUDIO_OUTPUT_FORMATS as readonly string[]).includes(value);
+}
+
+const storedAudioOutputFormatAtom = atomWithStorage<string>(
+  'fullstack-media-converter:audio-output-format',
+  'mp3',
+);
+
+export const audioOutputFormatAtom = atom(
+  get => {
+    const format = get(storedAudioOutputFormatAtom);
+    return isAudioOutputFormat(format) ? format : 'mp3';
+  },
+  (_get, set, format: AudioOutputFormat) => set(storedAudioOutputFormatAtom, format),
+);
+
+const storedAudioBitrateAtom = atomWithStorage<number>(
+  'fullstack-media-converter:audio-bitrate',
+  320,
+);
+
+const AUDIO_BITRATES = [96, 128, 192, 256, 320] as const;
+export const audioBitrateAtom = atom(
+  get => {
+    const bitrate = get(storedAudioBitrateAtom);
+    return AUDIO_BITRATES.includes(bitrate as typeof AUDIO_BITRATES[number]) ? bitrate : 320;
+  },
+  (_get, set, bitrate: number) => set(
+    storedAudioBitrateAtom,
+    AUDIO_BITRATES.includes(bitrate as typeof AUDIO_BITRATES[number]) ? bitrate : 320,
+  ),
 );

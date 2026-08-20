@@ -20,13 +20,21 @@ export interface VideoInputFormatDefinition {
   label: string;
   extensions: readonly `.${string}`[];
 }
+export type AudioFormat = 'mp3' | 'wav' | 'aac' | 'm4a' | 'flac' | 'ogg' | 'opus' | 'wma' | 'aif' | 'aiff';
+export type AudioOutputFormat = Exclude<AudioFormat, 'wma' | 'aif' | 'aiff'>;
+export interface AudioInputFormatDefinition {
+  format: AudioFormat;
+  label: string;
+  extensions: readonly `.${string}`[];
+}
 export type DocumentFormat = 'pdf';
-export type OutputFormat = ImageFormat | VideoFormat | DocumentFormat;
-export type InputFormat = ImageFormat | VideoFormat | DocumentFormat;
+export type OutputFormat = ImageFormat | VideoFormat | AudioFormat | DocumentFormat;
+export type InputFormat = ImageFormat | VideoFormat | AudioFormat | DocumentFormat;
 
 export type ConversionType =
   | 'image'
   | 'video'
+  | 'audio'
   | 'document'
   | 'exif';
 
@@ -72,9 +80,15 @@ export interface VideoConvertOptions {
   scale?: number; // 0.1–1.0 (for GIF)
 }
 
+export interface AudioConvertOptions {
+  bitrate?: number;
+  sampleRate?: number;
+}
+
 export interface ConversionOptions {
   image?: ImageConvertOptions;
   video?: VideoConvertOptions;
+  audio?: AudioConvertOptions;
   /** Runtime progress hook used by queues and interactive clients. */
   onProgress?: (progress: number) => void;
 }
@@ -126,8 +140,16 @@ export function getMimeType(format: OutputFormat): string {
     mts: 'video/mp2t',
     m2ts: 'video/mp2t',
     ogv: 'video/ogg',
-    ogg: 'video/ogg',
+    ogg: 'audio/ogg',
     wmv: 'video/x-ms-wmv',
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    aac: 'audio/aac',
+    m4a: 'audio/mp4',
+    flac: 'audio/flac',
+    opus: 'audio/opus',
+    aiff: 'audio/aiff',
+    aif: 'audio/aiff',
     pdf: 'application/pdf',
   };
   return map[format] ?? 'application/octet-stream';
@@ -139,7 +161,8 @@ export function guessFormat(filename: string): InputFormat | null {
     'jpg', 'jpeg', 'png', 'webp', 'avif', 'heic', 'gif',
     'bmp', 'svg', 'ico', 'tif', 'tiff', 'psd',
     'mp4', 'mov', 'webm', 'mkv', 'avi', 'flv', 'mpeg', 'mpg', 'm4v', '3gp',
-    'ts', 'mts', 'm2ts', 'ogv', 'ogg', 'wmv', 'pdf',
+    'ts', 'mts', 'm2ts', 'ogv', 'ogg', 'wmv',
+    'mp3', 'wav', 'aac', 'm4a', 'flac', 'opus', 'aif', 'aiff', 'pdf',
   ];
   return (valid.includes(ext as InputFormat) ? ext : null) as InputFormat | null;
 }
@@ -202,11 +225,38 @@ function buildVideoRoutes(): Array<{ from: InputFormat; to: OutputFormat; type: 
   });
 }
 
+export const AUDIO_INPUT_FORMATS = [
+  { format: 'mp3', label: 'MP3', extensions: ['.mp3'] },
+  { format: 'wav', label: 'WAV', extensions: ['.wav'] },
+  { format: 'aac', label: 'AAC', extensions: ['.aac'] },
+  { format: 'm4a', label: 'M4A', extensions: ['.m4a'] },
+  { format: 'flac', label: 'FLAC', extensions: ['.flac'] },
+  { format: 'ogg', label: 'OGG', extensions: ['.ogg'] },
+  { format: 'opus', label: 'OPUS', extensions: ['.opus'] },
+  { format: 'wma', label: 'WMA', extensions: ['.wma'] },
+  { format: 'aiff', label: 'AIFF', extensions: ['.aif', '.aiff'] },
+] as const satisfies readonly AudioInputFormatDefinition[];
+
+export const AUDIO_INPUT_FORMAT_LABELS = AUDIO_INPUT_FORMATS.map(({ label }) => label);
+export const AUDIO_INPUT_EXTENSIONS = AUDIO_INPUT_FORMATS.flatMap(({ extensions }) => [...extensions]);
+export const AUDIO_OUTPUT_FORMATS = ['mp3', 'wav', 'aac', 'm4a', 'flac', 'ogg', 'opus'] as const satisfies readonly AudioOutputFormat[];
+
+function buildAudioRoutes(): Array<{ from: InputFormat; to: OutputFormat; type: ConversionType }> {
+  return AUDIO_INPUT_FORMATS.flatMap(({ extensions, format }) => {
+    const inputs = extensions.map(extension => extension.slice(1) as InputFormat);
+    if (!inputs.includes(format)) inputs.push(format);
+    return inputs.flatMap(from => AUDIO_OUTPUT_FORMATS
+      .filter(to => from !== to)
+      .map(to => ({ from, to, type: 'audio' as const })));
+  });
+}
+
 export const SUPPORTED_CONVERSIONS: Array<{ from: InputFormat; to: OutputFormat; type: ConversionType }> = [
   // Image ↔ Image (all pairwise combinations, see buildImageRoutes)
   ...buildImageRoutes(),
   // Video
   ...buildVideoRoutes(),
+  ...buildAudioRoutes(),
   // Document
   { from: 'jpg', to: 'pdf', type: 'document' },
   { from: 'jpeg', to: 'pdf', type: 'document' },

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { createElement } from 'react';
-import { IMAGE_INPUT_FORMAT_LABELS, VIDEO_INPUT_FORMAT_LABELS, VIDEO_OUTPUT_FORMATS } from '@convertmate/shared';
+import { AUDIO_INPUT_FORMAT_LABELS, AUDIO_OUTPUT_FORMATS, IMAGE_INPUT_FORMAT_LABELS, VIDEO_INPUT_FORMAT_LABELS, VIDEO_OUTPUT_FORMATS } from '@convertmate/shared';
 
 const imageFormatsEn = IMAGE_INPUT_FORMAT_LABELS.join(', ');
 const imageFormatsJa = IMAGE_INPUT_FORMAT_LABELS.join('、');
@@ -8,8 +8,12 @@ const videoInputsEn = VIDEO_INPUT_FORMAT_LABELS.join(', ');
 const videoInputsJa = VIDEO_INPUT_FORMAT_LABELS.join('、');
 const videoOutputsEn = VIDEO_OUTPUT_FORMATS.map(format => format.toUpperCase()).join(', ');
 const videoOutputsJa = VIDEO_OUTPUT_FORMATS.map(format => format.toUpperCase()).join('・');
+const audioInputsEn = AUDIO_INPUT_FORMAT_LABELS.join(', ');
+const audioInputsJa = AUDIO_INPUT_FORMAT_LABELS.join('、');
+const audioOutputsEn = AUDIO_OUTPUT_FORMATS.map(format => format.toUpperCase()).join(', ');
+const audioOutputsJa = AUDIO_OUTPUT_FORMATS.map(format => format.toUpperCase()).join('・');
 
-export type ToolName = 'image' | 'video' | 'exif';
+export type ToolName = 'image' | 'video' | 'audio' | 'exif';
 export type SeoLocale = 'en' | 'ja';
 
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://fullstack-media-converter.taptappun.workers.dev').replace(/\/$/, '');
@@ -26,6 +30,12 @@ const tools = {
     image: '/og/video-converter.png',
     en: { title: 'Free Video Converter — MP4, WebM, MKV, AVI & More', description: `Convert ${videoInputsEn} videos to ${videoOutputsEn} with FFmpeg WebAssembly. Private browser processing with no uploads.`, imageAlt: 'Abstract video frames transforming into a playback file', keywords: ['free video converter', 'MOV to MP4', 'WebM MKV converter', 'MP4 to GIF', 'bulk video converter'] },
     ja: { title: `無料動画変換ツール｜MP4・WebM・MKVなど${VIDEO_INPUT_FORMAT_LABELS.length}形式に対応`, description: `${videoInputsJa}を${videoOutputsJa}へ無料で変換。動画をアップロードせず、ブラウザ内のFFmpegで処理します。`, imageAlt: '複数の動画フレームを別形式へ変換するイメージ', keywords: ['動画変換', '動画変換 無料', 'MOV MP4 変換', 'WebM MKV 変換', '動画 一括変換'] },
+  },
+  audio: {
+    path: '/audio-converter',
+    image: '/og/video-converter.png',
+    en: { title: 'Free Audio Converter — MP3, WAV, FLAC, AAC & More', description: `Convert ${audioInputsEn} audio to ${audioOutputsEn} privately in your browser with FFmpeg WebAssembly.`, imageAlt: 'Audio waveforms being converted between file formats', keywords: ['free audio converter', 'MP3 converter', 'WAV FLAC converter', 'audio batch converter', 'private audio converter'] },
+    ja: { title: `無料音声変換ツール｜MP3・WAV・FLACなど${AUDIO_INPUT_FORMAT_LABELS.length}形式に対応`, description: `${audioInputsJa}を${audioOutputsJa}へ無料で一括変換。アップロード不要でブラウザ内処理します。`, imageAlt: '音声波形を別のファイル形式へ変換するイメージ', keywords: ['音声変換', 'MP3 変換', 'WAV FLAC 変換', '音声 一括変換', '音声変換 無料'] },
   },
   exif: {
     path: '/export-exif',
@@ -68,6 +78,10 @@ const faq = {
   video: {
     en: [['Are videos uploaded?', 'No. FFmpeg WebAssembly processes videos locally in your browser.'], ['Which conversions are supported?', `${videoInputsEn} input is supported, with ${videoOutputsEn} output.`], ['Why is the first conversion slower?', 'The browser downloads and initializes FFmpeg before the first conversion.']],
     ja: [['動画はアップロードされますか？', 'いいえ。WebAssembly版FFmpegがブラウザ内で動画を処理します。'], ['どの動画変換に対応していますか？', `${videoInputsJa}の入力と、${videoOutputsJa}の出力に対応しています。`], ['初回の変換に時間がかかるのはなぜですか？', '最初の変換前にブラウザがFFmpegを読み込み、初期化するためです。']],
+  },
+  audio: {
+    en: [['Are audio files uploaded?', 'No. FFmpeg WebAssembly processes audio locally in your browser.'], ['Which formats are supported?', `${audioInputsEn} input and ${audioOutputsEn} output are supported.`], ['Can I convert multiple files?', 'Yes. Mixed audio formats can be converted together and downloaded as a ZIP.']],
+    ja: [['音声ファイルはアップロードされますか？', 'いいえ。WebAssembly版FFmpegがブラウザ内で音声を処理します。'], ['どの形式に対応していますか？', `${audioInputsJa}の入力と${audioOutputsJa}の出力に対応しています。`], ['複数ファイルを変換できますか？', 'はい。異なる音声形式をまとめて変換し、ZIPで保存できます。']],
   },
   exif: {
     en: [['What EXIF data can I view?', 'Available camera, lens, exposure, timestamp and GPS metadata can be extracted.'], ['Can I export multiple files?', 'Yes. Metadata from multiple images can be exported as JSON files.'], ['Are photos uploaded?', 'No. EXIF extraction runs locally in your browser.']],

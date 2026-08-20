@@ -30,7 +30,7 @@
 .sectionHeading { display: flex; align-items: flex-end; justify-content: space-between; gap: 48px; margin-bottom: 42px; }
 .sectionTitle { margin-top: 10px; color: var(--white); font-size: clamp(2rem,4vw,3.1rem); font-weight: 600; letter-spacing: -.045em; }
 .sectionIntro { max-width: 430px; color: var(--muted); font-size: .9rem; line-height: 1.7; }
-.converterGrid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; }
+.converterGrid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 20px; }
 .converterCard { position: relative; min-height: 410px; padding: 32px; overflow: hidden; border: 1px solid var(--border); border-radius: 20px; background: var(--navy-2); transition: transform .25s,border-color .25s; }
 .converterCard::after { content: ''; position: absolute; width: 300px; height: 300px; right: -140px; bottom: -180px; border-radius: 50%; opacity: .15; transition: opacity .25s,transform .25s; }
 .converterCard.violet::after { background: var(--indigo-2); }

@@ -6,7 +6,7 @@ import Footer from '@/components/Footer';
 import s from '@/styles/home.module.css';
 import { useTranslation } from '@/i18n';
 import { useLocalizedPath } from '@/hooks/useLocalizedPath';
-import { IMAGE_INPUT_FORMAT_LABELS, VIDEO_INPUT_FORMAT_LABELS } from '@convertmate/shared';
+import { AUDIO_INPUT_FORMAT_LABELS, IMAGE_INPUT_FORMAT_LABELS, VIDEO_INPUT_FORMAT_LABELS } from '@convertmate/shared';
 
 export default function HomePage() {
   const { t, locale } = useTranslation();
@@ -14,6 +14,7 @@ export default function HomePage() {
   const converters = [
     { href: '/image-converter', number: '01', icon: '◫', formats: IMAGE_INPUT_FORMAT_LABELS, accent: 'violet' },
     { href: '/video-converter', number: '02', icon: '▶', formats: VIDEO_INPUT_FORMAT_LABELS, accent: 'coral' },
+    { href: '/audio-converter', number: '03', icon: '♫', formats: AUDIO_INPUT_FORMAT_LABELS, accent: 'violet' },
   ] as const;
   return (
     <div className={s.page}>

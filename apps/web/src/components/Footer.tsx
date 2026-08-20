@@ -11,6 +11,7 @@ export default function Footer() {
   const tools = [
     { href: localizedPath('/image-converter'), label: t('footer.image') },
     { href: localizedPath('/video-converter'), label: t('footer.video') },
+    { href: localizedPath('/audio-converter'), label: t('footer.audio') },
     { href: localizedPath('/export-exif'), label: t('footer.exif') },
   ];
   return (

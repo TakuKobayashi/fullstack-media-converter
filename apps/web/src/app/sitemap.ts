@@ -4,7 +4,7 @@ import { SITE_URL, routeFor, type ToolName } from '@/lib/seo';
 export const dynamic = 'force-static';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const tools: ToolName[] = ['image', 'video', 'exif'];
+  const tools: ToolName[] = ['image', 'video', 'audio', 'exif'];
   const pages: MetadataRoute.Sitemap = [
     { url: SITE_URL, changeFrequency: 'monthly', priority: 1, alternates: { languages: { en: SITE_URL, ja: `${SITE_URL}/ja/` } } },
     { url: `${SITE_URL}/ja/`, changeFrequency: 'monthly', priority: 1, alternates: { languages: { en: SITE_URL, ja: `${SITE_URL}/ja/` } } },

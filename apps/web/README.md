@@ -13,6 +13,7 @@ https://fullstack-media-converter.taptappun.workers.dev/
 | トップ | `/` | `/ja/` |
 | 画像変換 | `/image-converter/` | `/ja/image-converter/` |
 | 動画変換 | `/video-converter/` | `/ja/video-converter/` |
+| 音声変換 | `/audio-converter/` | `/ja/audio-converter/` |
 | EXIF抽出 | `/export-exif/` | `/ja/export-exif/` |
 
 canonical、`hreflang`、Open Graph、FAQ構造化データ、`robots.txt`、`sitemap.xml`を生成します。公開URLを変更する場合は、ビルド時に`NEXT_PUBLIC_SITE_URL`を指定してください。

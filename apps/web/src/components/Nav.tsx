@@ -13,6 +13,7 @@ export default function Nav() {
     { href: localizedPath('/'), label: t('nav.home') },
     { href: localizedPath('/image-converter'), label: t('nav.image') },
     { href: localizedPath('/video-converter'), label: t('nav.video') },
+    { href: localizedPath('/audio-converter'), label: t('nav.audio') },
     { href: localizedPath('/export-exif'), label: t('nav.exif') },
   ];
   return (
