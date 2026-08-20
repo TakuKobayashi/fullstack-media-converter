@@ -9,17 +9,22 @@ const TITLE_KEYS: Record<string, string> = { '/': 'titles.home', '/image-convert
 export default function LocaleDocument() {
   const { i18n, t } = useTranslation();
   const pathname = usePathname().replace(/\/$/, '') || '/';
+  const canonicalPath = pathname.replace(/^\/ja(?=\/|$)/, '') || '/';
 
   useEffect(() => {
+    if (pathname === '/ja' || pathname.startsWith('/ja/')) {
+      void i18n.changeLanguage('ja');
+      return;
+    }
     const detected = i18n.services.languageDetector?.detect();
     const preferredLanguage = Array.isArray(detected) ? detected[0] : detected;
     if (preferredLanguage) void i18n.changeLanguage(preferredLanguage);
-  }, [i18n]);
+  }, [i18n, pathname]);
 
   useEffect(() => {
     document.documentElement.lang = i18n.resolvedLanguage === 'ja' ? 'ja' : 'en';
-    document.title = t(TITLE_KEYS[pathname] ?? TITLE_KEYS['/']);
-  }, [i18n.resolvedLanguage, pathname, t]);
+    document.title = t(TITLE_KEYS[canonicalPath] ?? TITLE_KEYS['/']);
+  }, [canonicalPath, i18n.resolvedLanguage, t]);
 
   return null;
 }

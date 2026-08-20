@@ -3,13 +3,15 @@
 import Link from 'next/link';
 import s from '@/styles/footer.module.css';
 import { useTranslation } from '@/i18n';
+import { useLocalizedPath } from '@/hooks/useLocalizedPath';
 
 export default function Footer() {
   const { t } = useTranslation();
+  const localizedPath = useLocalizedPath();
   const tools = [
-    { href: '/image-converter', label: t('footer.image') },
-    { href: '/video-converter', label: t('footer.video') },
-    { href: '/export-exif', label: t('footer.exif') },
+    { href: localizedPath('/image-converter'), label: t('footer.image') },
+    { href: localizedPath('/video-converter'), label: t('footer.video') },
+    { href: localizedPath('/export-exif'), label: t('footer.exif') },
   ];
   return (
     <footer className={s.footer}>

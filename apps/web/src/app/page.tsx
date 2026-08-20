@@ -5,9 +5,11 @@ import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
 import s from '@/styles/home.module.css';
 import { useTranslation } from '@/i18n';
+import { useLocalizedPath } from '@/hooks/useLocalizedPath';
 
 export default function HomePage() {
   const { t } = useTranslation();
+  const localizedPath = useLocalizedPath();
   const converters = [
     { href: '/image-converter', number: '01', icon: '◫', formats: ['JPG', 'PNG', 'WebP', 'HEIC', 'AVIF', 'GIF'], accent: 'violet' },
     { href: '/video-converter', number: '02', icon: '▶', formats: ['MOV', 'MP4', 'GIF'], accent: 'coral' },
@@ -23,8 +25,8 @@ export default function HomePage() {
               <h1 className={s.title}>{t('home.title')}<br /><em>{t('home.titleAccent')}</em></h1>
               <p className={s.subtitle}>{t('home.subtitle')}</p>
               <div className={s.ctaGroup}>
-                <Link href="/image-converter" className={s.ctaPrimary}>{t('home.imageCta')} <span>→</span></Link>
-                <Link href="/video-converter" className={s.ctaSecondary}>{t('home.videoCta')}</Link>
+                <Link href={localizedPath('/image-converter')} className={s.ctaPrimary}>{t('home.imageCta')} <span>→</span></Link>
+                <Link href={localizedPath('/video-converter')} className={s.ctaSecondary}>{t('home.videoCta')}</Link>
               </div>
             </div>
             <div className={s.heroVisual} aria-hidden="true">
@@ -44,7 +46,7 @@ export default function HomePage() {
             </div>
             <div className={s.converterGrid}>
               {converters.map((converter, index) => (
-                <Link key={converter.href} href={converter.href} className={`${s.converterCard} ${s[converter.accent]}`}>
+                <Link key={converter.href} href={localizedPath(converter.href)} className={`${s.converterCard} ${s[converter.accent]}`}>
                   <div className={s.cardTop}><span className={s.cardNumber}>{converter.number}</span><span className={s.cardIcon}>{converter.icon}</span></div>
                   <h3>{t(`home.converters.${index}.title`)}</h3><p>{t(`home.converters.${index}.description`)}</p>
                   <div className={s.formatList}>{converter.formats.map(format => <span key={format}>{format}</span>)}</div>
@@ -64,7 +66,7 @@ export default function HomePage() {
         <section className={s.exifSection}>
           <div className={`container ${s.exifInner}`}>
             <div><p className={s.sectionEyebrow}>{t('home.metadata')}</p><h2>{t('home.exifTitle')}</h2><p>{t('home.exifText')}</p></div>
-            <Link href="/export-exif" className={s.exifLink}>{t('home.exifLink')} <span>→</span></Link>
+            <Link href={localizedPath('/export-exif')} className={s.exifLink}>{t('home.exifLink')} <span>→</span></Link>
           </div>
         </section>
       </main>
