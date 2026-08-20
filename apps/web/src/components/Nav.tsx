@@ -24,7 +24,7 @@ export default function Nav() {
           <span className={s.logoText}>Fullstack Media Converter</span>
         </Link>
         <div className={s.links}>
-          {links.map(l => (
+          {links.map((l) => (
             <Link
               key={l.href}
               href={l.href}

@@ -1,12 +1,23 @@
 import sharp from 'sharp';
 import path from 'node:path';
 import fs from 'node:fs';
-import { ConversionEngine, ConversionJob, ConversionOptions, InputFormat, OutputFormat, canConvert } from '@convertmate/shared';
+import {
+  ConversionEngine,
+  ConversionJob,
+  ConversionOptions,
+  InputFormat,
+  OutputFormat,
+  canConvert,
+} from '@convertmate/shared';
 
 export class NodeImageEngine implements ConversionEngine {
   canConvert(inputFormat: InputFormat, outputFormat: OutputFormat): boolean {
     const supported = ['jpg', 'jpeg', 'png', 'webp', 'avif', 'heic', 'gif'];
-    return supported.includes(inputFormat) && supported.includes(outputFormat) && canConvert(inputFormat, outputFormat);
+    return (
+      supported.includes(inputFormat) &&
+      supported.includes(outputFormat) &&
+      canConvert(inputFormat, outputFormat)
+    );
   }
 
   async convert(job: ConversionJob, options: ConversionOptions = {}): Promise<ConversionJob> {

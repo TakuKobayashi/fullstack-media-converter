@@ -5,7 +5,13 @@ import { createInstance } from 'i18next';
 import { I18nextProvider, initReactI18next } from 'react-i18next';
 import { messages } from '@/i18n/messages';
 
-export default function I18nProvider({ locale, children }: { locale: 'en' | 'ja'; children: ReactNode }) {
+export default function I18nProvider({
+  locale,
+  children,
+}: {
+  locale: 'en' | 'ja';
+  children: ReactNode;
+}) {
   const [instance] = useState(() => {
     const nextInstance = createInstance();
     void nextInstance.use(initReactI18next).init({

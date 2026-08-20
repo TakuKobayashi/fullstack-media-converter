@@ -20,20 +20,21 @@ const PRECACHE_URLS = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(STATIC_CACHE).then(cache => cache.addAll(PRECACHE_URLS))
-  );
+  event.waitUntil(caches.open(STATIC_CACHE).then((cache) => cache.addAll(PRECACHE_URLS)));
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys
-        .filter(k => k !== STATIC_CACHE && k !== RUNTIME_CACHE)
-        .map(k => caches.delete(k))
-      )
-    )
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((k) => k !== STATIC_CACHE && k !== RUNTIME_CACHE)
+            .map((k) => caches.delete(k)),
+        ),
+      ),
   );
   self.clients.claim();
 });
@@ -49,12 +50,12 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
-        .then(res => {
+        .then((res) => {
           const clone = res.clone();
-          caches.open(RUNTIME_CACHE).then(c => c.put(request, clone));
+          caches.open(RUNTIME_CACHE).then((c) => c.put(request, clone));
           return res;
         })
-        .catch(() => caches.match(request).then(r => r ?? caches.match('/')))
+        .catch(() => caches.match(request).then((r) => r ?? caches.match('/'))),
     );
     return;
   }
@@ -62,14 +63,14 @@ self.addEventListener('fetch', (event) => {
   // Static assets: cache-first
   if (url.pathname.match(/\.(js|css|woff2?|png|svg|ico|webp)$/)) {
     event.respondWith(
-      caches.match(request).then(cached => {
+      caches.match(request).then((cached) => {
         if (cached) return cached;
-        return fetch(request).then(res => {
+        return fetch(request).then((res) => {
           const clone = res.clone();
-          caches.open(STATIC_CACHE).then(c => c.put(request, clone));
+          caches.open(STATIC_CACHE).then((c) => c.put(request, clone));
           return res;
         });
-      })
+      }),
     );
   }
 });

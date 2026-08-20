@@ -9,7 +9,7 @@ export function useBatchDownload(jobs: ConversionJob[], archivePrefix: string) {
   const [packageProgress, setPackageProgress] = useState(0);
   const [packageError, setPackageError] = useState<string | null>(null);
   const completed = useMemo(
-    () => jobs.filter(job => job.status === 'done' && job.resultUrl),
+    () => jobs.filter((job) => job.status === 'done' && job.resultUrl),
     [jobs],
   );
   const isAllComplete = jobs.length > 0 && completed.length === jobs.length;
@@ -31,7 +31,7 @@ export function useBatchDownload(jobs: ConversionJob[], archivePrefix: string) {
       const zip = new JSZip();
       for (let index = 0; index < completed.length; index += 1) {
         const job = completed[index];
-        const data = await fetch(job.resultUrl!).then(response => {
+        const data = await fetch(job.resultUrl!).then((response) => {
           if (!response.ok) throw new Error(`Could not read ${job.file.name}.`);
           return response.arrayBuffer();
         });
@@ -40,7 +40,7 @@ export function useBatchDownload(jobs: ConversionJob[], archivePrefix: string) {
       }
       const blob = await zip.generateAsync(
         { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } },
-        metadata => setPackageProgress(50 + Math.round(metadata.percent / 2)),
+        (metadata) => setPackageProgress(50 + Math.round(metadata.percent / 2)),
       );
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');

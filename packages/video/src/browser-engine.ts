@@ -1,6 +1,13 @@
 import {
-  ConversionEngine, ConversionJob, ConversionOptions, InputFormat, OutputFormat,
-  VIDEO_INPUT_FORMATS, VIDEO_OUTPUT_FORMATS, canConvert, getMimeType,
+  ConversionEngine,
+  ConversionJob,
+  ConversionOptions,
+  InputFormat,
+  OutputFormat,
+  VIDEO_INPUT_FORMATS,
+  VIDEO_OUTPUT_FORMATS,
+  canConvert,
+  getMimeType,
 } from '@convertmate/shared';
 
 /**
@@ -30,11 +37,13 @@ export class BrowserVideoEngine implements ConversionEngine {
 
   canConvert(inputFormat: InputFormat, outputFormat: OutputFormat): boolean {
     const inputFormats: readonly string[] = VIDEO_INPUT_FORMATS.flatMap(({ extensions }) =>
-      extensions.map(extension => extension.slice(1))
+      extensions.map((extension) => extension.slice(1)),
     );
-    return inputFormats.includes(inputFormat) &&
-           (VIDEO_OUTPUT_FORMATS as readonly string[]).includes(outputFormat) &&
-           canConvert(inputFormat, outputFormat);
+    return (
+      inputFormats.includes(inputFormat) &&
+      (VIDEO_OUTPUT_FORMATS as readonly string[]).includes(outputFormat) &&
+      canConvert(inputFormat, outputFormat)
+    );
   }
 
   private async load(): Promise<void> {
@@ -66,7 +75,7 @@ export class BrowserVideoEngine implements ConversionEngine {
       } catch (e) {
         throw new Error(
           `Could not download the video engine from ${baseURL}. ` +
-          `Check your internet connection and try again. (${this.errorMessage(e)})`
+            `Check your internet connection and try again. (${this.errorMessage(e)})`,
         );
       }
 
@@ -116,9 +125,10 @@ export class BrowserVideoEngine implements ConversionEngine {
 
     try {
       const source = job.file.source;
-      const data = source instanceof File
-        ? await this._fetchFile(source)
-        : new Uint8Array(source as ArrayBuffer);
+      const data =
+        source instanceof File
+          ? await this._fetchFile(source)
+          : new Uint8Array(source as ArrayBuffer);
 
       await this.ffmpeg.writeFile(inputName, data);
 
@@ -133,11 +143,17 @@ export class BrowserVideoEngine implements ConversionEngine {
         if (exitCode !== 0) {
           // A partial output may remain after a failed mux. Remove it before
           // falling back to the broadly compatible H.264/AAC encode.
-          try { await this.ffmpeg.deleteFile(outputName); } catch { /* noop */ }
+          try {
+            await this.ffmpeg.deleteFile(outputName);
+          } catch {
+            /* noop */
+          }
           progressStart = 10;
           progressSpan = 89;
           options.onProgress?.(progressStart);
-          exitCode = await this.ffmpeg.exec(this.buildArgs(job.outputFormat, inputName, outputName));
+          exitCode = await this.ffmpeg.exec(
+            this.buildArgs(job.outputFormat, inputName, outputName),
+          );
         }
       } else {
         exitCode = await this.ffmpeg.exec(this.buildArgs(job.outputFormat, inputName, outputName));
@@ -149,7 +165,9 @@ export class BrowserVideoEngine implements ConversionEngine {
 
       const result: Uint8Array = await this.ffmpeg.readFile(outputName);
       if (!result || result.byteLength === 0) {
-        throw new Error('Conversion produced an empty file — the input may be unsupported or corrupted.');
+        throw new Error(
+          'Conversion produced an empty file — the input may be unsupported or corrupted.',
+        );
       }
 
       const mime = getMimeType(job.outputFormat);
@@ -170,20 +188,33 @@ export class BrowserVideoEngine implements ConversionEngine {
     } finally {
       this.ffmpeg.off('progress', handleProgress);
       // Best-effort cleanup — ignore errors (file may not have been created)
-      try { await this.ffmpeg.deleteFile(inputName); } catch { /* noop */ }
-      try { await this.ffmpeg.deleteFile(outputName); } catch { /* noop */ }
+      try {
+        await this.ffmpeg.deleteFile(inputName);
+      } catch {
+        /* noop */
+      }
+      try {
+        await this.ffmpeg.deleteFile(outputName);
+      } catch {
+        /* noop */
+      }
     }
   }
 
   private buildRemuxArgs(inputName: string, outputName: string): string[] {
     return [
-      '-i', inputName,
+      '-i',
+      inputName,
       // Copy the playable streams and omit MOV-only data/timecode tracks
       // which commonly make an otherwise valid MP4 mux fail.
-      '-map', '0:v?',
-      '-map', '0:a?',
-      '-c', 'copy',
-      '-movflags', '+faststart',
+      '-map',
+      '0:v?',
+      '-map',
+      '0:a?',
+      '-c',
+      'copy',
+      '-movflags',
+      '+faststart',
       outputName,
     ];
   }
@@ -191,23 +222,72 @@ export class BrowserVideoEngine implements ConversionEngine {
   private buildArgs(output: string, inputName: string, outputName: string): string[] {
     if (output === 'gif') {
       return [
-        '-i', inputName,
-        '-vf', 'fps=10,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse',
-        '-loop', '0',
+        '-i',
+        inputName,
+        '-vf',
+        'fps=10,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse',
+        '-loop',
+        '0',
         outputName,
       ];
     }
     if (output === 'mp4') {
-      return ['-i', inputName, '-c:v', 'libx264', '-crf', '23', '-preset', 'fast', '-c:a', 'aac', outputName];
+      return [
+        '-i',
+        inputName,
+        '-c:v',
+        'libx264',
+        '-crf',
+        '23',
+        '-preset',
+        'fast',
+        '-c:a',
+        'aac',
+        outputName,
+      ];
     }
     if (output === 'mov') {
-      return ['-i', inputName, '-c:v', 'libx264', '-c:a', 'aac', '-movflags', '+faststart', outputName];
+      return [
+        '-i',
+        inputName,
+        '-c:v',
+        'libx264',
+        '-c:a',
+        'aac',
+        '-movflags',
+        '+faststart',
+        outputName,
+      ];
     }
     if (output === 'webm') {
-      return ['-i', inputName, '-c:v', 'libvpx-vp9', '-crf', '32', '-b:v', '0', '-c:a', 'libopus', outputName];
+      return [
+        '-i',
+        inputName,
+        '-c:v',
+        'libvpx-vp9',
+        '-crf',
+        '32',
+        '-b:v',
+        '0',
+        '-c:a',
+        'libopus',
+        outputName,
+      ];
     }
     if (output === 'mkv') {
-      return ['-i', inputName, '-c:v', 'libx264', '-crf', '23', '-preset', 'fast', '-c:a', 'aac', outputName];
+      return [
+        '-i',
+        inputName,
+        '-c:v',
+        'libx264',
+        '-crf',
+        '23',
+        '-preset',
+        'fast',
+        '-c:a',
+        'aac',
+        outputName,
+      ];
     }
     if (output === 'avi') {
       return ['-i', inputName, '-c:v', 'mpeg4', '-q:v', '5', '-c:a', 'libmp3lame', outputName];

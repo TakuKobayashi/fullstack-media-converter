@@ -14,7 +14,13 @@ import chalk from 'chalk';
 import JSZip from 'jszip';
 import { NodeImageEngine } from './engines/node-image-engine.js';
 import { extractExifFromFile } from './engines/node-exif-engine.js';
-import { SUPPORTED_CONVERSIONS, guessFormat, generateId, type InputFormat, type OutputFormat } from '@convertmate/shared';
+import {
+  SUPPORTED_CONVERSIONS,
+  guessFormat,
+  generateId,
+  type InputFormat,
+  type OutputFormat,
+} from '@convertmate/shared';
 
 const engine = new NodeImageEngine();
 
@@ -35,7 +41,8 @@ program
   .action(async (opts) => {
     const inputPath = path.resolve(opts.input);
     if (!fs.existsSync(inputPath)) {
-      console.error(chalk.red(`✖ Input not found: ${inputPath}`)); process.exit(1);
+      console.error(chalk.red(`✖ Input not found: ${inputPath}`));
+      process.exit(1);
     }
     const inputFormat = guessFormat(opts.input) as InputFormat;
     const outputFormat = opts.format.toLowerCase() as OutputFormat;
@@ -44,15 +51,23 @@ program
       : inputPath.replace(/\.[^.]+$/, `.${outputFormat}`);
 
     const job = {
-      id: generateId(), file: { id: '1', name: path.basename(inputPath), size: 0, source: inputPath },
-      inputFormat, outputFormat, status: 'pending' as const, progress: 0, resultUrl: outputPath,
+      id: generateId(),
+      file: { id: '1', name: path.basename(inputPath), size: 0, source: inputPath },
+      inputFormat,
+      outputFormat,
+      status: 'pending' as const,
+      progress: 0,
+      resultUrl: outputPath,
     };
     console.log(chalk.dim(`${inputPath} → ${outputPath}`));
-    const result = await engine.convert(job, { image: { quality: Number(opts.quality), keepExif: opts.exif !== false } });
+    const result = await engine.convert(job, {
+      image: { quality: Number(opts.quality), keepExif: opts.exif !== false },
+    });
     if (result.status === 'done') {
       console.log(chalk.green(`✔ Done: ${result.resultUrl}`));
     } else {
-      console.error(chalk.red(`✖ Error: ${result.error}`)); process.exit(1);
+      console.error(chalk.red(`✖ Error: ${result.error}`));
+      process.exit(1);
     }
   });
 
@@ -73,7 +88,8 @@ program
   .action(async (opts) => {
     const inputDir = path.resolve(opts.input);
     if (!fs.existsSync(inputDir)) {
-      console.error(chalk.red(`✖ Input directory not found: ${inputDir}`)); process.exit(1);
+      console.error(chalk.red(`✖ Input directory not found: ${inputDir}`));
+      process.exit(1);
     }
     const inputFmt = opts.inputFormat.toLowerCase();
     const outputFmt = opts.format.toLowerCase() as OutputFormat;
@@ -89,17 +105,24 @@ program
     const files = fg.sync(pattern, { dot: false });
 
     if (files.length === 0) {
-      console.log(chalk.yellow(`⚠ No .${inputFmt} files found in ${inputDir}`)); return;
+      console.log(chalk.yellow(`⚠ No .${inputFmt} files found in ${inputDir}`));
+      return;
     }
 
     console.log(chalk.cyan(`\n Fullstack Media Converter — Batch Convert`));
-    console.log(chalk.dim(`  ${files.length} files  •  ${inputFmt} → ${outputFmt}  •  concurrency ${concurrency}\n`));
+    console.log(
+      chalk.dim(
+        `  ${files.length} files  •  ${inputFmt} → ${outputFmt}  •  concurrency ${concurrency}\n`,
+      ),
+    );
 
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
     const bar = new cliProgress.SingleBar({
       format: `  ${chalk.cyan('{bar}')} {percentage}% | {value}/{total} | {filename}`,
-      barCompleteChar: '█', barIncompleteChar: '░', hideCursor: true,
+      barCompleteChar: '█',
+      barIncompleteChar: '░',
+      hideCursor: true,
     });
     bar.start(files.length, 0, { filename: '' });
 
@@ -107,40 +130,51 @@ program
     const zip = useZip ? new JSZip() : null;
     const errors: string[] = [];
 
-    await Promise.all(files.map(filePath => limit(async () => {
-      const baseName = path.basename(filePath);
-      const outName = baseName.replace(/\.[^.]+$/, `.${outputFmt}`);
-      const outPath = path.join(outputDir, outName);
+    await Promise.all(
+      files.map((filePath) =>
+        limit(async () => {
+          const baseName = path.basename(filePath);
+          const outName = baseName.replace(/\.[^.]+$/, `.${outputFmt}`);
+          const outPath = path.join(outputDir, outName);
 
-      const job = {
-        id: generateId(),
-        file: { id: generateId(), name: baseName, size: 0, source: filePath },
-        inputFormat: inputFmt as InputFormat,
-        outputFormat: outputFmt,
-        status: 'pending' as const,
-        progress: 0,
-        resultUrl: outPath,
-      };
+          const job = {
+            id: generateId(),
+            file: { id: generateId(), name: baseName, size: 0, source: filePath },
+            inputFormat: inputFmt as InputFormat,
+            outputFormat: outputFmt,
+            status: 'pending' as const,
+            progress: 0,
+            resultUrl: outPath,
+          };
 
-      try {
-        const result = await engine.convert(job, { image: { quality, keepExif: opts.exif !== false } });
-        if (zip && result.resultUrl) {
-          const data = fs.readFileSync(result.resultUrl);
-          zip.file(outName, data);
-        }
-        bar.increment(1, { filename: baseName });
-      } catch (err) {
-        errors.push(`${filePath}: ${err}`);
-        bar.increment(1, { filename: chalk.red(baseName) });
-      }
-    })));
+          try {
+            const result = await engine.convert(job, {
+              image: { quality, keepExif: opts.exif !== false },
+            });
+            if (zip && result.resultUrl) {
+              const data = fs.readFileSync(result.resultUrl);
+              zip.file(outName, data);
+            }
+            bar.increment(1, { filename: baseName });
+          } catch (err) {
+            errors.push(`${filePath}: ${err}`);
+            bar.increment(1, { filename: chalk.red(baseName) });
+          }
+        }),
+      ),
+    );
 
     bar.stop();
 
     if (zip && opts.zip) {
-      const zipName = typeof opts.zip === 'string' ? opts.zip : `FullstackMediaConverter-${Date.now()}.zip`;
+      const zipName =
+        typeof opts.zip === 'string' ? opts.zip : `FullstackMediaConverter-${Date.now()}.zip`;
       const zipPath = path.join(outputDir, zipName);
-      const content = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+      const content = await zip.generateAsync({
+        type: 'nodebuffer',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 },
+      });
       fs.writeFileSync(zipPath, content);
       console.log(chalk.green(`\n✔ ZIP saved: ${zipPath}`));
     }
@@ -148,7 +182,7 @@ program
     console.log(chalk.green(`\n✔ Converted ${files.length - errors.length}/${files.length} files`));
     if (errors.length > 0) {
       console.log(chalk.red(`✖ ${errors.length} errors:`));
-      errors.forEach(e => console.log(chalk.dim(`  ${e}`)));
+      errors.forEach((e) => console.log(chalk.dim(`  ${e}`)));
     }
   });
 
@@ -161,7 +195,8 @@ program
   .action(async (opts) => {
     const inputPath = path.resolve(opts.input);
     if (!fs.existsSync(inputPath)) {
-      console.error(chalk.red(`✖ Not found: ${inputPath}`)); process.exit(1);
+      console.error(chalk.red(`✖ Not found: ${inputPath}`));
+      process.exit(1);
     }
     const exif = extractExifFromFile(inputPath);
     const json = JSON.stringify(exif, null, 2);
@@ -190,7 +225,8 @@ program
     const files = fg.sync(pattern);
 
     if (files.length === 0) {
-      console.log(chalk.yellow(`⚠ No .${inputFmt} files found`)); return;
+      console.log(chalk.yellow(`⚠ No .${inputFmt} files found`));
+      return;
     }
 
     const outputDir = opts.output ? path.resolve(opts.output) : inputDir;
@@ -198,20 +234,25 @@ program
 
     const bar = new cliProgress.SingleBar({
       format: `  ${chalk.cyan('{bar}')} {percentage}% | {value}/{total}`,
-      barCompleteChar: '█', barIncompleteChar: '░',
+      barCompleteChar: '█',
+      barIncompleteChar: '░',
     });
     bar.start(files.length, 0);
     const limit = pLimit(Number(opts.concurrency ?? 4));
     const zip = opts.zip ? new JSZip() : null;
 
-    await Promise.all(files.map(fp => limit(() => {
-      const exif = extractExifFromFile(fp);
-      const json = JSON.stringify(exif, null, 2);
-      const outName = path.basename(fp).replace(/\.[^.]+$/, '.json');
-      fs.writeFileSync(path.join(outputDir, outName), json);
-      if (zip) zip.file(outName, json);
-      bar.increment();
-    })));
+    await Promise.all(
+      files.map((fp) =>
+        limit(() => {
+          const exif = extractExifFromFile(fp);
+          const json = JSON.stringify(exif, null, 2);
+          const outName = path.basename(fp).replace(/\.[^.]+$/, '.json');
+          fs.writeFileSync(path.join(outputDir, outName), json);
+          if (zip) zip.file(outName, json);
+          bar.increment();
+        }),
+      ),
+    );
     bar.stop();
 
     if (zip && opts.zip) {
@@ -236,7 +277,7 @@ program
     }
     for (const [type, conversions] of Object.entries(byType)) {
       console.log(chalk.bold(`  ${type.toUpperCase()}`));
-      conversions.forEach(c => console.log(chalk.dim(`    ${c.from.padEnd(6)} → ${c.to}`)));
+      conversions.forEach((c) => console.log(chalk.dim(`    ${c.from.padEnd(6)} → ${c.to}`)));
       console.log();
     }
   });

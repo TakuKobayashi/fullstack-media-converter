@@ -6,15 +6,33 @@ import { SITE_URL } from '@/lib/seo';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: { default: 'Fullstack Media Converter — Private Image & Video Converter', template: '%s | Fullstack Media Converter' },
-  description: 'Convert images and videos in bulk — entirely in your browser. No uploads, no server, 100% private.',
-  keywords: ['bulk image converter', 'video converter', 'batch convert', 'private file converter', 'free converter'],
+  title: {
+    default: 'Fullstack Media Converter — Private Image & Video Converter',
+    template: '%s | Fullstack Media Converter',
+  },
+  description:
+    'Convert images and videos in bulk — entirely in your browser. No uploads, no server, 100% private.',
+  keywords: [
+    'bulk image converter',
+    'video converter',
+    'batch convert',
+    'private file converter',
+    'free converter',
+  ],
   openGraph: {
     type: 'website',
     siteName: 'Fullstack Media Converter',
     title: 'Fullstack Media Converter — Private Image & Video Converter',
     description: 'Convert image and video batches locally. Works offline. No uploads.',
-    images: [{ url: `${SITE_URL}/og/home.png`, width: 1536, height: 864, alt: 'Image, video and metadata conversion in one private browser tool', type: 'image/png' }],
+    images: [
+      {
+        url: `${SITE_URL}/og/home.png`,
+        width: 1536,
+        height: 864,
+        alt: 'Image, video and metadata conversion in one private browser tool',
+        type: 'image/png',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',

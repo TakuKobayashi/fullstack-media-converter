@@ -4,7 +4,12 @@ import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { useTranslation } from '@/i18n';
 
-const TITLE_KEYS: Record<string, string> = { '/': 'titles.home', '/image-converter': 'titles.image', '/video-converter': 'titles.video', '/export-exif': 'titles.exif' };
+const TITLE_KEYS: Record<string, string> = {
+  '/': 'titles.home',
+  '/image-converter': 'titles.image',
+  '/video-converter': 'titles.video',
+  '/export-exif': 'titles.exif',
+};
 
 export default function LocaleDocument() {
   const { i18n, t } = useTranslation();

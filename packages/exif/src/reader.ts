@@ -12,9 +12,7 @@ export interface FlatExif {
 
 export async function extractExif(source: File | ArrayBuffer): Promise<FlatExif> {
   const ExifReader = (await import('exifreader')).default;
-  const buffer = source instanceof File
-    ? await source.slice(0, 256 * 1024).arrayBuffer()
-    : source;
+  const buffer = source instanceof File ? await source.slice(0, 256 * 1024).arrayBuffer() : source;
   const tags: ExifTags = ExifReader.load(buffer);
   const flat: FlatExif = {};
   for (const [key, tag] of Object.entries(tags)) {
@@ -25,7 +23,9 @@ export async function extractExif(source: File | ArrayBuffer): Promise<FlatExif>
   return flat;
 }
 
-export async function bulkExtractExif(files: File[]): Promise<Array<{ name: string; exif: FlatExif }>> {
+export async function bulkExtractExif(
+  files: File[],
+): Promise<Array<{ name: string; exif: FlatExif }>> {
   return Promise.all(
     files.map(async (file) => ({
       name: file.name,

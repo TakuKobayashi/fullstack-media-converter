@@ -6,6 +6,11 @@
     "dev": "pnpm --filter @convertmate/web dev",
     "build": "pnpm --filter @convertmate/web build",
     "build:cli": "pnpm --filter @convertmate/cli build",
-    "test:action": "node --test action/test/*.test.js"
+    "test:action": "node --test action/test/*.test.js",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.9.6"
   }
 }

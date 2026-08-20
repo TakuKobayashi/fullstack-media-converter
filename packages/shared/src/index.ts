@@ -1,7 +1,18 @@
 // ─── Conversion Types ───────────────────────────────────────────────
 export type ImageFormat =
-  | 'jpg' | 'jpeg' | 'png' | 'webp' | 'avif' | 'heic' | 'gif'
-  | 'bmp' | 'svg' | 'ico' | 'tif' | 'tiff' | 'psd';
+  | 'jpg'
+  | 'jpeg'
+  | 'png'
+  | 'webp'
+  | 'avif'
+  | 'heic'
+  | 'gif'
+  | 'bmp'
+  | 'svg'
+  | 'ico'
+  | 'tif'
+  | 'tiff'
+  | 'psd';
 export type CanonicalImageInputFormat = Exclude<ImageFormat, 'jpeg' | 'tif'>;
 export type ImageOutputFormat = 'jpg' | 'png' | 'webp' | 'gif' | 'avif' | 'svg';
 
@@ -11,16 +22,30 @@ export interface ImageInputFormatDefinition {
   extensions: readonly `.${string}`[];
 }
 export type VideoFormat =
-  | 'mp4' | 'mov' | 'webm' | 'mkv' | 'avi' | 'flv'
-  | 'mpeg' | 'mpg' | 'm4v' | '3gp'
-  | 'ts' | 'mts' | 'm2ts' | 'ogv' | 'ogg' | 'wmv';
+  | 'mp4'
+  | 'mov'
+  | 'webm'
+  | 'mkv'
+  | 'avi'
+  | 'flv'
+  | 'mpeg'
+  | 'mpg'
+  | 'm4v'
+  | '3gp'
+  | 'ts'
+  | 'mts'
+  | 'm2ts'
+  | 'ogv'
+  | 'ogg'
+  | 'wmv';
 export type VideoOutputFormat = 'mp4' | 'mov' | 'webm' | 'mkv' | 'avi' | 'gif';
 export interface VideoInputFormatDefinition {
   format: VideoFormat;
   label: string;
   extensions: readonly `.${string}`[];
 }
-export type AudioFormat = 'mp3' | 'wav' | 'aac' | 'm4a' | 'flac' | 'ogg' | 'opus' | 'wma' | 'aif' | 'aiff';
+export type AudioFormat =
+  'mp3' | 'wav' | 'aac' | 'm4a' | 'flac' | 'ogg' | 'opus' | 'wma' | 'aif' | 'aiff';
 export type AudioOutputFormat = Exclude<AudioFormat, 'wma' | 'aif' | 'aiff'>;
 export interface AudioInputFormatDefinition {
   format: AudioFormat;
@@ -31,12 +56,7 @@ export type DocumentFormat = 'pdf';
 export type OutputFormat = ImageFormat | VideoFormat | AudioFormat | DocumentFormat;
 export type InputFormat = ImageFormat | VideoFormat | AudioFormat | DocumentFormat;
 
-export type ConversionType =
-  | 'image'
-  | 'video'
-  | 'audio'
-  | 'document'
-  | 'exif';
+export type ConversionType = 'image' | 'video' | 'audio' | 'document' | 'exif';
 
 // ─── Job / Queue Types ───────────────────────────────────────────────
 export type JobStatus = 'pending' | 'processing' | 'done' | 'error';
@@ -158,11 +178,44 @@ export function getMimeType(format: OutputFormat): string {
 export function guessFormat(filename: string): InputFormat | null {
   const ext = filename.split('.').pop()?.toLowerCase();
   const valid: InputFormat[] = [
-    'jpg', 'jpeg', 'png', 'webp', 'avif', 'heic', 'gif',
-    'bmp', 'svg', 'ico', 'tif', 'tiff', 'psd',
-    'mp4', 'mov', 'webm', 'mkv', 'avi', 'flv', 'mpeg', 'mpg', 'm4v', '3gp',
-    'ts', 'mts', 'm2ts', 'ogv', 'ogg', 'wmv',
-    'mp3', 'wav', 'aac', 'm4a', 'flac', 'opus', 'aif', 'aiff', 'pdf',
+    'jpg',
+    'jpeg',
+    'png',
+    'webp',
+    'avif',
+    'heic',
+    'gif',
+    'bmp',
+    'svg',
+    'ico',
+    'tif',
+    'tiff',
+    'psd',
+    'mp4',
+    'mov',
+    'webm',
+    'mkv',
+    'avi',
+    'flv',
+    'mpeg',
+    'mpg',
+    'm4v',
+    '3gp',
+    'ts',
+    'mts',
+    'm2ts',
+    'ogv',
+    'ogg',
+    'wmv',
+    'mp3',
+    'wav',
+    'aac',
+    'm4a',
+    'flac',
+    'opus',
+    'aif',
+    'aiff',
+    'pdf',
   ];
   return (valid.includes(ext as InputFormat) ? ext : null) as InputFormat | null;
 }
@@ -175,9 +228,7 @@ export function guessFormat(filename: string): InputFormat | null {
 const CANVAS_IMAGE_FORMATS: ImageFormat[] = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'svg'];
 // Formats the engine can *decode* but browsers generally can't *encode*
 // back out via Canvas — these are one-directional inputs only.
-const DECODE_ONLY_IMAGE_FORMATS: ImageFormat[] = [
-  'heic', 'bmp', 'ico', 'tif', 'tiff', 'psd',
-];
+const DECODE_ONLY_IMAGE_FORMATS: ImageFormat[] = ['heic', 'bmp', 'ico', 'tif', 'tiff', 'psd'];
 
 function buildImageRoutes(): Array<{ from: InputFormat; to: OutputFormat; type: ConversionType }> {
   const routes: Array<{ from: InputFormat; to: OutputFormat; type: ConversionType }> = [];
@@ -212,16 +263,29 @@ export const VIDEO_INPUT_FORMATS = [
 ] as const satisfies readonly VideoInputFormatDefinition[];
 
 export const VIDEO_INPUT_FORMAT_LABELS = VIDEO_INPUT_FORMATS.map(({ label }) => label);
-export const VIDEO_INPUT_EXTENSIONS = VIDEO_INPUT_FORMATS.flatMap(({ extensions }) => [...extensions]);
-export const VIDEO_OUTPUT_FORMATS = ['mp4', 'mov', 'webm', 'mkv', 'avi', 'gif'] as const satisfies readonly VideoOutputFormat[];
+export const VIDEO_INPUT_EXTENSIONS = VIDEO_INPUT_FORMATS.flatMap(({ extensions }) => [
+  ...extensions,
+]);
+export const VIDEO_OUTPUT_FORMATS = [
+  'mp4',
+  'mov',
+  'webm',
+  'mkv',
+  'avi',
+  'gif',
+] as const satisfies readonly VideoOutputFormat[];
 
 function buildVideoRoutes(): Array<{ from: InputFormat; to: OutputFormat; type: ConversionType }> {
   return VIDEO_INPUT_FORMATS.flatMap(({ extensions, format }) => {
-    const inputs = extensions.map(extension => extension.slice(1) as InputFormat);
+    const inputs = extensions.map((extension) => extension.slice(1) as InputFormat);
     if (!inputs.includes(format)) inputs.push(format);
-    return inputs.flatMap(from => VIDEO_OUTPUT_FORMATS
-      .filter(to => from !== to)
-      .map(to => ({ from, to, type: 'video' as const })));
+    return inputs.flatMap((from) =>
+      VIDEO_OUTPUT_FORMATS.filter((to) => from !== to).map((to) => ({
+        from,
+        to,
+        type: 'video' as const,
+      })),
+    );
   });
 }
 
@@ -238,20 +302,38 @@ export const AUDIO_INPUT_FORMATS = [
 ] as const satisfies readonly AudioInputFormatDefinition[];
 
 export const AUDIO_INPUT_FORMAT_LABELS = AUDIO_INPUT_FORMATS.map(({ label }) => label);
-export const AUDIO_INPUT_EXTENSIONS = AUDIO_INPUT_FORMATS.flatMap(({ extensions }) => [...extensions]);
-export const AUDIO_OUTPUT_FORMATS = ['mp3', 'wav', 'aac', 'm4a', 'flac', 'ogg', 'opus'] as const satisfies readonly AudioOutputFormat[];
+export const AUDIO_INPUT_EXTENSIONS = AUDIO_INPUT_FORMATS.flatMap(({ extensions }) => [
+  ...extensions,
+]);
+export const AUDIO_OUTPUT_FORMATS = [
+  'mp3',
+  'wav',
+  'aac',
+  'm4a',
+  'flac',
+  'ogg',
+  'opus',
+] as const satisfies readonly AudioOutputFormat[];
 
 function buildAudioRoutes(): Array<{ from: InputFormat; to: OutputFormat; type: ConversionType }> {
   return AUDIO_INPUT_FORMATS.flatMap(({ extensions, format }) => {
-    const inputs = extensions.map(extension => extension.slice(1) as InputFormat);
+    const inputs = extensions.map((extension) => extension.slice(1) as InputFormat);
     if (!inputs.includes(format)) inputs.push(format);
-    return inputs.flatMap(from => AUDIO_OUTPUT_FORMATS
-      .filter(to => from !== to)
-      .map(to => ({ from, to, type: 'audio' as const })));
+    return inputs.flatMap((from) =>
+      AUDIO_OUTPUT_FORMATS.filter((to) => from !== to).map((to) => ({
+        from,
+        to,
+        type: 'audio' as const,
+      })),
+    );
   });
 }
 
-export const SUPPORTED_CONVERSIONS: Array<{ from: InputFormat; to: OutputFormat; type: ConversionType }> = [
+export const SUPPORTED_CONVERSIONS: Array<{
+  from: InputFormat;
+  to: OutputFormat;
+  type: ConversionType;
+}> = [
   // Image ↔ Image (all pairwise combinations, see buildImageRoutes)
   ...buildImageRoutes(),
   // Video
@@ -265,10 +347,17 @@ export const SUPPORTED_CONVERSIONS: Array<{ from: InputFormat; to: OutputFormat;
 ];
 
 export function canConvert(inputFormat: InputFormat, outputFormat: OutputFormat): boolean {
-  return SUPPORTED_CONVERSIONS.some(c => c.from === inputFormat && c.to === outputFormat);
+  return SUPPORTED_CONVERSIONS.some((c) => c.from === inputFormat && c.to === outputFormat);
 }
 
-export const IMAGE_OUTPUT_FORMATS = ['jpg', 'png', 'webp', 'gif', 'avif', 'svg'] as const satisfies readonly ImageOutputFormat[];
+export const IMAGE_OUTPUT_FORMATS = [
+  'jpg',
+  'png',
+  'webp',
+  'gif',
+  'avif',
+  'svg',
+] as const satisfies readonly ImageOutputFormat[];
 /** Single source of truth for accepted image inputs and their UI labels. */
 export const IMAGE_INPUT_FORMATS = [
   { format: 'jpg', label: 'JPG', extensions: ['.jpg', '.jpeg'] },
@@ -285,4 +374,6 @@ export const IMAGE_INPUT_FORMATS = [
 ] as const satisfies readonly ImageInputFormatDefinition[];
 
 export const IMAGE_INPUT_FORMAT_LABELS = IMAGE_INPUT_FORMATS.map(({ label }) => label);
-export const IMAGE_INPUT_EXTENSIONS = IMAGE_INPUT_FORMATS.flatMap(({ extensions }) => [...extensions]);
+export const IMAGE_INPUT_EXTENSIONS = IMAGE_INPUT_FORMATS.flatMap(({ extensions }) => [
+  ...extensions,
+]);

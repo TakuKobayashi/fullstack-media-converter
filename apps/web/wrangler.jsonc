@@ -5,6 +5,6 @@
   // just the Next.js static export served directly.
   "assets": {
     "directory": "./out",
-    "not_found_handling": "404-page"
-  }
+    "not_found_handling": "404-page",
+  },
 }

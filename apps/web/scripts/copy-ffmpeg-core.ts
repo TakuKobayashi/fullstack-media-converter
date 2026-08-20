@@ -91,7 +91,9 @@ function main() {
 
   if (!srcDir) {
     console.warn('[copy-ffmpeg-core] Could not locate @ffmpeg/core/dist/esm.');
-    console.warn('[copy-ffmpeg-core] Video conversion (MOV/MP4/GIF) will not work until this is fixed.');
+    console.warn(
+      '[copy-ffmpeg-core] Video conversion (MOV/MP4/GIF) will not work until this is fixed.',
+    );
     console.warn('[copy-ffmpeg-core] Things to check:');
     console.warn('  1. Confirm it installed: ls node_modules/@ffmpeg/core  (run from apps/web)');
     console.warn('  2. If missing, run: pnpm add @ffmpeg/core --filter @convertmate/web');
@@ -120,7 +122,9 @@ function main() {
   if (copiedCount === files.length) {
     console.log('[copy-ffmpeg-core] Done — video conversion is ready.');
   } else {
-    console.warn(`[copy-ffmpeg-core] Only copied ${copiedCount}/${files.length} files — video conversion may still fail.`);
+    console.warn(
+      `[copy-ffmpeg-core] Only copied ${copiedCount}/${files.length} files — video conversion may still fail.`,
+    );
   }
 }
 

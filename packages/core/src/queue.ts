@@ -24,32 +24,39 @@ export class ConversionQueue {
   }
 
   addMany(jobs: ConversionJob[]): void {
-    jobs.forEach(j => this.add(j));
+    jobs.forEach((j) => this.add(j));
   }
 
   on(listener: QueueListener): () => void {
     this.listeners.push(listener);
-    return () => { this.listeners = this.listeners.filter(l => l !== listener); };
+    return () => {
+      this.listeners = this.listeners.filter((l) => l !== listener);
+    };
   }
 
   private emit(type: QueueEventType, job?: ConversionJob) {
-    this.listeners.forEach(l => l({ type, job }));
+    this.listeners.forEach((l) => l({ type, job }));
   }
 
-  abort() { this.aborted = true; }
+  abort() {
+    this.aborted = true;
+  }
 
   async run(): Promise<ConversionJob[]> {
     this.aborted = false;
-    const pending = [...this.jobs.filter(j => j.status === 'pending')];
+    const pending = [...this.jobs.filter((j) => j.status === 'pending')];
     const results: ConversionJob[] = [];
 
     await new Promise<void>((resolve) => {
       const tick = () => {
-        if (this.aborted) { resolve(); return; }
+        if (this.aborted) {
+          resolve();
+          return;
+        }
         while (this.running < this.concurrency && pending.length > 0) {
           const job = pending.shift()!;
           this.running++;
-          this.processJob(job).then(done => {
+          this.processJob(job).then((done) => {
             results.push(done);
             this.running--;
             tick();
@@ -99,8 +106,16 @@ export class ConversionQueue {
     }
   }
 
-  get snapshot(): ConversionJob[] { return [...this.jobs]; }
-  get total(): number { return this.jobs.length; }
-  get done(): number { return this.jobs.filter(j => j.status === 'done').length; }
-  get errors(): number { return this.jobs.filter(j => j.status === 'error').length; }
+  get snapshot(): ConversionJob[] {
+    return [...this.jobs];
+  }
+  get total(): number {
+    return this.jobs.length;
+  }
+  get done(): number {
+    return this.jobs.filter((j) => j.status === 'done').length;
+  }
+  get errors(): number {
+    return this.jobs.filter((j) => j.status === 'error').length;
+  }
 }

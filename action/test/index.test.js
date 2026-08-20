@@ -27,12 +27,19 @@ test('generates a README in the requested language', async () => {
     await writeFile(path.join(workspace, 'package.json'), '{"name":"fixture"}', 'utf8');
     process.env.GITHUB_WORKSPACE = workspace;
     await run([
-      '--model', 'test-model',
-      '--language', 'Japanese',
-      '--ollama-host', `http://127.0.0.1:${address.port}`,
-      '--output', 'README.md',
+      '--model',
+      'test-model',
+      '--language',
+      'Japanese',
+      '--ollama-host',
+      `http://127.0.0.1:${address.port}`,
+      '--output',
+      'README.md',
     ]);
-    assert.equal(await readFile(path.join(workspace, 'README.md'), 'utf8'), '# テスト\n\n説明です。\n');
+    assert.equal(
+      await readFile(path.join(workspace, 'README.md'), 'utf8'),
+      '# テスト\n\n説明です。\n',
+    );
   } finally {
     process.env = previous;
     await new Promise((resolve) => server.close(resolve));

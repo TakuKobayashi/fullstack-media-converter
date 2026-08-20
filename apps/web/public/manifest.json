@@ -12,9 +12,21 @@
   ],
   "categories": ["utilities", "productivity"],
   "shortcuts": [
-    { "name": "Image Converter", "url": "/image-converter", "description": "Convert image batches" },
-    { "name": "Video Converter", "url": "/video-converter", "description": "Convert videos locally" },
-    { "name": "Audio Converter", "url": "/audio-converter", "description": "Convert audio locally" },
+    {
+      "name": "Image Converter",
+      "url": "/image-converter",
+      "description": "Convert image batches"
+    },
+    {
+      "name": "Video Converter",
+      "url": "/video-converter",
+      "description": "Convert videos locally"
+    },
+    {
+      "name": "Audio Converter",
+      "url": "/audio-converter",
+      "description": "Convert audio locally"
+    },
     { "name": "EXIF Export", "url": "/export-exif", "description": "Export image metadata" }
   ]
 }

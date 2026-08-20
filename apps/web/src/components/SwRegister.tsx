@@ -17,9 +17,7 @@ export default function SwRegister() {
         if ('caches' in window) {
           const keys = await caches.keys();
           await Promise.all(
-            keys
-              .filter((key) => key.startsWith('convertmate-'))
-              .map((key) => caches.delete(key)),
+            keys.filter((key) => key.startsWith('convertmate-')).map((key) => caches.delete(key)),
           );
         }
       };

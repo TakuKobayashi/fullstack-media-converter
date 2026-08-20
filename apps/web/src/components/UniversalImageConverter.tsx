@@ -11,8 +11,15 @@
  */
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
-  ConversionJob, ConversionFile, InputFormat, ImageOutputFormat,
-  generateId, guessFormat, IMAGE_OUTPUT_FORMATS, IMAGE_INPUT_EXTENSIONS, IMAGE_INPUT_FORMAT_LABELS,
+  ConversionJob,
+  ConversionFile,
+  InputFormat,
+  ImageOutputFormat,
+  generateId,
+  guessFormat,
+  IMAGE_OUTPUT_FORMATS,
+  IMAGE_INPUT_EXTENSIONS,
+  IMAGE_INPUT_FORMAT_LABELS,
   canConvert,
 } from '@convertmate/shared';
 import { ConversionQueue } from '@convertmate/core';
@@ -44,52 +51,64 @@ export default function UniversalImageConverter() {
   const queueRef = useRef<ConversionQueue | null>(null);
 
   const updateJob = useCallback((id: string, patch: Partial<ConversionJob>) => {
-    setJobs(prev => prev.map(j => j.id === id ? { ...j, ...patch } : j));
+    setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, ...patch } : j)));
   }, []);
 
   // Detect input format per file, tag the job with the currently-selected
   // target format. If the user later changes the dropdown, pending jobs'
   // outputFormat is updated too (see the effect below).
-  const addFiles = useCallback((fileList: FileList | File[]) => {
-    const files = Array.from(fileList);
-    const valid = files.filter(f => {
-      const ext = '.' + (f.name.split('.').pop() ?? '');
-      return IMAGE_INPUT_EXTENSIONS.some(e => e.toLowerCase() === ext.toLowerCase());
-    });
-    if (valid.length === 0) return;
+  const addFiles = useCallback(
+    (fileList: FileList | File[]) => {
+      const files = Array.from(fileList);
+      const valid = files.filter((f) => {
+        const ext = '.' + (f.name.split('.').pop() ?? '');
+        return IMAGE_INPUT_EXTENSIONS.some((e) => e.toLowerCase() === ext.toLowerCase());
+      });
+      if (valid.length === 0) return;
 
-    setJobs(prev => {
-      const newJobs: ConversionJob[] = valid.map(file => ({
-        id: generateId(),
-        file: { id: generateId(), name: file.name, size: file.size, source: file } as ConversionFile,
-        inputFormat: (guessFormat(file.name) ?? 'jpg') as InputFormat,
-        outputFormat: targetFormat,
-        status: 'pending',
-        progress: 0,
-      }));
-      return [...prev, ...newJobs];
-    });
-  }, [targetFormat]);
+      setJobs((prev) => {
+        const newJobs: ConversionJob[] = valid.map((file) => ({
+          id: generateId(),
+          file: {
+            id: generateId(),
+            name: file.name,
+            size: file.size,
+            source: file,
+          } as ConversionFile,
+          inputFormat: (guessFormat(file.name) ?? 'jpg') as InputFormat,
+          outputFormat: targetFormat,
+          status: 'pending',
+          progress: 0,
+        }));
+        return [...prev, ...newJobs];
+      });
+    },
+    [targetFormat],
+  );
 
   // Keep pending jobs' outputFormat in sync with the dropdown
   const handleTargetFormatChange = useCallback((fmt: ImageOutputFormat) => {
     setTargetFormat(fmt);
-    setJobs(prev => prev.map(j => j.status === 'pending' ? { ...j, outputFormat: fmt } : j));
+    setJobs((prev) => prev.map((j) => (j.status === 'pending' ? { ...j, outputFormat: fmt } : j)));
   }, []);
 
-  const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    addFiles(e.dataTransfer.files);
-  }, [addFiles]);
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragOver(false);
+      addFiles(e.dataTransfer.files);
+    },
+    [addFiles],
+  );
 
   // Warn (not block) when some pending files can't reach the chosen target
   const incompatibleCount = useMemo(() => {
-    return jobs.filter(j => j.status === 'pending' && !canConvert(j.inputFormat, targetFormat)).length;
+    return jobs.filter((j) => j.status === 'pending' && !canConvert(j.inputFormat, targetFormat))
+      .length;
   }, [jobs, targetFormat]);
 
   const startConversion = useCallback(async () => {
-    const pending = jobs.filter(j => j.status === 'pending');
+    const pending = jobs.filter((j) => j.status === 'pending');
     if (pending.length === 0) return;
     setRunning(true);
 
@@ -100,8 +119,10 @@ export default function UniversalImageConverter() {
     const unsub = queue.on(({ type, job }) => {
       if (!job) return;
       if (type === 'job:start') updateJob(job.id, { status: 'processing', progress: 0 });
-      if (type === 'job:done')  updateJob(job.id, { status: 'done', progress: 100, resultUrl: job.resultUrl });
-      if (type === 'job:error') updateJob(job.id, { status: 'error', error: job.error, progress: 0 });
+      if (type === 'job:done')
+        updateJob(job.id, { status: 'done', progress: 100, resultUrl: job.resultUrl });
+      if (type === 'job:error')
+        updateJob(job.id, { status: 'error', error: job.error, progress: 0 });
     });
 
     await queue.run();
@@ -114,22 +135,28 @@ export default function UniversalImageConverter() {
 
   const clearAll = () => {
     if (running && queueRef.current) queueRef.current.abort();
-    jobs.forEach(j => { if (j.resultUrl?.startsWith('blob:')) URL.revokeObjectURL(j.resultUrl); });
+    jobs.forEach((j) => {
+      if (j.resultUrl?.startsWith('blob:')) URL.revokeObjectURL(j.resultUrl);
+    });
     setJobs([]);
     setRunning(false);
   };
 
-  const removeJob = (id: string) => setJobs(prev => prev.filter(j => j.id !== id));
+  const removeJob = (id: string) => setJobs((prev) => prev.filter((j) => j.id !== id));
 
   useEffect(() => {
-    return () => { jobs.forEach(j => { if (j.resultUrl?.startsWith('blob:')) URL.revokeObjectURL(j.resultUrl); }); };
+    return () => {
+      jobs.forEach((j) => {
+        if (j.resultUrl?.startsWith('blob:')) URL.revokeObjectURL(j.resultUrl);
+      });
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const pendingCount    = jobs.filter(j => j.status === 'pending').length;
-  const doneCount       = jobs.filter(j => j.status === 'done').length;
-  const errorCount      = jobs.filter(j => j.status === 'error').length;
-  const processingCount = jobs.filter(j => j.status === 'processing').length;
+  const pendingCount = jobs.filter((j) => j.status === 'pending').length;
+  const doneCount = jobs.filter((j) => j.status === 'done').length;
+  const errorCount = jobs.filter((j) => j.status === 'error').length;
+  const processingCount = jobs.filter((j) => j.status === 'processing').length;
 
   return (
     <div className={s.main}>
@@ -140,25 +167,28 @@ export default function UniversalImageConverter() {
           <h1 className={s.title}>
             <em>{t('image.title')}</em> {t('image.suffix')}
           </h1>
-          <p className={s.subtitle}>
-            {t('image.subtitle', { formats: formatList })}
-          </p>
+          <p className={s.subtitle}>{t('image.subtitle', { formats: formatList })}</p>
         </div>
       </section>
 
       <div className="container">
-        <div className={s.adSlot} aria-hidden="true">{t('common.ad')}</div>
+        <div className={s.adSlot} aria-hidden="true">
+          {t('common.ad')}
+        </div>
 
         {/* Drop zone */}
         <div
           className={`${s.dropZone} ${isDragOver ? s.dropZoneActive : ''}`}
-          onDragOver={e => { e.preventDefault(); setIsDragOver(true); }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragOver(true);
+          }}
           onDragLeave={() => setIsDragOver(false)}
           onDrop={onDrop}
           onClick={() => inputRef.current?.click()}
           role="button"
           tabIndex={0}
-          onKeyDown={e => e.key === 'Enter' && inputRef.current?.click()}
+          onKeyDown={(e) => e.key === 'Enter' && inputRef.current?.click()}
           aria-label={t('image.dropAria')}
         >
           <span className={s.dropIcon}>📂</span>
@@ -171,7 +201,7 @@ export default function UniversalImageConverter() {
             multiple
             accept={IMAGE_INPUT_EXTENSIONS.join(',')}
             style={{ display: 'none' }}
-            onChange={e => e.target.files && addFiles(e.target.files)}
+            onChange={(e) => e.target.files && addFiles(e.target.files)}
           />
         </div>
 
@@ -182,11 +212,13 @@ export default function UniversalImageConverter() {
           <select
             className={s.formatSelect}
             value={targetFormat}
-            onChange={e => handleTargetFormatChange(e.target.value as ImageOutputFormat)}
+            onChange={(e) => handleTargetFormatChange(e.target.value as ImageOutputFormat)}
             disabled={running}
           >
-            {IMAGE_OUTPUT_FORMATS.map(fmt => (
-              <option key={fmt} value={fmt}>{fmt.toUpperCase()}</option>
+            {IMAGE_OUTPUT_FORMATS.map((fmt) => (
+              <option key={fmt} value={fmt}>
+                {fmt.toUpperCase()}
+              </option>
             ))}
           </select>
 
@@ -199,7 +231,11 @@ export default function UniversalImageConverter() {
 
         {incompatibleCount > 0 && (
           <p className={s.mixedHint}>
-            ⚠ {t('image.incompatible', { count: incompatibleCount, format: targetFormat.toUpperCase() })}
+            ⚠{' '}
+            {t('image.incompatible', {
+              count: incompatibleCount,
+              format: targetFormat.toUpperCase(),
+            })}
           </p>
         )}
 
@@ -208,54 +244,108 @@ export default function UniversalImageConverter() {
           <div className={s.controls}>
             <span className={s.controlLabel}>{t('common.quality')}</span>
             <input
-              type="range" min={60} max={100} value={quality}
-              onChange={e => setQuality(Number(e.target.value))}
+              type="range"
+              min={60}
+              max={100}
+              value={quality}
+              onChange={(e) => setQuality(Number(e.target.value))}
               disabled={running}
               style={{ width: 100, accentColor: 'var(--indigo)' }}
             />
-            <span style={{ fontSize: '0.8rem', color: 'var(--muted)', minWidth: 28 }}>{quality}</span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--muted)', minWidth: 28 }}>
+              {quality}
+            </span>
 
-            <span className={s.controlLabel} style={{ marginLeft: 12 }}>{t('common.threads')}</span>
+            <span className={s.controlLabel} style={{ marginLeft: 12 }}>
+              {t('common.threads')}
+            </span>
             <select
-              className={s.select} value={concurrency}
-              onChange={e => setConcurrency(Number(e.target.value))}
+              className={s.select}
+              value={concurrency}
+              onChange={(e) => setConcurrency(Number(e.target.value))}
               disabled={running}
             >
-              {[1,2,3,4,6,8].map(n => <option key={n} value={n}>{n}</option>)}
+              {[1, 2, 3, 4, 6, 8].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
             </select>
 
-            <button className={s.convertBtn} onClick={startConversion} disabled={running || pendingCount === 0}>
-              {running ? <><span className={s.spinner} /> {t('common.converting')}</> : t('common.convertCount', { count: pendingCount })}
+            <button
+              className={s.convertBtn}
+              onClick={startConversion}
+              disabled={running || pendingCount === 0}
+            >
+              {running ? (
+                <>
+                  <span className={s.spinner} /> {t('common.converting')}
+                </>
+              ) : (
+                t('common.convertCount', { count: pendingCount })
+              )}
             </button>
 
             {jobs.length > 0 && (
-              <button className={s.downloadAllBtn} onClick={downloadAll} disabled={!isAllComplete || isPackaging}>
-                {isPackaging ? t('common.zipProgress', { progress: packageProgress }) : `⬇ ${t(jobs.length > 1 ? 'common.downloadZip' : 'common.download')}`}
+              <button
+                className={s.downloadAllBtn}
+                onClick={downloadAll}
+                disabled={!isAllComplete || isPackaging}
+              >
+                {isPackaging
+                  ? t('common.zipProgress', { progress: packageProgress })
+                  : `⬇ ${t(jobs.length > 1 ? 'common.downloadZip' : 'common.download')}`}
               </button>
             )}
 
             <button
               onClick={clearAll}
               disabled={isPackaging}
-              style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--muted)', background: 'none', padding: '6px 8px' }}
+              style={{
+                marginLeft: 'auto',
+                fontSize: '0.8rem',
+                color: 'var(--muted)',
+                background: 'none',
+                padding: '6px 8px',
+              }}
             >
               {t('common.clear')}
             </button>
           </div>
         )}
 
-        {packageError && <p className={s.errorDetail}>{t('common.zipError', { error: packageError })}</p>}
+        {packageError && (
+          <p className={s.errorDetail}>{t('common.zipError', { error: packageError })}</p>
+        )}
 
         {/* Summary */}
         {jobs.length > 0 && (
           <div className={s.summary}>
-            <div><div className={s.summaryNum}>{jobs.length}</div><div className={s.summaryLabel}>{t('common.total')}</div></div>
-            <div><div className={s.summaryNum} style={{ color: '#22c55e' }}>{doneCount}</div><div className={s.summaryLabel}>{t('common.done')}</div></div>
+            <div>
+              <div className={s.summaryNum}>{jobs.length}</div>
+              <div className={s.summaryLabel}>{t('common.total')}</div>
+            </div>
+            <div>
+              <div className={s.summaryNum} style={{ color: '#22c55e' }}>
+                {doneCount}
+              </div>
+              <div className={s.summaryLabel}>{t('common.done')}</div>
+            </div>
             {processingCount > 0 && (
-              <div><div className={s.summaryNum} style={{ color: 'var(--indigo-3)' }}>{processingCount}</div><div className={s.summaryLabel}>{t('common.processing')}</div></div>
+              <div>
+                <div className={s.summaryNum} style={{ color: 'var(--indigo-3)' }}>
+                  {processingCount}
+                </div>
+                <div className={s.summaryLabel}>{t('common.processing')}</div>
+              </div>
             )}
             {errorCount > 0 && (
-              <div><div className={s.summaryNum} style={{ color: 'var(--coral)' }}>{errorCount}</div><div className={s.summaryLabel}>{t('common.errors')}</div></div>
+              <div>
+                <div className={s.summaryNum} style={{ color: 'var(--coral)' }}>
+                  {errorCount}
+                </div>
+                <div className={s.summaryLabel}>{t('common.errors')}</div>
+              </div>
             )}
           </div>
         )}
@@ -263,7 +353,7 @@ export default function UniversalImageConverter() {
         {/* File list */}
         {jobs.length > 0 && (
           <div className={s.fileList}>
-            {jobs.map(job => (
+            {jobs.map((job) => (
               <div key={job.id}>
                 <div className={s.fileRow}>
                   <span className={s.fileIcon}>🖼️</span>
@@ -280,13 +370,23 @@ export default function UniversalImageConverter() {
                     />
                   </div>
 
-                  <span className={
-                    job.status === 'pending' ? s.statusPending :
-                    job.status === 'processing' ? s.statusProcessing :
-                    job.status === 'done' ? s.statusDone : s.statusError
-                  }>
+                  <span
+                    className={
+                      job.status === 'pending'
+                        ? s.statusPending
+                        : job.status === 'processing'
+                          ? s.statusProcessing
+                          : job.status === 'done'
+                            ? s.statusDone
+                            : s.statusError
+                    }
+                  >
                     {job.status === 'pending' && '–'}
-                    {job.status === 'processing' && <><span className={s.spinner} /> {job.progress}%</>}
+                    {job.status === 'processing' && (
+                      <>
+                        <span className={s.spinner} /> {job.progress}%
+                      </>
+                    )}
                     {job.status === 'done' && '✔'}
                     {job.status === 'error' && '✖'}
                   </span>
@@ -304,7 +404,12 @@ export default function UniversalImageConverter() {
                   {job.status === 'pending' && (
                     <button
                       onClick={() => removeJob(job.id)}
-                      style={{ background: 'none', color: 'var(--muted)', fontSize: '0.9rem', padding: '2px 8px' }}
+                      style={{
+                        background: 'none',
+                        color: 'var(--muted)',
+                        fontSize: '0.9rem',
+                        padding: '2px 8px',
+                      }}
                       aria-label={t('common.remove', { name: job.file.name })}
                     >
                       ✕
@@ -320,14 +425,23 @@ export default function UniversalImageConverter() {
         )}
 
         {jobs.length > 0 && (
-          <div className={s.adSlot} style={{ marginTop: 32 }} aria-hidden="true">{t('common.ad')}</div>
+          <div className={s.adSlot} style={{ marginTop: 32 }} aria-hidden="true">
+            {t('common.ad')}
+          </div>
         )}
 
         <div className={s.prose}>
           <h2>{t('image.proseTitle')}</h2>
           <p>{t('image.prose')}</p>
           <ul>
-            {(t('image.bullets', { returnObjects: true, formats: formatList }) as unknown as string[]).map(item => <li key={item}>{item}</li>)}
+            {(
+              t('image.bullets', {
+                returnObjects: true,
+                formats: formatList,
+              }) as unknown as string[]
+            ).map((item) => (
+              <li key={item}>{item}</li>
+            ))}
           </ul>
         </div>
       </div>

@@ -1,7 +1,9 @@
 {
   "name": "@convertmate/cli",
   "version": "0.1.0",
-  "bin": { "cm": "./src/index.ts" },
+  "bin": {
+    "cm": "./src/index.ts"
+  },
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsc"

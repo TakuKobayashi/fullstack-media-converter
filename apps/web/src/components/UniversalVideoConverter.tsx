@@ -5,9 +5,16 @@
  */
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
-  ConversionJob, ConversionFile, InputFormat, VideoOutputFormat,
-  generateId, guessFormat, canConvert, VIDEO_INPUT_EXTENSIONS,
-  VIDEO_INPUT_FORMAT_LABELS, VIDEO_OUTPUT_FORMATS,
+  ConversionJob,
+  ConversionFile,
+  InputFormat,
+  VideoOutputFormat,
+  generateId,
+  guessFormat,
+  canConvert,
+  VIDEO_INPUT_EXTENSIONS,
+  VIDEO_INPUT_FORMAT_LABELS,
+  VIDEO_OUTPUT_FORMATS,
 } from '@convertmate/shared';
 import { ConversionQueue } from '@convertmate/core';
 import { BrowserVideoEngine } from '@convertmate/video';
@@ -27,7 +34,9 @@ function formatBytes(bytes: number): string {
 export default function UniversalVideoConverter() {
   const { t, locale } = useTranslation();
   const inputFormatList = VIDEO_INPUT_FORMAT_LABELS.join(locale === 'ja' ? '・' : ' · ');
-  const outputFormatList = VIDEO_OUTPUT_FORMATS.map(format => format.toUpperCase()).join(locale === 'ja' ? '・' : ' · ');
+  const outputFormatList = VIDEO_OUTPUT_FORMATS.map((format) => format.toUpperCase()).join(
+    locale === 'ja' ? '・' : ' · ',
+  );
   const [jobs, setJobs] = useState<ConversionJob[]>([]);
   const [targetFormat, setTargetFormat] = useAtom(videoOutputFormatAtom);
   const [running, setRunning] = useState(false);
@@ -39,47 +48,59 @@ export default function UniversalVideoConverter() {
   const queueRef = useRef<ConversionQueue | null>(null);
 
   const updateJob = useCallback((id: string, patch: Partial<ConversionJob>) => {
-    setJobs(prev => prev.map(j => j.id === id ? { ...j, ...patch } : j));
+    setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, ...patch } : j)));
   }, []);
 
-  const addFiles = useCallback((fileList: FileList | File[]) => {
-    const files = Array.from(fileList);
-    const valid = files.filter(f => {
-      const ext = '.' + (f.name.split('.').pop() ?? '');
-      return VIDEO_INPUT_EXTENSIONS.some(e => e.toLowerCase() === ext.toLowerCase());
-    });
-    if (valid.length === 0) return;
+  const addFiles = useCallback(
+    (fileList: FileList | File[]) => {
+      const files = Array.from(fileList);
+      const valid = files.filter((f) => {
+        const ext = '.' + (f.name.split('.').pop() ?? '');
+        return VIDEO_INPUT_EXTENSIONS.some((e) => e.toLowerCase() === ext.toLowerCase());
+      });
+      if (valid.length === 0) return;
 
-    setJobs(prev => {
-      const newJobs: ConversionJob[] = valid.map(file => ({
-        id: generateId(),
-        file: { id: generateId(), name: file.name, size: file.size, source: file } as ConversionFile,
-        inputFormat: (guessFormat(file.name) ?? 'mp4') as InputFormat,
-        outputFormat: targetFormat,
-        status: 'pending',
-        progress: 0,
-      }));
-      return [...prev, ...newJobs];
-    });
-  }, [targetFormat]);
+      setJobs((prev) => {
+        const newJobs: ConversionJob[] = valid.map((file) => ({
+          id: generateId(),
+          file: {
+            id: generateId(),
+            name: file.name,
+            size: file.size,
+            source: file,
+          } as ConversionFile,
+          inputFormat: (guessFormat(file.name) ?? 'mp4') as InputFormat,
+          outputFormat: targetFormat,
+          status: 'pending',
+          progress: 0,
+        }));
+        return [...prev, ...newJobs];
+      });
+    },
+    [targetFormat],
+  );
 
   const handleTargetFormatChange = useCallback((fmt: VideoOutputFormat) => {
     setTargetFormat(fmt);
-    setJobs(prev => prev.map(j => j.status === 'pending' ? { ...j, outputFormat: fmt } : j));
+    setJobs((prev) => prev.map((j) => (j.status === 'pending' ? { ...j, outputFormat: fmt } : j)));
   }, []);
 
-  const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    addFiles(e.dataTransfer.files);
-  }, [addFiles]);
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragOver(false);
+      addFiles(e.dataTransfer.files);
+    },
+    [addFiles],
+  );
 
   const incompatibleCount = useMemo(() => {
-    return jobs.filter(j => j.status === 'pending' && !canConvert(j.inputFormat, targetFormat)).length;
+    return jobs.filter((j) => j.status === 'pending' && !canConvert(j.inputFormat, targetFormat))
+      .length;
   }, [jobs, targetFormat]);
 
   const startConversion = useCallback(async () => {
-    const pending = jobs.filter(j => j.status === 'pending');
+    const pending = jobs.filter((j) => j.status === 'pending');
     if (pending.length === 0) return;
     setRunning(true);
 
@@ -91,8 +112,10 @@ export default function UniversalVideoConverter() {
       if (!job) return;
       if (type === 'job:start') updateJob(job.id, { status: 'processing', progress: 0 });
       if (type === 'job:progress') updateJob(job.id, { progress: job.progress });
-      if (type === 'job:done')  updateJob(job.id, { status: 'done', progress: 100, resultUrl: job.resultUrl });
-      if (type === 'job:error') updateJob(job.id, { status: 'error', error: job.error, progress: 0 });
+      if (type === 'job:done')
+        updateJob(job.id, { status: 'done', progress: 100, resultUrl: job.resultUrl });
+      if (type === 'job:error')
+        updateJob(job.id, { status: 'error', error: job.error, progress: 0 });
     });
 
     await queue.run();
@@ -105,45 +128,60 @@ export default function UniversalVideoConverter() {
 
   const clearAll = () => {
     if (running && queueRef.current) queueRef.current.abort();
-    jobs.forEach(j => { if (j.resultUrl?.startsWith('blob:')) URL.revokeObjectURL(j.resultUrl); });
+    jobs.forEach((j) => {
+      if (j.resultUrl?.startsWith('blob:')) URL.revokeObjectURL(j.resultUrl);
+    });
     setJobs([]);
     setRunning(false);
   };
 
-  const removeJob = (id: string) => setJobs(prev => prev.filter(j => j.id !== id));
+  const removeJob = (id: string) => setJobs((prev) => prev.filter((j) => j.id !== id));
 
   useEffect(() => {
-    return () => { jobs.forEach(j => { if (j.resultUrl?.startsWith('blob:')) URL.revokeObjectURL(j.resultUrl); }); };
+    return () => {
+      jobs.forEach((j) => {
+        if (j.resultUrl?.startsWith('blob:')) URL.revokeObjectURL(j.resultUrl);
+      });
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const pendingCount    = jobs.filter(j => j.status === 'pending').length;
-  const doneCount       = jobs.filter(j => j.status === 'done').length;
-  const errorCount      = jobs.filter(j => j.status === 'error').length;
-  const processingCount = jobs.filter(j => j.status === 'processing').length;
+  const pendingCount = jobs.filter((j) => j.status === 'pending').length;
+  const doneCount = jobs.filter((j) => j.status === 'done').length;
+  const errorCount = jobs.filter((j) => j.status === 'error').length;
+  const processingCount = jobs.filter((j) => j.status === 'processing').length;
 
   return (
     <div className={s.main}>
       <section className={s.hero}>
         <div className="container">
           <span className={s.badge}>{t('video.badge')}</span>
-          <h1 className={s.title}><em>{t('video.title')}</em> {t('video.suffix')}</h1>
-          <p className={s.subtitle}>{t('video.subtitle', { inputs: inputFormatList, outputs: outputFormatList })}</p>
+          <h1 className={s.title}>
+            <em>{t('video.title')}</em> {t('video.suffix')}
+          </h1>
+          <p className={s.subtitle}>
+            {t('video.subtitle', { inputs: inputFormatList, outputs: outputFormatList })}
+          </p>
         </div>
       </section>
 
       <div className="container">
-        <div className={s.adSlot} aria-hidden="true">{t('common.ad')}</div>
+        <div className={s.adSlot} aria-hidden="true">
+          {t('common.ad')}
+        </div>
 
         <div
           className={`${s.dropZone} ${isDragOver ? s.dropZoneActive : ''}`}
-          onDragOver={e => { e.preventDefault(); setIsDragOver(true); }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragOver(true);
+          }}
           onDragLeave={() => setIsDragOver(false)}
           onDrop={onDrop}
           onClick={() => inputRef.current?.click()}
           role="button"
           tabIndex={0}
-          onKeyDown={e => e.key === 'Enter' && inputRef.current?.click()}
+          onKeyDown={(e) => e.key === 'Enter' && inputRef.current?.click()}
           aria-label={t('video.dropAria')}
         >
           <span className={s.dropIcon}>🎬</span>
@@ -156,7 +194,7 @@ export default function UniversalVideoConverter() {
             multiple
             accept={VIDEO_INPUT_EXTENSIONS.join(',')}
             style={{ display: 'none' }}
-            onChange={e => e.target.files && addFiles(e.target.files)}
+            onChange={(e) => e.target.files && addFiles(e.target.files)}
           />
         </div>
 
@@ -166,11 +204,13 @@ export default function UniversalVideoConverter() {
           <select
             className={s.formatSelect}
             value={targetFormat}
-            onChange={e => handleTargetFormatChange(e.target.value as VideoOutputFormat)}
+            onChange={(e) => handleTargetFormatChange(e.target.value as VideoOutputFormat)}
             disabled={running}
           >
-            {VIDEO_OUTPUT_FORMATS.map(fmt => (
-              <option key={fmt} value={fmt}>{fmt.toUpperCase()}</option>
+            {VIDEO_OUTPUT_FORMATS.map((fmt) => (
+              <option key={fmt} value={fmt}>
+                {fmt.toUpperCase()}
+              </option>
             ))}
           </select>
           {jobs.length > 0 && (
@@ -182,7 +222,11 @@ export default function UniversalVideoConverter() {
 
         {incompatibleCount > 0 && (
           <p className={s.mixedHint}>
-            ⚠ {t('video.incompatible', { count: incompatibleCount, format: targetFormat.toUpperCase() })}
+            ⚠{' '}
+            {t('video.incompatible', {
+              count: incompatibleCount,
+              format: targetFormat.toUpperCase(),
+            })}
           </p>
         )}
 
@@ -190,54 +234,99 @@ export default function UniversalVideoConverter() {
           <div className={s.controls}>
             <span className={s.controlLabel}>{t('common.threads')}</span>
             <select
-              className={s.select} value={concurrency}
-              onChange={e => setConcurrency(Number(e.target.value))}
+              className={s.select}
+              value={concurrency}
+              onChange={(e) => setConcurrency(Number(e.target.value))}
               disabled={running}
             >
-              {[1, 2].map(n => <option key={n} value={n}>{n}</option>)}
+              {[1, 2].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
             </select>
-            <span style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
-              {t('video.cpu')}
-            </span>
+            <span style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>{t('video.cpu')}</span>
 
-            <button className={s.convertBtn} onClick={startConversion} disabled={running || pendingCount === 0}>
-              {running ? <><span className={s.spinner} /> {t('common.converting')}</> : t('common.convertCount', { count: pendingCount })}
+            <button
+              className={s.convertBtn}
+              onClick={startConversion}
+              disabled={running || pendingCount === 0}
+            >
+              {running ? (
+                <>
+                  <span className={s.spinner} /> {t('common.converting')}
+                </>
+              ) : (
+                t('common.convertCount', { count: pendingCount })
+              )}
             </button>
 
             {jobs.length > 0 && (
-              <button className={s.downloadAllBtn} onClick={downloadAll} disabled={!isAllComplete || isPackaging}>
-                {isPackaging ? t('common.zipProgress', { progress: packageProgress }) : `⬇ ${t(jobs.length > 1 ? 'common.downloadZip' : 'common.download')}`}
+              <button
+                className={s.downloadAllBtn}
+                onClick={downloadAll}
+                disabled={!isAllComplete || isPackaging}
+              >
+                {isPackaging
+                  ? t('common.zipProgress', { progress: packageProgress })
+                  : `⬇ ${t(jobs.length > 1 ? 'common.downloadZip' : 'common.download')}`}
               </button>
             )}
 
             <button
               onClick={clearAll}
               disabled={isPackaging}
-              style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--muted)', background: 'none', padding: '6px 8px' }}
+              style={{
+                marginLeft: 'auto',
+                fontSize: '0.8rem',
+                color: 'var(--muted)',
+                background: 'none',
+                padding: '6px 8px',
+              }}
             >
               {t('common.clear')}
             </button>
           </div>
         )}
 
-        {packageError && <p className={s.errorDetail}>{t('common.zipError', { error: packageError })}</p>}
+        {packageError && (
+          <p className={s.errorDetail}>{t('common.zipError', { error: packageError })}</p>
+        )}
 
         {jobs.length > 0 && (
           <div className={s.summary}>
-            <div><div className={s.summaryNum}>{jobs.length}</div><div className={s.summaryLabel}>{t('common.total')}</div></div>
-            <div><div className={s.summaryNum} style={{ color: '#22c55e' }}>{doneCount}</div><div className={s.summaryLabel}>{t('common.done')}</div></div>
+            <div>
+              <div className={s.summaryNum}>{jobs.length}</div>
+              <div className={s.summaryLabel}>{t('common.total')}</div>
+            </div>
+            <div>
+              <div className={s.summaryNum} style={{ color: '#22c55e' }}>
+                {doneCount}
+              </div>
+              <div className={s.summaryLabel}>{t('common.done')}</div>
+            </div>
             {processingCount > 0 && (
-              <div><div className={s.summaryNum} style={{ color: 'var(--indigo-3)' }}>{processingCount}</div><div className={s.summaryLabel}>{t('common.processing')}</div></div>
+              <div>
+                <div className={s.summaryNum} style={{ color: 'var(--indigo-3)' }}>
+                  {processingCount}
+                </div>
+                <div className={s.summaryLabel}>{t('common.processing')}</div>
+              </div>
             )}
             {errorCount > 0 && (
-              <div><div className={s.summaryNum} style={{ color: 'var(--coral)' }}>{errorCount}</div><div className={s.summaryLabel}>{t('common.errors')}</div></div>
+              <div>
+                <div className={s.summaryNum} style={{ color: 'var(--coral)' }}>
+                  {errorCount}
+                </div>
+                <div className={s.summaryLabel}>{t('common.errors')}</div>
+              </div>
             )}
           </div>
         )}
 
         {jobs.length > 0 && (
           <div className={s.fileList}>
-            {jobs.map(job => (
+            {jobs.map((job) => (
               <div key={job.id}>
                 <div className={s.fileRow}>
                   <span className={s.fileIcon}>🎬</span>
@@ -254,13 +343,23 @@ export default function UniversalVideoConverter() {
                     />
                   </div>
 
-                  <span className={
-                    job.status === 'pending' ? s.statusPending :
-                    job.status === 'processing' ? s.statusProcessing :
-                    job.status === 'done' ? s.statusDone : s.statusError
-                  }>
+                  <span
+                    className={
+                      job.status === 'pending'
+                        ? s.statusPending
+                        : job.status === 'processing'
+                          ? s.statusProcessing
+                          : job.status === 'done'
+                            ? s.statusDone
+                            : s.statusError
+                    }
+                  >
                     {job.status === 'pending' && '–'}
-                    {job.status === 'processing' && <><span className={s.spinner} /> {job.progress}%</>}
+                    {job.status === 'processing' && (
+                      <>
+                        <span className={s.spinner} /> {job.progress}%
+                      </>
+                    )}
                     {job.status === 'done' && '✔'}
                     {job.status === 'error' && '✖'}
                   </span>
@@ -278,7 +377,12 @@ export default function UniversalVideoConverter() {
                   {job.status === 'pending' && (
                     <button
                       onClick={() => removeJob(job.id)}
-                      style={{ background: 'none', color: 'var(--muted)', fontSize: '0.9rem', padding: '2px 8px' }}
+                      style={{
+                        background: 'none',
+                        color: 'var(--muted)',
+                        fontSize: '0.9rem',
+                        padding: '2px 8px',
+                      }}
                       aria-label={t('common.remove', { name: job.file.name })}
                     >
                       ✕
@@ -294,14 +398,24 @@ export default function UniversalVideoConverter() {
         )}
 
         {jobs.length > 0 && (
-          <div className={s.adSlot} style={{ marginTop: 32 }} aria-hidden="true">{t('common.ad')}</div>
+          <div className={s.adSlot} style={{ marginTop: 32 }} aria-hidden="true">
+            {t('common.ad')}
+          </div>
         )}
 
         <div className={s.prose}>
           <h2>{t('video.proseTitle')}</h2>
           <p>{t('video.prose')}</p>
           <ul>
-            {(t('video.bullets', { returnObjects: true, inputs: inputFormatList, outputs: outputFormatList }) as unknown as string[]).map(item => <li key={item}>{item}</li>)}
+            {(
+              t('video.bullets', {
+                returnObjects: true,
+                inputs: inputFormatList,
+                outputs: outputFormatList,
+              }) as unknown as string[]
+            ).map((item) => (
+              <li key={item}>{item}</li>
+            ))}
           </ul>
         </div>
       </div>

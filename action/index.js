@@ -3,23 +3,81 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const DEFAULT_EXCLUDED_DIRECTORIES = new Set([
-  '.git', '.next', '.turbo', '.wrangler', 'build', 'coverage', 'dist',
-  'node_modules', 'out', 'target', 'vendor',
+  '.git',
+  '.next',
+  '.turbo',
+  '.wrangler',
+  'build',
+  'coverage',
+  'dist',
+  'node_modules',
+  'out',
+  'target',
+  'vendor',
 ]);
 const EXCLUDED_FILES = new Set([
-  '.env', '.env.local', '.env.production', 'pnpm-lock.yaml', 'package-lock.json',
-  'yarn.lock', 'bun.lock', 'bun.lockb',
+  '.env',
+  '.env.local',
+  '.env.production',
+  'pnpm-lock.yaml',
+  'package-lock.json',
+  'yarn.lock',
+  'bun.lock',
+  'bun.lockb',
 ]);
 const TEXT_EXTENSIONS = new Set([
-  '.c', '.cc', '.conf', '.cpp', '.cs', '.css', '.dockerfile', '.go', '.graphql',
-  '.h', '.hpp', '.html', '.ini', '.java', '.js', '.json', '.jsx', '.kt', '.kts',
-  '.md', '.mjs', '.php', '.properties', '.py', '.rb', '.rs', '.scss', '.sh',
-  '.sql', '.svelte', '.swift', '.toml', '.ts', '.tsx', '.txt', '.vue', '.xml',
-  '.yaml', '.yml',
+  '.c',
+  '.cc',
+  '.conf',
+  '.cpp',
+  '.cs',
+  '.css',
+  '.dockerfile',
+  '.go',
+  '.graphql',
+  '.h',
+  '.hpp',
+  '.html',
+  '.ini',
+  '.java',
+  '.js',
+  '.json',
+  '.jsx',
+  '.kt',
+  '.kts',
+  '.md',
+  '.mjs',
+  '.php',
+  '.properties',
+  '.py',
+  '.rb',
+  '.rs',
+  '.scss',
+  '.sh',
+  '.sql',
+  '.svelte',
+  '.swift',
+  '.toml',
+  '.ts',
+  '.tsx',
+  '.txt',
+  '.vue',
+  '.xml',
+  '.yaml',
+  '.yml',
 ]);
 const IMPORTANT_NAMES = new Set([
-  'action.yml', 'action.yaml', 'dockerfile', 'gemfile', 'go.mod', 'makefile',
-  'package.json', 'pom.xml', 'pyproject.toml', 'requirements.txt', 'tsconfig.json',
+  'action.yml',
+  'action.yaml',
+  'dockerfile',
+  'gemfile',
+  'go.mod',
+  'makefile',
+  'package.json',
+  'pom.xml',
+  'pyproject.toml',
+  'requirements.txt',
+  'tsconfig.json',
 ]);
 const PER_FILE_LIMIT = 20_000;
 
@@ -32,7 +90,12 @@ function input(name, fallback = '') {
 function parseArguments(args) {
   const values = {};
   const supported = new Set([
-    'model', 'language', 'ollama-host', 'output', 'max-input-bytes', 'instructions',
+    'model',
+    'language',
+    'ollama-host',
+    'output',
+    'max-input-bytes',
+    'instructions',
   ]);
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
@@ -71,7 +134,10 @@ Options:
 }
 
 function workflowCommand(name, value) {
-  const escaped = String(value).replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
+  const escaped = String(value)
+    .replaceAll('%', '%25')
+    .replaceAll('\r', '%0D')
+    .replaceAll('\n', '%0A');
   process.stdout.write(`::${name}::${escaped}\n`);
 }
 
@@ -86,10 +152,12 @@ async function setOutput(name, value) {
 function isSecretLike(relativePath) {
   const normalized = relativePath.replaceAll('\\', '/').toLowerCase();
   const name = path.basename(normalized);
-  return EXCLUDED_FILES.has(name)
-    || name.startsWith('.env.')
-    || /(^|\/)(id_rsa|id_ed25519|credentials|secrets?)(\.|$)/.test(normalized)
-    || /\.(key|p12|pfx|pem)$/.test(name);
+  return (
+    EXCLUDED_FILES.has(name) ||
+    name.startsWith('.env.') ||
+    /(^|\/)(id_rsa|id_ed25519|credentials|secrets?)(\.|$)/.test(normalized) ||
+    /\.(key|p12|pfx|pem)$/.test(name)
+  );
 }
 
 function isReadableProjectFile(relativePath) {
@@ -179,7 +247,11 @@ async function generateReadme({ host, model, language, instructions, projectCont
 
   const raw = await response.text();
   let body;
-  try { body = JSON.parse(raw); } catch { body = null; }
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    body = null;
+  }
   if (!response.ok) {
     throw new Error(`Ollama returned HTTP ${response.status}: ${body?.error ?? raw.slice(0, 500)}`);
   }
@@ -202,7 +274,10 @@ export async function run(args = []) {
   const host = cli['ollama-host'] ?? input('ollama-host', 'http://127.0.0.1:11434');
   const outputValue = cli.output ?? input('output', 'README.md');
   const instructions = cli.instructions ?? input('instructions');
-  const maxBytes = Number.parseInt(cli['max-input-bytes'] ?? input('max-input-bytes', '120000'), 10);
+  const maxBytes = Number.parseInt(
+    cli['max-input-bytes'] ?? input('max-input-bytes', '120000'),
+    10,
+  );
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1_000 || maxBytes > 2_000_000) {
     throw new Error('max-input-bytes must be an integer between 1000 and 2000000.');
   }
@@ -215,17 +290,25 @@ export async function run(args = []) {
 
   workflowCommand('notice', `Reading project files for a ${language} README`);
   const context = await buildProjectContext(root, maxBytes);
-  process.stdout.write(`Prepared ${context.fileCount} files (${context.bytes} bytes) for ${model}.\n`);
+  process.stdout.write(
+    `Prepared ${context.fileCount} files (${context.bytes} bytes) for ${model}.\n`,
+  );
 
   try {
     const readme = await generateReadme({
-      host, model, language, instructions, projectContext: context.text,
+      host,
+      model,
+      language,
+      instructions,
+      projectContext: context.text,
     });
     await mkdir(path.dirname(outputPath), { recursive: true });
     await writeFile(outputPath, readme, 'utf8');
   } catch (error) {
     if (error instanceof TypeError && /fetch|connect/i.test(error.message)) {
-      throw new Error(`Could not connect to Ollama at ${host}. Start Ollama on this runner and pull model "${model}" first.`);
+      throw new Error(
+        `Could not connect to Ollama at ${host}. Start Ollama on this runner and pull model "${model}" first.`,
+      );
     }
     throw error;
   }

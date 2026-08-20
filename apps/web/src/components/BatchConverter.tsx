@@ -7,8 +7,12 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import JSZip from 'jszip';
 import {
-  ConversionJob, ConversionFile, OutputFormat, InputFormat,
-  generateId, guessFormat,
+  ConversionJob,
+  ConversionFile,
+  OutputFormat,
+  InputFormat,
+  generateId,
+  guessFormat,
 } from '@convertmate/shared';
 import { ConversionQueue } from '@convertmate/core';
 import type { ConversionEngine, ConversionOptions } from '@convertmate/shared';
@@ -19,7 +23,7 @@ import { imageQualityAtom } from '@/state/preferences';
 
 export interface BatchConverterProps {
   engine: ConversionEngine;
-  acceptedFormats: string[];    // e.g. ['.webp', '.heic']
+  acceptedFormats: string[]; // e.g. ['.webp', '.heic']
   outputFormat: OutputFormat;
   options?: ConversionOptions;
   title: string;
@@ -40,15 +44,23 @@ function formatBytes(bytes: number): string {
 
 function fileIcon(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase();
-  if (['jpg','jpeg','png','webp','avif','heic','gif'].includes(ext ?? '')) return '🖼️';
-  if (['mp4','mov'].includes(ext ?? '')) return '🎬';
+  if (['jpg', 'jpeg', 'png', 'webp', 'avif', 'heic', 'gif'].includes(ext ?? '')) return '🖼️';
+  if (['mp4', 'mov'].includes(ext ?? '')) return '🎬';
   if (ext === 'pdf') return '📄';
   return '📁';
 }
 
 export default function BatchConverter({
-  engine, acceptedFormats, outputFormat, options = {},
-  title, subtitle, badge, prose, crossLinkHref, crossLinkLabel,
+  engine,
+  acceptedFormats,
+  outputFormat,
+  options = {},
+  title,
+  subtitle,
+  badge,
+  prose,
+  crossLinkHref,
+  crossLinkLabel,
 }: BatchConverterProps) {
   const { t } = useTranslation();
   const [jobs, setJobs] = useState<ConversionJob[]>([]);
@@ -60,36 +72,47 @@ export default function BatchConverter({
   const queueRef = useRef<ConversionQueue | null>(null);
 
   const updateJob = useCallback((id: string, patch: Partial<ConversionJob>) => {
-    setJobs(prev => prev.map(j => j.id === id ? { ...j, ...patch } : j));
+    setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, ...patch } : j)));
   }, []);
 
-  const addFiles = useCallback((fileList: FileList | File[]) => {
-    const files = Array.from(fileList);
-    const valid = files.filter(f => {
-      const ext = '.' + (f.name.split('.').pop()?.toLowerCase() ?? '');
-      return acceptedFormats.includes(ext);
-    });
-    if (valid.length === 0) return;
+  const addFiles = useCallback(
+    (fileList: FileList | File[]) => {
+      const files = Array.from(fileList);
+      const valid = files.filter((f) => {
+        const ext = '.' + (f.name.split('.').pop()?.toLowerCase() ?? '');
+        return acceptedFormats.includes(ext);
+      });
+      if (valid.length === 0) return;
 
-    const newJobs: ConversionJob[] = valid.map(file => ({
-      id: generateId(),
-      file: { id: generateId(), name: file.name, size: file.size, source: file } as ConversionFile,
-      inputFormat: (guessFormat(file.name) ?? 'jpg') as InputFormat,
-      outputFormat,
-      status: 'pending',
-      progress: 0,
-    }));
-    setJobs(prev => [...prev, ...newJobs]);
-  }, [acceptedFormats, outputFormat]);
+      const newJobs: ConversionJob[] = valid.map((file) => ({
+        id: generateId(),
+        file: {
+          id: generateId(),
+          name: file.name,
+          size: file.size,
+          source: file,
+        } as ConversionFile,
+        inputFormat: (guessFormat(file.name) ?? 'jpg') as InputFormat,
+        outputFormat,
+        status: 'pending',
+        progress: 0,
+      }));
+      setJobs((prev) => [...prev, ...newJobs]);
+    },
+    [acceptedFormats, outputFormat],
+  );
 
-  const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    addFiles(e.dataTransfer.files);
-  }, [addFiles]);
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragOver(false);
+      addFiles(e.dataTransfer.files);
+    },
+    [addFiles],
+  );
 
   const startConversion = useCallback(async () => {
-    const pending = jobs.filter(j => j.status === 'pending');
+    const pending = jobs.filter((j) => j.status === 'pending');
     if (pending.length === 0) return;
     setRunning(true);
 
@@ -106,7 +129,8 @@ export default function BatchConverter({
       if (!job) return;
       if (type === 'job:start') updateJob(job.id, { status: 'processing', progress: 0 });
       if (type === 'job:progress') updateJob(job.id, { progress: job.progress });
-      if (type === 'job:done')  updateJob(job.id, { status: 'done', progress: 100, resultUrl: job.resultUrl });
+      if (type === 'job:done')
+        updateJob(job.id, { status: 'done', progress: 100, resultUrl: job.resultUrl });
       if (type === 'job:error') updateJob(job.id, { status: 'error', error: job.error });
     });
 
@@ -116,7 +140,7 @@ export default function BatchConverter({
   }, [jobs, engine, concurrency, quality, options, updateJob]);
 
   const downloadAll = useCallback(async () => {
-    const done = jobs.filter(j => j.status === 'done' && j.resultUrl);
+    const done = jobs.filter((j) => j.status === 'done' && j.resultUrl);
     if (done.length === 0) return;
     if (done.length === 1) {
       const a = document.createElement('a');
@@ -126,13 +150,19 @@ export default function BatchConverter({
       return;
     }
     const zip = new JSZip();
-    await Promise.all(done.map(async job => {
-      const res = await fetch(job.resultUrl!);
-      const buf = await res.arrayBuffer();
-      const name = job.file.name.replace(/\.[^.]+$/, `.${outputFormat}`);
-      zip.file(name, buf);
-    }));
-    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    await Promise.all(
+      done.map(async (job) => {
+        const res = await fetch(job.resultUrl!);
+        const buf = await res.arrayBuffer();
+        const name = job.file.name.replace(/\.[^.]+$/, `.${outputFormat}`);
+        zip.file(name, buf);
+      }),
+    );
+    const blob = await zip.generateAsync({
+      type: 'blob',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 6 },
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -144,20 +174,26 @@ export default function BatchConverter({
   const clearAll = () => {
     if (running && queueRef.current) queueRef.current.abort();
     // Revoke object URLs
-    jobs.forEach(j => { if (j.resultUrl?.startsWith('blob:')) URL.revokeObjectURL(j.resultUrl); });
+    jobs.forEach((j) => {
+      if (j.resultUrl?.startsWith('blob:')) URL.revokeObjectURL(j.resultUrl);
+    });
     setJobs([]);
     setRunning(false);
   };
 
   // Cleanup on unmount
   useEffect(() => {
-    return () => { jobs.forEach(j => { if (j.resultUrl?.startsWith('blob:')) URL.revokeObjectURL(j.resultUrl); }); };
+    return () => {
+      jobs.forEach((j) => {
+        if (j.resultUrl?.startsWith('blob:')) URL.revokeObjectURL(j.resultUrl);
+      });
+    };
   }, []);
 
-  const pendingCount   = jobs.filter(j => j.status === 'pending').length;
-  const doneCount      = jobs.filter(j => j.status === 'done').length;
-  const errorCount     = jobs.filter(j => j.status === 'error').length;
-  const processingCount = jobs.filter(j => j.status === 'processing').length;
+  const pendingCount = jobs.filter((j) => j.status === 'pending').length;
+  const doneCount = jobs.filter((j) => j.status === 'done').length;
+  const errorCount = jobs.filter((j) => j.status === 'error').length;
+  const processingCount = jobs.filter((j) => j.status === 'processing').length;
 
   return (
     <div className={s.main}>
@@ -179,18 +215,23 @@ export default function BatchConverter({
 
       <div className="container">
         {/* Ad slot top */}
-        <div className={s.adSlot} aria-hidden="true">{t('common.ad')}</div>
+        <div className={s.adSlot} aria-hidden="true">
+          {t('common.ad')}
+        </div>
 
         {/* Drop zone */}
         <div
           className={`${s.dropZone} ${isDragOver ? s.dropZoneActive : ''}`}
-          onDragOver={e => { e.preventDefault(); setIsDragOver(true); }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragOver(true);
+          }}
           onDragLeave={() => setIsDragOver(false)}
           onDrop={onDrop}
           onClick={() => inputRef.current?.click()}
           role="button"
           tabIndex={0}
-          onKeyDown={e => e.key === 'Enter' && inputRef.current?.click()}
+          onKeyDown={(e) => e.key === 'Enter' && inputRef.current?.click()}
           aria-label={t('common.dropAria')}
         >
           <span className={s.dropIcon}>📂</span>
@@ -206,7 +247,7 @@ export default function BatchConverter({
             accept={acceptedFormats.join(',')}
             className={s['sr-only']}
             style={{ display: 'none' }}
-            onChange={e => e.target.files && addFiles(e.target.files)}
+            onChange={(e) => e.target.files && addFiles(e.target.files)}
           />
         </div>
 
@@ -215,24 +256,46 @@ export default function BatchConverter({
           <div className={s.controls}>
             <span className={s.controlLabel}>{t('common.quality')}</span>
             <input
-              type="range" min={60} max={100} value={quality}
-              onChange={e => setQuality(Number(e.target.value))}
+              type="range"
+              min={60}
+              max={100}
+              value={quality}
+              onChange={(e) => setQuality(Number(e.target.value))}
               disabled={running}
               style={{ width: 100, accentColor: 'var(--indigo)' }}
             />
-            <span style={{ fontSize: '0.8rem', color: 'var(--muted)', minWidth: 28 }}>{quality}</span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--muted)', minWidth: 28 }}>
+              {quality}
+            </span>
 
-            <span className={s.controlLabel} style={{ marginLeft: 12 }}>{t('common.threads')}</span>
+            <span className={s.controlLabel} style={{ marginLeft: 12 }}>
+              {t('common.threads')}
+            </span>
             <select
-              className={s.select} value={concurrency}
-              onChange={e => setConcurrency(Number(e.target.value))}
+              className={s.select}
+              value={concurrency}
+              onChange={(e) => setConcurrency(Number(e.target.value))}
               disabled={running}
             >
-              {[1,2,3,4,6,8].map(n => <option key={n} value={n}>{n}</option>)}
+              {[1, 2, 3, 4, 6, 8].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
             </select>
 
-            <button className={s.convertBtn} onClick={startConversion} disabled={running || pendingCount === 0}>
-              {running ? <><span className={s.spinner} /> {t('common.converting')}</> : t('common.convertCount', { count: pendingCount })}
+            <button
+              className={s.convertBtn}
+              onClick={startConversion}
+              disabled={running || pendingCount === 0}
+            >
+              {running ? (
+                <>
+                  <span className={s.spinner} /> {t('common.converting')}
+                </>
+              ) : (
+                t('common.convertCount', { count: pendingCount })
+              )}
             </button>
 
             {doneCount > 0 && (
@@ -243,7 +306,13 @@ export default function BatchConverter({
 
             <button
               onClick={clearAll}
-              style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--muted)', background: 'none', padding: '6px 8px' }}
+              style={{
+                marginLeft: 'auto',
+                fontSize: '0.8rem',
+                color: 'var(--muted)',
+                background: 'none',
+                padding: '6px 8px',
+              }}
             >
               {t('common.clear')}
             </button>
@@ -258,18 +327,24 @@ export default function BatchConverter({
               <div className={s.summaryLabel}>{t('common.total')}</div>
             </div>
             <div>
-              <div className={s.summaryNum} style={{ color: '#22c55e' }}>{doneCount}</div>
+              <div className={s.summaryNum} style={{ color: '#22c55e' }}>
+                {doneCount}
+              </div>
               <div className={s.summaryLabel}>{t('common.done')}</div>
             </div>
             {processingCount > 0 && (
               <div>
-                <div className={s.summaryNum} style={{ color: 'var(--indigo-3)' }}>{processingCount}</div>
+                <div className={s.summaryNum} style={{ color: 'var(--indigo-3)' }}>
+                  {processingCount}
+                </div>
                 <div className={s.summaryLabel}>{t('common.processing')}</div>
               </div>
             )}
             {errorCount > 0 && (
               <div>
-                <div className={s.summaryNum} style={{ color: 'var(--coral)' }}>{errorCount}</div>
+                <div className={s.summaryNum} style={{ color: 'var(--coral)' }}>
+                  {errorCount}
+                </div>
                 <div className={s.summaryLabel}>{t('common.errors')}</div>
               </div>
             )}
@@ -279,7 +354,7 @@ export default function BatchConverter({
         {/* File list */}
         {jobs.length > 0 && (
           <div className={s.fileList}>
-            {jobs.map(job => (
+            {jobs.map((job) => (
               <div key={job.id}>
                 <div className={s.fileRow}>
                   <span className={s.fileIcon}>{fileIcon(job.file.name)}</span>
@@ -293,9 +368,19 @@ export default function BatchConverter({
                     />
                   </div>
 
-                  <span className={s[`status${job.status.charAt(0).toUpperCase() + job.status.slice(1)}` as keyof typeof s]}>
+                  <span
+                    className={
+                      s[
+                        `status${job.status.charAt(0).toUpperCase() + job.status.slice(1)}` as keyof typeof s
+                      ]
+                    }
+                  >
                     {job.status === 'pending' && '–'}
-                    {job.status === 'processing' && <><span className={s.spinner} /> {job.progress}%</>}
+                    {job.status === 'processing' && (
+                      <>
+                        <span className={s.spinner} /> {job.progress}%
+                      </>
+                    )}
                     {job.status === 'done' && '✔'}
                     {job.status === 'error' && '✖'}
                   </span>
@@ -320,7 +405,9 @@ export default function BatchConverter({
 
         {/* Ad slot bottom */}
         {jobs.length > 0 && (
-          <div className={s.adSlot} style={{ marginTop: 32 }} aria-hidden="true">{t('common.ad')}</div>
+          <div className={s.adSlot} style={{ marginTop: 32 }} aria-hidden="true">
+            {t('common.ad')}
+          </div>
         )}
 
         {/* SEO prose */}

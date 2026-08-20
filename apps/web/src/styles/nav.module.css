@@ -2,7 +2,7 @@
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(13,17,23,0.85);
+  background: rgba(13, 17, 23, 0.85);
   backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border);
 }
@@ -32,7 +32,9 @@
   justify-content: center;
   font-size: 0.85rem;
 }
-.logoText { white-space: nowrap; }
+.logoText {
+  white-space: nowrap;
+}
 .links {
   display: flex;
   align-items: center;
@@ -43,7 +45,9 @@
   border-radius: var(--radius-sm);
   font-size: 0.875rem;
   color: var(--muted);
-  transition: color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    background 0.15s;
 }
 .link:hover {
   color: var(--cream);
@@ -54,7 +58,14 @@
 }
 
 @media (max-width: 720px) {
-  .logoText { display: none; }
-  .links { gap: 0; }
-  .link { padding-inline: 9px; font-size: 0.78rem; }
+  .logoText {
+    display: none;
+  }
+  .links {
+    gap: 0;
+  }
+  .link {
+    padding-inline: 9px;
+    font-size: 0.78rem;
+  }
 }

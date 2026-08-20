@@ -56,13 +56,13 @@ cd apps/web && wrangler deploy
 
 ## CLI Commands
 
-| Command | Description |
-|---------|-------------|
-| `cm convert -i file.webp -f jpg` | Single file conversion |
-| `cm bulk-convert -i ./dir --if webp -f jpg -z` | Batch + ZIP output |
-| `cm export-exif -i photo.jpg` | EXIF to stdout |
-| `cm bulk-export-exif -i ./dir --if jpg -z` | Bulk EXIF + ZIP |
-| `cm list` | All supported conversions |
+| Command                                        | Description               |
+| ---------------------------------------------- | ------------------------- |
+| `cm convert -i file.webp -f jpg`               | Single file conversion    |
+| `cm bulk-convert -i ./dir --if webp -f jpg -z` | Batch + ZIP output        |
+| `cm export-exif -i photo.jpg`                  | EXIF to stdout            |
+| `cm bulk-export-exif -i ./dir --if jpg -z`     | Bulk EXIF + ZIP           |
+| `cm list`                                      | All supported conversions |
 
 ## Supported Conversions
 

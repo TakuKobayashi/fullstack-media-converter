@@ -24,7 +24,7 @@ const storedImageQualityAtom = atomWithStorage<number>(
 
 /** Shared image quality preference, persisted in localStorage by Jotai. */
 export const imageQualityAtom = atom(
-  get => normalizeImageQuality(get(storedImageQualityAtom)),
+  (get) => normalizeImageQuality(get(storedImageQualityAtom)),
   (_get, set, quality: number) => set(storedImageQualityAtom, normalizeImageQuality(quality)),
 );
 
@@ -42,7 +42,7 @@ const storedImageOutputFormatAtom = atomWithStorage<string>(
 );
 
 export const imageOutputFormatAtom = atom(
-  get => {
+  (get) => {
     const format = get(storedImageOutputFormatAtom);
     return isImageOutputFormat(format) ? format : 'jpg';
   },
@@ -55,7 +55,7 @@ const storedVideoOutputFormatAtom = atomWithStorage<string>(
 );
 
 export const videoOutputFormatAtom = atom(
-  get => {
+  (get) => {
     const format = get(storedVideoOutputFormatAtom);
     return isVideoOutputFormat(format) ? format : 'mp4';
   },
@@ -72,7 +72,7 @@ const storedAudioOutputFormatAtom = atomWithStorage<string>(
 );
 
 export const audioOutputFormatAtom = atom(
-  get => {
+  (get) => {
     const format = get(storedAudioOutputFormatAtom);
     return isAudioOutputFormat(format) ? format : 'mp3';
   },
@@ -86,12 +86,13 @@ const storedAudioBitrateAtom = atomWithStorage<number>(
 
 const AUDIO_BITRATES = [96, 128, 192, 256, 320] as const;
 export const audioBitrateAtom = atom(
-  get => {
+  (get) => {
     const bitrate = get(storedAudioBitrateAtom);
-    return AUDIO_BITRATES.includes(bitrate as typeof AUDIO_BITRATES[number]) ? bitrate : 320;
+    return AUDIO_BITRATES.includes(bitrate as (typeof AUDIO_BITRATES)[number]) ? bitrate : 320;
   },
-  (_get, set, bitrate: number) => set(
-    storedAudioBitrateAtom,
-    AUDIO_BITRATES.includes(bitrate as typeof AUDIO_BITRATES[number]) ? bitrate : 320,
-  ),
+  (_get, set, bitrate: number) =>
+    set(
+      storedAudioBitrateAtom,
+      AUDIO_BITRATES.includes(bitrate as (typeof AUDIO_BITRATES)[number]) ? bitrate : 320,
+    ),
 );

@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+dist/
+.wrangler/
+coverage/
+*.tsbuildinfo
+pnpm-lock.yaml
+apps/web/public/ffmpeg/
+apps/web/public/og/
+apps/web/public/*.png
+apps/web/public/*.wasm

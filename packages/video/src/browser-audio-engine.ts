@@ -18,9 +18,11 @@ export class BrowserAudioEngine implements ConversionEngine {
   private fetchFile: any = null;
 
   canConvert(inputFormat: InputFormat, outputFormat: OutputFormat): boolean {
-    return (AUDIO_INPUT_EXTENSIONS as readonly string[]).includes(`.${inputFormat}`) &&
+    return (
+      (AUDIO_INPUT_EXTENSIONS as readonly string[]).includes(`.${inputFormat}`) &&
       (AUDIO_OUTPUT_FORMATS as readonly string[]).includes(outputFormat) &&
-      canConvert(inputFormat, outputFormat);
+      canConvert(inputFormat, outputFormat)
+    );
   }
 
   private message(error: unknown): string {
@@ -38,7 +40,9 @@ export class BrowserAudioEngine implements ConversionEngine {
       const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd';
       const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
       const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
-      ffmpeg.on('log', ({ message }: { message: string }) => console.debug('[ffmpeg:audio]', message));
+      ffmpeg.on('log', ({ message }: { message: string }) =>
+        console.debug('[ffmpeg:audio]', message),
+      );
       await ffmpeg.load({ coreURL, wasmURL });
       this.ffmpeg = ffmpeg;
     })();
@@ -67,9 +71,10 @@ export class BrowserAudioEngine implements ConversionEngine {
 
     try {
       const source = job.file.source;
-      const data = source instanceof File
-        ? await this.fetchFile(source)
-        : new Uint8Array(source as ArrayBuffer);
+      const data =
+        source instanceof File
+          ? await this.fetchFile(source)
+          : new Uint8Array(source as ArrayBuffer);
       await this.ffmpeg.writeFile(inputName, data);
       const args = this.buildArgs(
         job.outputFormat as AudioOutputFormat,
@@ -88,8 +93,16 @@ export class BrowserAudioEngine implements ConversionEngine {
       return { ...job, status: 'error', error: this.message(error) };
     } finally {
       this.ffmpeg.off('progress', handleProgress);
-      try { await this.ffmpeg.deleteFile(inputName); } catch { /* noop */ }
-      try { await this.ffmpeg.deleteFile(outputName); } catch { /* noop */ }
+      try {
+        await this.ffmpeg.deleteFile(inputName);
+      } catch {
+        /* noop */
+      }
+      try {
+        await this.ffmpeg.deleteFile(outputName);
+      } catch {
+        /* noop */
+      }
     }
   }
 

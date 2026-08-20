@@ -21,8 +21,10 @@ export default function Footer() {
           © {new Date().getFullYear()} Fullstack Media Converter · {t('footer.privacy')}
         </p>
         <div className={s.tools}>
-          {tools.map(t => (
-            <Link key={t.href} href={t.href} className={s.toolLink}>{t.label}</Link>
+          {tools.map((t) => (
+            <Link key={t.href} href={t.href} className={s.toolLink}>
+              {t.label}
+            </Link>
           ))}
         </div>
       </div>

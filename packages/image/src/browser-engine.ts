@@ -16,8 +16,19 @@ import {
 export class BrowserImageEngine implements ConversionEngine {
   canConvert(inputFormat: InputFormat, outputFormat: OutputFormat): boolean {
     const imageFormats = [
-      'jpg', 'jpeg', 'png', 'webp', 'avif', 'heic', 'gif',
-      'bmp', 'svg', 'ico', 'tif', 'tiff', 'psd',
+      'jpg',
+      'jpeg',
+      'png',
+      'webp',
+      'avif',
+      'heic',
+      'gif',
+      'bmp',
+      'svg',
+      'ico',
+      'tif',
+      'tiff',
+      'psd',
     ] as const;
     const isImageInput = (imageFormats as readonly string[]).includes(inputFormat);
     const isImageOutput = (imageFormats as readonly string[]).includes(outputFormat);
@@ -37,18 +48,24 @@ export class BrowserImageEngine implements ConversionEngine {
         imageBlob = await this.convertFromHeic(source, job.outputFormat, quality);
       } else if (inputFormat === 'tif' || inputFormat === 'tiff') {
         imageBlob = await this.convertDecodedPixels(
-          await this.decodeTiff(source), outputMime, quality,
+          await this.decodeTiff(source),
+          outputMime,
+          quality,
         );
       } else if (inputFormat === 'psd') {
         imageBlob = await this.convertDecodedPixels(
-          await this.decodePsd(source), outputMime, quality,
+          await this.decodePsd(source),
+          outputMime,
+          quality,
         );
       } else {
         imageBlob = await this.convertViaCanvas(source, outputMime, quality);
       }
 
       if (!imageBlob || imageBlob.size === 0) {
-        throw new Error('Conversion produced an empty image — the source file may be corrupted or unsupported.');
+        throw new Error(
+          'Conversion produced an empty image — the source file may be corrupted or unsupported.',
+        );
       }
 
       const resultUrl = URL.createObjectURL(imageBlob);
@@ -150,9 +167,7 @@ export class BrowserImageEngine implements ConversionEngine {
   ): Promise<Blob> {
     // Dynamic import to avoid loading heic2any on every page
     const heic2any = (await import('heic2any')).default;
-    const inputBlob = source instanceof File
-      ? source
-      : new Blob([source as ArrayBuffer]);
+    const inputBlob = source instanceof File ? source : new Blob([source as ArrayBuffer]);
 
     // heic2any only encodes to jpeg or png — map any other requested
     // output through jpeg first, then re-encode via Canvas if needed.
@@ -176,18 +191,19 @@ export class BrowserImageEngine implements ConversionEngine {
     outputMime: string,
     quality: number,
   ): Promise<Blob> {
-    const blob = source instanceof Blob
-      ? source
-      : source instanceof File
+    const blob =
+      source instanceof Blob
         ? source
-        : new Blob([source as ArrayBuffer]);
+        : source instanceof File
+          ? source
+          : new Blob([source as ArrayBuffer]);
 
     let bitmap: ImageBitmap;
     try {
       bitmap = await createImageBitmap(blob);
     } catch (e) {
       throw new Error(
-        `Your browser could not decode this image. AVIF and some WebP variants aren't supported in every browser. (${e instanceof Error ? e.message : e})`
+        `Your browser could not decode this image. AVIF and some WebP variants aren't supported in every browser. (${e instanceof Error ? e.message : e})`,
       );
     }
 
