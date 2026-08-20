@@ -5,36 +5,19 @@ import Footer from '@/components/Footer';
 import s from '@/styles/home.module.css';
 
 export const metadata: Metadata = {
-  title: 'ConvertMate — Bulk File Converter. No Uploads. 100% Private.',
-  description: 'Convert hundreds of images, videos, and documents at once. WebP, HEIC, AVIF, MOV, MP4, PDF. All processing in your browser.',
+  title: 'ConvertMate — Private Image & Video Converter',
+  description: 'Convert images and videos in bulk, entirely in your browser. No uploads, no account, and no watermarks.',
 };
 
-const FEATURED_TOOLS = [
-  { href: '/image-converter', icon: '🖼️', title: 'Image Converter', desc: 'Any format in, any format out. Auto-detects each file, pick one output, convert the whole batch.' },
-  { href: '/video-converter', icon: '🎬', title: 'Video Converter', desc: 'MOV, MP4, GIF — mix formats freely, pick one target, convert everything at once.' },
-];
+const CONVERTERS = [
+  { href: '/image-converter', number: '01', icon: '◫', title: 'Image Converter', description: 'Convert mixed batches of JPG, PNG, WebP, HEIC, AVIF, and GIF files to one output format.', formats: ['JPG', 'PNG', 'WebP', 'HEIC', 'AVIF', 'GIF'], accent: 'violet' },
+  { href: '/video-converter', number: '02', icon: '▶', title: 'Video Converter', description: 'Convert MOV and MP4 videos, or turn video clips into GIFs with FFmpeg running locally.', formats: ['MOV', 'MP4', 'GIF'], accent: 'coral' },
+] as const;
 
-const TOOLS = [
-  { href: '/webp-to-jpg', icon: '🖼️', title: 'WebP → JPG',   desc: 'Bulk convert WebP images to JPEG with quality control.' },
-  { href: '/webp-to-png', icon: '🖼️', title: 'WebP → PNG',   desc: 'Lossless conversion from WebP to transparent PNG.' },
-  { href: '/heic-to-jpg', icon: '📱', title: 'HEIC → JPG',   desc: 'Convert iPhone HEIC photos to universally-compatible JPG.' },
-  { href: '/heic-to-png', icon: '📱', title: 'HEIC → PNG',   desc: 'HEIC to PNG with full transparency support.' },
-  { href: '/png-to-jpg',  icon: '🎨', title: 'PNG → JPG',    desc: 'Compress PNG files to smaller JPEG format.' },
-  { href: '/jpg-to-png',  icon: '🎨', title: 'JPG → PNG',    desc: 'Convert JPEGs to lossless PNG.' },
-  { href: '/avif-to-jpg', icon: '⚡', title: 'AVIF → JPG',   desc: 'Modern AVIF images to widely-supported JPEG.' },
-  { href: '/mov-to-mp4',  icon: '🎬', title: 'MOV → MP4',    desc: 'QuickTime to MP4 via FFmpeg WebAssembly — no upload.' },
-  { href: '/mp4-to-gif',  icon: '🎞️', title: 'MP4 → GIF',    desc: 'Create optimised GIFs from MP4 video clips.' },
-  { href: '/jpg-to-pdf',  icon: '📄', title: 'JPG → PDF',    desc: 'Combine or convert JPGs into PDF documents.' },
-  { href: '/export-exif', icon: '🔍', title: 'EXIF Export',  desc: 'Bulk extract photo metadata and download as JSON.' },
-];
-
-const FEATURES = [
-  { icon: '🔒', title: 'Zero Upload',       desc: 'Files are processed in your browser. Nothing is sent to any server.' },
-  { icon: '⚡', title: 'Batch First',       desc: 'Built for hundreds of files at once — not just one at a time.' },
-  { icon: '📦', title: 'ZIP Download',      desc: 'Download all converted files in a single ZIP archive.' },
-  { icon: '🎛️', title: 'Queue Control',     desc: 'Control concurrency and quality per batch.' },
-  { icon: '📶', title: 'Works Offline',     desc: 'Install as a PWA and convert files with no internet connection.' },
-  { icon: '🆓', title: 'Free Forever',      desc: 'No account required. No file size limits. No watermarks.' },
+const BENEFITS = [
+  ['Local by design', 'Your files stay on your device. Conversion happens inside the browser.'],
+  ['Built for batches', 'Add different source formats together and export the entire queue at once.'],
+  ['No friction', 'No account, no upload wait, no watermark, and no server-side file limits.'],
 ];
 
 export default function HomePage() {
@@ -42,98 +25,59 @@ export default function HomePage() {
     <div className={s.page}>
       <Nav />
       <main className={s.main}>
-
-        {/* Hero */}
         <section className={s.hero}>
-          <div className="container">
-            <div className={s.eyebrow}>⚡ 100% In-Browser Processing</div>
-            <h1 className={s.title}>
-              Bulk file conversion<br />
-              <em>without the upload</em>
-            </h1>
-            <p className={s.subtitle}>
-              Convert hundreds of images, videos, and documents at once.
-              Everything runs in your browser — fast, private, and free.
-            </p>
-            <div className={s.ctaGroup}>
-              <Link href="/image-converter" className={s.ctaPrimary}>Start Converting</Link>
-              <Link href="#tools" className={s.ctaSecondary}>Browse all tools →</Link>
+          <div className={`container ${s.heroInner}`}>
+            <div>
+              <p className={s.eyebrow}><span /> Private browser-based conversion</p>
+              <h1 className={s.title}>Convert media.<br /><em>Keep it yours.</em></h1>
+              <p className={s.subtitle}>A focused workspace for batch image and video conversion. Nothing is uploaded; every file is processed on your device.</p>
+              <div className={s.ctaGroup}>
+                <Link href="/image-converter" className={s.ctaPrimary}>Convert images <span>→</span></Link>
+                <Link href="/video-converter" className={s.ctaSecondary}>Convert videos</Link>
+              </div>
             </div>
-            <div className={s.boltRow}>
-              <span className={s.boltChip}>WebP</span>
-              <span className={s.boltArrow} aria-hidden="true" />
-              <span className={s.boltChip}>JPG</span>
-              <span className={s.boltArrow} aria-hidden="true" />
-              <span className={s.boltChip}>×500 files</span>
-              <span className={s.boltArrow} aria-hidden="true" />
-              <span className={s.boltChip}>ZIP</span>
+            <div className={s.heroVisual} aria-hidden="true">
+              <div className={s.fileStack}>
+                <span className={s.fileBack}>WEBP</span><span className={s.fileMiddle}>PNG</span><span className={s.fileFront}>JPG</span>
+              </div>
+              <div className={s.localBadge}><span>●</span> Processed locally</div>
             </div>
           </div>
         </section>
 
-        {/* Featured universal converters */}
-        <section className={s.toolsSection} style={{ paddingBottom: 0 }}>
+        <section className={s.converterSection} id="converters">
           <div className="container">
-            <p className={s.sectionEyebrow}>Start Here</p>
-            <h2 className={s.sectionTitle}>Any format in, one format out</h2>
-            <div className={s.grid}>
-              {FEATURED_TOOLS.map((tool, i) => (
-                <Link
-                  key={tool.href}
-                  href={tool.href}
-                  className={s.toolCard}
-                  style={{ animationDelay: `${i * 40}ms`, borderColor: 'rgba(110,64,201,0.4)' }}
-                >
-                  <div className={s.toolCardIcon}>{tool.icon}</div>
-                  <div className={s.toolCardTitle}>{tool.title}</div>
-                  <div className={s.toolCardDesc}>{tool.desc}</div>
-                  <span className={s.toolCardArrow}>Open tool →</span>
+            <div className={s.sectionHeading}>
+              <div><p className={s.sectionEyebrow}>Choose a workspace</p><h2 className={s.sectionTitle}>Two converters. Every route.</h2></div>
+              <p className={s.sectionIntro}>Choose what you are working with, then select the output format inside the converter.</p>
+            </div>
+            <div className={s.converterGrid}>
+              {CONVERTERS.map(converter => (
+                <Link key={converter.href} href={converter.href} className={`${s.converterCard} ${s[converter.accent]}`}>
+                  <div className={s.cardTop}><span className={s.cardNumber}>{converter.number}</span><span className={s.cardIcon}>{converter.icon}</span></div>
+                  <h3>{converter.title}</h3><p>{converter.description}</p>
+                  <div className={s.formatList}>{converter.formats.map(format => <span key={format}>{format}</span>)}</div>
+                  <div className={s.cardAction}>Open converter <span>↗</span></div>
                 </Link>
               ))}
             </div>
           </div>
         </section>
 
-        {/* Tools grid */}
-        <section className={s.toolsSection} id="tools">
-          <div className="container">
-            <p className={s.sectionEyebrow}>Specific Conversions</p>
-            <h2 className={s.sectionTitle}>Or pick an exact route</h2>
-            <div className={s.grid}>
-              {TOOLS.map((tool, i) => (
-                <Link
-                  key={tool.href}
-                  href={tool.href}
-                  className={s.toolCard}
-                  style={{ animationDelay: `${i * 40}ms` }}
-                >
-                  <div className={s.toolCardIcon}>{tool.icon}</div>
-                  <div className={s.toolCardTitle}>{tool.title}</div>
-                  <div className={s.toolCardDesc}>{tool.desc}</div>
-                  <span className={s.toolCardArrow}>Open tool →</span>
-                </Link>
-              ))}
-            </div>
+        <section className={s.benefits}>
+          <div className={`container ${s.benefitGrid}`}>
+            {BENEFITS.map(([title, description], index) => (
+              <article key={title} className={s.benefit}><span>0{index + 1}</span><h3>{title}</h3><p>{description}</p></article>
+            ))}
           </div>
         </section>
 
-        {/* Features */}
-        <section className={s.features}>
-          <div className="container">
-            <p className={s.sectionEyebrow}>Why ConvertMate</p>
-            <h2 className={s.sectionTitle}>Built for batch. Not for one.</h2>
-            <div className={s.featureGrid}>
-              {FEATURES.map(f => (
-                <div key={f.title} className={s.featureItem}>
-                  <div className={s.featureIcon}>{f.icon}</div>
-                  <div className={s.featureTitle}>{f.title}</div>
-                  <div className={s.featureDesc}>{f.desc}</div>
-                </div>
-              ))}
-            </div>
+        <section className={s.exifSection}>
+          <div className={`container ${s.exifInner}`}>
+            <div><p className={s.sectionEyebrow}>Metadata utility</p><h2>Need the data behind your photos?</h2><p>Inspect image metadata and export EXIF records from an entire batch as JSON.</p></div>
+            <Link href="/export-exif" className={s.exifLink}>Open EXIF Export <span>→</span></Link>
           </div>
         </section>
-
       </main>
       <Footer />
     </div>

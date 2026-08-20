@@ -1,7 +1,7 @@
 {
   "name": "ConvertMate",
   "short_name": "ConvertMate",
-  "description": "Bulk file converter — images, videos, documents. No uploads.",
+  "description": "Private batch image and video conversion in your browser.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0D1117",
@@ -13,8 +13,8 @@
   ],
   "categories": ["utilities", "productivity"],
   "shortcuts": [
-    { "name": "WebP to JPG", "url": "/webp-to-jpg", "description": "Bulk convert WebP to JPG" },
-    { "name": "HEIC to JPG", "url": "/heic-to-jpg", "description": "Convert iPhone photos" },
-    { "name": "MOV to MP4",  "url": "/mov-to-mp4",  "description": "Convert QuickTime videos" }
+    { "name": "Image Converter", "url": "/image-converter", "description": "Convert image batches" },
+    { "name": "Video Converter", "url": "/video-converter", "description": "Convert videos locally" },
+    { "name": "EXIF Export", "url": "/export-exif", "description": "Export image metadata" }
   ]
 }

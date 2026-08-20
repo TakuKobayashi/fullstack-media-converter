@@ -1,0 +1,45 @@
+name: Ollama README Generator
+description: Generate a repository-aware README with a local Ollama model
+author: ConvertMate contributors
+
+inputs:
+  model:
+    description: Ollama model name
+    required: false
+    default: qwen3:8b
+  language:
+    description: Language used for the generated README
+    required: false
+    default: English
+  ollama-host:
+    description: Base URL of the Ollama server
+    required: false
+    default: http://127.0.0.1:11434
+  output:
+    description: README path, relative to the repository root
+    required: false
+    default: README.md
+  max-input-bytes:
+    description: Maximum total number of project bytes sent to the model
+    required: false
+    default: "120000"
+  instructions:
+    description: Additional README generation instructions
+    required: false
+    default: ""
+
+outputs:
+  path:
+    description: Path of the generated README
+  model:
+    description: Ollama model used to generate the README
+  language:
+    description: Language requested for the README
+
+runs:
+  using: node24
+  main: action/index.js
+
+branding:
+  icon: file-text
+  color: blue

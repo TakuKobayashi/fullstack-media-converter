@@ -3,14 +3,14 @@ import '@/styles/globals.css';
 import SwRegister from '@/components/SwRegister';
 
 export const metadata: Metadata = {
-  title: { default: 'ConvertMate — Bulk File Converter', template: '%s | ConvertMate' },
-  description: 'Convert hundreds of images, videos and documents at once — entirely in your browser. No uploads, no server, 100% private.',
-  keywords: ['bulk image converter', 'webp to jpg', 'heic to jpg', 'mov to mp4', 'batch convert', 'free converter'],
+  title: { default: 'ConvertMate — Private Image & Video Converter', template: '%s | ConvertMate' },
+  description: 'Convert images and videos in bulk — entirely in your browser. No uploads, no server, 100% private.',
+  keywords: ['bulk image converter', 'video converter', 'batch convert', 'private file converter', 'free converter'],
   openGraph: {
     type: 'website',
     siteName: 'ConvertMate',
-    title: 'ConvertMate — Bulk File Converter',
-    description: 'Convert hundreds of files at once. Works offline. No uploads.',
+    title: 'ConvertMate — Private Image & Video Converter',
+    description: 'Convert image and video batches locally. Works offline. No uploads.',
   },
   manifest: '/manifest.json',
   icons: { icon: '/icon.svg', apple: '/apple-touch-icon.png' },

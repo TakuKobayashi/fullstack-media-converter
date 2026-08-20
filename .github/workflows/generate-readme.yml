@@ -1,0 +1,32 @@
+name: Generate Japanese README with Ollama
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate-readme:
+    # Ollama must be running on this machine and the model must be installed.
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Generate README in Japanese
+        id: readme
+        uses: ./
+        with:
+          language: Japanese
+          model: qwen3:8b
+          output: README.md
+
+      - name: Show generated changes
+        shell: bash
+        run: git diff -- README.md
+
+      - name: Upload generated README
+        uses: actions/upload-artifact@v6
+        with:
+          name: generated-readme-ja
+          path: ${{ steps.readme.outputs.path }}

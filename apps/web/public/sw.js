@@ -5,15 +5,14 @@
 // Bump this whenever the app's loading/runtime behaviour changes. In
 // particular, v1 may contain the old ffmpeg build that incorrectly required
 // SharedArrayBuffer even though the app uses the single-thread core.
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const STATIC_CACHE = `convertmate-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `convertmate-runtime-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
   '/',
-  '/webp-to-jpg/',
-  '/heic-to-jpg/',
-  '/mov-to-mp4/',
+  '/image-converter/',
+  '/video-converter/',
   '/export-exif/',
   '/manifest.json',
 ];
