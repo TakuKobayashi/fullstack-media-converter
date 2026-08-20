@@ -1,5 +1,14 @@
 // ─── Conversion Types ───────────────────────────────────────────────
-export type ImageFormat = 'jpg' | 'jpeg' | 'png' | 'webp' | 'avif' | 'heic' | 'gif';
+export type ImageFormat =
+  | 'jpg' | 'jpeg' | 'png' | 'webp' | 'avif' | 'heic' | 'gif'
+  | 'bmp' | 'svg' | 'ico' | 'tif' | 'tiff' | 'psd';
+export type CanonicalImageInputFormat = Exclude<ImageFormat, 'jpeg' | 'tif'>;
+
+export interface ImageInputFormatDefinition {
+  format: CanonicalImageInputFormat;
+  label: string;
+  extensions: readonly `.${string}`[];
+}
 export type VideoFormat = 'mp4' | 'mov' | 'gif';
 export type DocumentFormat = 'pdf';
 export type OutputFormat = ImageFormat | VideoFormat | DocumentFormat;
@@ -87,6 +96,12 @@ export function getMimeType(format: OutputFormat): string {
     avif: 'image/avif',
     heic: 'image/heic',
     gif: 'image/gif',
+    bmp: 'image/bmp',
+    svg: 'image/svg+xml',
+    ico: 'image/x-icon',
+    tif: 'image/tiff',
+    tiff: 'image/tiff',
+    psd: 'image/vnd.adobe.photoshop',
     mp4: 'video/mp4',
     mov: 'video/quicktime',
     pdf: 'application/pdf',
@@ -96,7 +111,11 @@ export function getMimeType(format: OutputFormat): string {
 
 export function guessFormat(filename: string): InputFormat | null {
   const ext = filename.split('.').pop()?.toLowerCase();
-  const valid: InputFormat[] = ['jpg', 'jpeg', 'png', 'webp', 'avif', 'heic', 'gif', 'mp4', 'mov', 'pdf'];
+  const valid: InputFormat[] = [
+    'jpg', 'jpeg', 'png', 'webp', 'avif', 'heic', 'gif',
+    'bmp', 'svg', 'ico', 'tif', 'tiff', 'psd',
+    'mp4', 'mov', 'pdf',
+  ];
   return (valid.includes(ext as InputFormat) ? ext : null) as InputFormat | null;
 }
 
@@ -108,7 +127,9 @@ export function guessFormat(filename: string): InputFormat | null {
 const CANVAS_IMAGE_FORMATS: ImageFormat[] = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
 // Formats the engine can *decode* but browsers generally can't *encode*
 // back out via Canvas — these are one-directional inputs only.
-const DECODE_ONLY_IMAGE_FORMATS: ImageFormat[] = ['heic', 'avif'];
+const DECODE_ONLY_IMAGE_FORMATS: ImageFormat[] = [
+  'heic', 'avif', 'bmp', 'svg', 'ico', 'tif', 'tiff', 'psd',
+];
 
 function buildImageRoutes(): Array<{ from: InputFormat; to: OutputFormat; type: ConversionType }> {
   const routes: Array<{ from: InputFormat; to: OutputFormat; type: ConversionType }> = [];
@@ -146,4 +167,20 @@ export function canConvert(inputFormat: InputFormat, outputFormat: OutputFormat)
 }
 
 export const IMAGE_OUTPUT_FORMATS: ImageFormat[] = ['jpg', 'png', 'webp', 'gif'];
-export const IMAGE_INPUT_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.heic', '.HEIC', '.avif', '.gif'];
+/** Single source of truth for accepted image inputs and their UI labels. */
+export const IMAGE_INPUT_FORMATS = [
+  { format: 'jpg', label: 'JPG', extensions: ['.jpg', '.jpeg'] },
+  { format: 'png', label: 'PNG', extensions: ['.png'] },
+  { format: 'webp', label: 'WebP', extensions: ['.webp'] },
+  { format: 'heic', label: 'HEIC', extensions: ['.heic'] },
+  { format: 'avif', label: 'AVIF', extensions: ['.avif'] },
+  { format: 'gif', label: 'GIF', extensions: ['.gif'] },
+  { format: 'bmp', label: 'BMP', extensions: ['.bmp'] },
+  { format: 'svg', label: 'SVG', extensions: ['.svg'] },
+  { format: 'ico', label: 'ICO', extensions: ['.ico'] },
+  { format: 'tiff', label: 'TIFF', extensions: ['.tif', '.tiff'] },
+  { format: 'psd', label: 'PSD', extensions: ['.psd'] },
+] as const satisfies readonly ImageInputFormatDefinition[];
+
+export const IMAGE_INPUT_FORMAT_LABELS = IMAGE_INPUT_FORMATS.map(({ label }) => label);
+export const IMAGE_INPUT_EXTENSIONS = IMAGE_INPUT_FORMATS.flatMap(({ extensions }) => [...extensions]);

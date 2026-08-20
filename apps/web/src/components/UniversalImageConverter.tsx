@@ -13,7 +13,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import JSZip from 'jszip';
 import {
   ConversionJob, ConversionFile, OutputFormat, InputFormat,
-  generateId, guessFormat, IMAGE_OUTPUT_FORMATS, IMAGE_INPUT_EXTENSIONS,
+  generateId, guessFormat, IMAGE_OUTPUT_FORMATS, IMAGE_INPUT_EXTENSIONS, IMAGE_INPUT_FORMAT_LABELS,
   canConvert,
 } from '@convertmate/shared';
 import { ConversionQueue } from '@convertmate/core';
@@ -30,7 +30,8 @@ function formatBytes(bytes: number): string {
 }
 
 export default function UniversalImageConverter() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
+  const formatList = IMAGE_INPUT_FORMAT_LABELS.join(locale === 'ja' ? '・' : ' · ');
   const [jobs, setJobs] = useState<ConversionJob[]>([]);
   const [targetFormat, setTargetFormat] = useState<OutputFormat>('jpg');
   const [running, setRunning] = useState(false);
@@ -161,7 +162,7 @@ export default function UniversalImageConverter() {
             <em>{t('image.title')}</em> {t('image.suffix')}
           </h1>
           <p className={s.subtitle}>
-            {t('image.subtitle')}
+            {t('image.subtitle', { formats: formatList })}
           </p>
         </div>
       </section>
@@ -183,7 +184,7 @@ export default function UniversalImageConverter() {
         >
           <span className={s.dropIcon}>📂</span>
           <p className={s.dropTitle}>{t('image.drop')}</p>
-          <p className={s.dropSub}>{t('image.dropSub')}</p>
+          <p className={s.dropSub}>{t('image.dropSub', { formats: formatList })}</p>
           <span className={s.browseBtn}>{t('common.browse')}</span>
           <input
             ref={inputRef}
@@ -344,7 +345,7 @@ export default function UniversalImageConverter() {
           <h2>{t('image.proseTitle')}</h2>
           <p>{t('image.prose')}</p>
           <ul>
-            {(t('image.bullets', { returnObjects: true }) as unknown as string[]).map(item => <li key={item}>{item}</li>)}
+            {(t('image.bullets', { returnObjects: true, formats: formatList }) as unknown as string[]).map(item => <li key={item}>{item}</li>)}
           </ul>
         </div>
       </div>

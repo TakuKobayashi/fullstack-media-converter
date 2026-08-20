@@ -6,12 +6,13 @@ import Footer from '@/components/Footer';
 import s from '@/styles/home.module.css';
 import { useTranslation } from '@/i18n';
 import { useLocalizedPath } from '@/hooks/useLocalizedPath';
+import { IMAGE_INPUT_FORMAT_LABELS } from '@convertmate/shared';
 
 export default function HomePage() {
   const { t } = useTranslation();
   const localizedPath = useLocalizedPath();
   const converters = [
-    { href: '/image-converter', number: '01', icon: '◫', formats: ['JPG', 'PNG', 'WebP', 'HEIC', 'AVIF', 'GIF'], accent: 'violet' },
+    { href: '/image-converter', number: '01', icon: '◫', formats: IMAGE_INPUT_FORMAT_LABELS, accent: 'violet' },
     { href: '/video-converter', number: '02', icon: '▶', formats: ['MOV', 'MP4', 'GIF'], accent: 'coral' },
   ] as const;
   return (
@@ -22,7 +23,10 @@ export default function HomePage() {
           <div className={`container ${s.heroInner}`}>
             <div>
               <p className={s.eyebrow}><span /> {t('home.eyebrow')}</p>
-              <h1 className={s.title}>{t('home.title')}<br /><em>{t('home.titleAccent')}</em></h1>
+              <h1 className={s.title}>
+                <span className={s.titleLine}>{t('home.title')}</span>
+                <em className={s.titleLine}>{t('home.titleAccent')}</em>
+              </h1>
               <p className={s.subtitle}>{t('home.subtitle')}</p>
               <div className={s.ctaGroup}>
                 <Link href={localizedPath('/image-converter')} className={s.ctaPrimary}>{t('home.imageCta')} <span>→</span></Link>
@@ -48,7 +52,7 @@ export default function HomePage() {
               {converters.map((converter, index) => (
                 <Link key={converter.href} href={localizedPath(converter.href)} className={`${s.converterCard} ${s[converter.accent]}`}>
                   <div className={s.cardTop}><span className={s.cardNumber}>{converter.number}</span><span className={s.cardIcon}>{converter.icon}</span></div>
-                  <h3>{t(`home.converters.${index}.title`)}</h3><p>{t(`home.converters.${index}.description`)}</p>
+                  <h3>{t(`home.converters.${index}.title`)}</h3><p>{t(`home.converters.${index}.description`, { formats: converter.formats.join(', ') })}</p>
                   <div className={s.formatList}>{converter.formats.map(format => <span key={format}>{format}</span>)}</div>
                   <div className={s.cardAction}>{t('home.open')} <span>↗</span></div>
                 </Link>

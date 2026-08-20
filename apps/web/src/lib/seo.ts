@@ -1,5 +1,9 @@
 import type { Metadata } from 'next';
 import { createElement } from 'react';
+import { IMAGE_INPUT_FORMAT_LABELS } from '@convertmate/shared';
+
+const imageFormatsEn = IMAGE_INPUT_FORMAT_LABELS.join(', ');
+const imageFormatsJa = IMAGE_INPUT_FORMAT_LABELS.join('、');
 
 export type ToolName = 'image' | 'video' | 'exif';
 export type SeoLocale = 'en' | 'ja';
@@ -10,8 +14,8 @@ const tools = {
   image: {
     path: '/image-converter',
     image: '/og/image-converter.png',
-    en: { title: 'Free Image Converter — JPG, PNG, WebP, HEIC & AVIF', description: 'Convert JPG, PNG, WebP, HEIC, AVIF and GIF images in bulk for free. Files stay on your device and are never uploaded.', imageAlt: 'Abstract image files transforming between formats', keywords: ['free image converter', 'bulk image converter', 'JPG PNG WebP converter', 'HEIC converter', 'AVIF converter'] },
-    ja: { title: '無料画像変換ツール｜JPG・PNG・WebP・HEIC・AVIF対応', description: 'JPG、PNG、WebP、HEIC、AVIF、GIF画像を無料で一括変換。ファイルをアップロードせず、ブラウザ内で安全に処理します。', imageAlt: '複数の画像ファイルを別形式へ変換するイメージ', keywords: ['画像変換', '画像変換 無料', '画像 一括変換', 'WebP JPG 変換', 'HEIC 変換'] },
+    en: { title: 'Free Image Converter — JPG, HEIC, TIFF, PSD & More', description: `Convert ${imageFormatsEn} images in bulk. Private, local browser processing.`, imageAlt: 'Abstract image files transforming between formats', keywords: ['free image converter', 'bulk image converter', 'JPG PNG WebP converter', 'HEIC converter', 'TIFF PSD converter'] },
+    ja: { title: `無料画像変換ツール｜HEIC・TIFF・PSDなど${IMAGE_INPUT_FORMAT_LABELS.length}形式に対応`, description: `${imageFormatsJa}画像を無料で一括変換。アップロード不要で安全に処理します。`, imageAlt: '複数の画像ファイルを別形式へ変換するイメージ', keywords: ['画像変換', '画像変換 無料', '画像 一括変換', 'WebP JPG 変換', 'HEIC TIFF PSD 変換'] },
   },
   video: {
     path: '/video-converter',
@@ -54,8 +58,8 @@ export function createToolMetadata(tool: ToolName, locale: SeoLocale): Metadata 
 
 const faq = {
   image: {
-    en: [['Are files uploaded to a server?', 'No. Image conversion runs entirely in your browser.'], ['Which image formats are supported?', 'JPG, PNG, WebP, HEIC, AVIF and GIF input files are supported.'], ['Can I convert multiple images at once?', 'Yes. Add mixed image formats and convert the whole batch to one output format.']],
-    ja: [['画像はサーバーへアップロードされますか？', 'いいえ。画像変換はすべてブラウザ内で実行されます。'], ['どの画像形式に対応していますか？', 'JPG、PNG、WebP、HEIC、AVIF、GIFの入力に対応しています。'], ['複数の画像を一括変換できますか？', 'はい。異なる画像形式をまとめて追加し、指定した形式へ一括変換できます。']],
+    en: [['Are files uploaded to a server?', 'No. Image conversion runs entirely in your browser.'], ['Which image formats are supported?', `${imageFormatsEn} input files are supported.`], ['Can I convert multiple images at once?', 'Yes. Add mixed image formats and convert the whole batch to one output format.']],
+    ja: [['画像はサーバーへアップロードされますか？', 'いいえ。画像変換はすべてブラウザ内で実行されます。'], ['どの画像形式に対応していますか？', `${imageFormatsJa}の入力に対応しています。`], ['複数の画像を一括変換できますか？', 'はい。異なる画像形式をまとめて追加し、指定した形式へ一括変換できます。']],
   },
   video: {
     en: [['Are videos uploaded?', 'No. FFmpeg WebAssembly processes videos locally in your browser.'], ['Which conversions are supported?', 'MOV and MP4 conversion and MP4 or MOV to GIF are supported.'], ['Why is the first conversion slower?', 'The browser downloads and initializes FFmpeg before the first conversion.']],

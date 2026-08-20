@@ -15,7 +15,10 @@ import {
  */
 export class BrowserImageEngine implements ConversionEngine {
   canConvert(inputFormat: InputFormat, outputFormat: OutputFormat): boolean {
-    const imageFormats = ['jpg', 'jpeg', 'png', 'webp', 'avif', 'heic', 'gif'] as const;
+    const imageFormats = [
+      'jpg', 'jpeg', 'png', 'webp', 'avif', 'heic', 'gif',
+      'bmp', 'svg', 'ico', 'tif', 'tiff', 'psd',
+    ] as const;
     const isImageInput = (imageFormats as readonly string[]).includes(inputFormat);
     const isImageOutput = (imageFormats as readonly string[]).includes(outputFormat);
     return isImageInput && isImageOutput && canConvert(inputFormat, outputFormat);
@@ -32,6 +35,14 @@ export class BrowserImageEngine implements ConversionEngine {
 
       if (inputFormat === 'heic') {
         imageBlob = await this.convertFromHeic(source, job.outputFormat, quality);
+      } else if (inputFormat === 'tif' || inputFormat === 'tiff') {
+        imageBlob = await this.convertDecodedPixels(
+          await this.decodeTiff(source), outputMime, quality,
+        );
+      } else if (inputFormat === 'psd') {
+        imageBlob = await this.convertDecodedPixels(
+          await this.decodePsd(source), outputMime, quality,
+        );
       } else {
         imageBlob = await this.convertViaCanvas(source, outputMime, quality);
       }
@@ -49,6 +60,50 @@ export class BrowserImageEngine implements ConversionEngine {
         error: this.describeError(err, job.inputFormat),
       };
     }
+  }
+
+  private async sourceToArrayBuffer(source: File | ArrayBuffer | string): Promise<ArrayBuffer> {
+    if (source instanceof ArrayBuffer) return source;
+    if (source instanceof Blob) return source.arrayBuffer();
+    throw new Error('Browser conversion requires a File or ArrayBuffer source.');
+  }
+
+  private async decodeTiff(source: File | ArrayBuffer | string): Promise<ImageData> {
+    const UTIF = await import('utif');
+    const buffer = await this.sourceToArrayBuffer(source);
+    const pages = UTIF.decode(buffer);
+    if (!pages.length) throw new Error('No image was found in this TIFF file.');
+    UTIF.decodeImage(buffer, pages[0]);
+    const rgba = UTIF.toRGBA8(pages[0]);
+    return new ImageData(new Uint8ClampedArray(rgba), pages[0].width, pages[0].height);
+  }
+
+  private async decodePsd(source: File | ArrayBuffer | string): Promise<ImageData> {
+    const { readPsd } = await import('ag-psd');
+    const buffer = await this.sourceToArrayBuffer(source);
+    const psd = readPsd(buffer, {
+      skipLayerImageData: true,
+      skipThumbnail: true,
+      useImageData: true,
+    });
+    if (!psd.imageData) throw new Error('This PSD file has no composite image preview.');
+    return new ImageData(
+      new Uint8ClampedArray(psd.imageData.data),
+      psd.imageData.width,
+      psd.imageData.height,
+    );
+  }
+
+  private async convertDecodedPixels(
+    imageData: ImageData,
+    outputMime: string,
+    quality: number,
+  ): Promise<Blob> {
+    const canvas = new OffscreenCanvas(imageData.width, imageData.height);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D context unavailable in this browser.');
+    ctx.putImageData(imageData, 0, 0);
+    return canvas.convertToBlob({ type: outputMime, quality: quality / 100 });
   }
 
   private async convertFromHeic(

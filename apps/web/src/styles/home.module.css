@@ -8,6 +8,8 @@
 .eyebrow span { width: 7px; height: 7px; border-radius: 50%; background: #55d68b; box-shadow: 0 0 14px #55d68b; }
 .title { max-width: 720px; margin-bottom: 28px; color: var(--white); font-size: clamp(3.25rem,7vw,6.4rem); font-weight: 600; letter-spacing: -.065em; line-height: .92; }
 .title em { color: var(--indigo-3); font-style: normal; }
+.titleLine { display: block; white-space: nowrap; }
+:global(html[lang='ja']) .title { font-size: clamp(2.65rem, 5.6vw, 4.5rem); letter-spacing: -.055em; line-height: 1.08; }
 .subtitle { max-width: 610px; color: var(--muted); font-size: 1.05rem; line-height: 1.8; }
 .ctaGroup { display: flex; gap: 12px; margin-top: 38px; }
 .ctaPrimary, .ctaSecondary { display: inline-flex; align-items: center; justify-content: center; min-height: 50px; padding: 0 24px; border-radius: 8px; font-size: .9rem; font-weight: 600; transition: transform .2s,border-color .2s; }
@@ -55,4 +57,4 @@
 .exifLink { flex: none; display: inline-flex; align-items: center; gap: 28px; padding: 15px 20px; border: 1px solid var(--border); border-radius: 8px; color: var(--cream); font-size: .82rem; font-weight: 600; transition: border-color .2s,transform .2s; }
 .exifLink:hover { border-color: var(--indigo-2); transform: translateX(3px); }
 @media (max-width:800px) { .hero { padding: 78px 0 70px; } .heroInner { grid-template-columns: 1fr; gap: 40px; } .heroVisual { display: none; } .sectionHeading, .exifInner { align-items: flex-start; flex-direction: column; } .converterGrid { grid-template-columns: 1fr; } .benefitGrid { grid-template-columns: 1fr; gap: 42px; } }
-@media (max-width:520px) { .title { font-size: 3.25rem; } .ctaGroup { align-items: stretch; flex-direction: column; } .converterCard { min-height: 430px; padding: 24px; } .cardAction { left: 24px; } }
+@media (max-width:520px) { .title { font-size: 3.25rem; } :global(html[lang='ja']) .title { font-size: clamp(2rem, 10vw, 2.8rem); } .ctaGroup { align-items: stretch; flex-direction: column; } .converterCard { min-height: 430px; padding: 24px; } .cardAction { left: 24px; } }
