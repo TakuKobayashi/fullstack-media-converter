@@ -141,9 +141,10 @@ export default function UniversalAudioConverter() {
 
         {jobs.length > 0 && <div className={s.controls}>
           <span className={s.controlLabel}>{t('audio.bitrate')}</span>
-          <select className={s.select} value={bitrate} onChange={event => setBitrate(Number(event.target.value))} disabled={running || ['wav', 'flac'].includes(targetFormat)}>
+          <select className={s.select} value={bitrate} onChange={event => setBitrate(Number(event.target.value))} disabled={running}>
             {[96, 128, 192, 256, 320].map(value => <option key={value} value={value}>{value} kbps</option>)}
           </select>
+          {['wav', 'flac'].includes(targetFormat) && <span style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>{t('audio.losslessBitrate')}</span>}
           <button className={s.convertBtn} onClick={convert} disabled={running || pending === 0}>{running ? t('common.converting') : t('common.convertCount', { count: pending })}</button>
           <button className={s.downloadAllBtn} onClick={downloadAll} disabled={!isAllComplete || isPackaging}>{isPackaging ? t('common.zipProgress', { progress: packageProgress }) : t(jobs.length > 1 ? 'common.downloadZip' : 'common.download')}</button>
           <button onClick={clear} disabled={isPackaging} style={{ marginLeft: 'auto', background: 'none', color: 'var(--muted)' }}>{t('common.clear')}</button>
