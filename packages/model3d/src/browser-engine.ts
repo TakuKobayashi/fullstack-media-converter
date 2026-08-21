@@ -41,6 +41,8 @@ import {
   type OutputFormat,
 } from '@convertmate/shared';
 
+const MMD_BAKE_LIGHT = new Vector3(0.5, 1, 1).normalize();
+
 export class BrowserModel3dEngine implements ConversionEngine {
   canConvert(inputFormat: InputFormat, outputFormat: OutputFormat): boolean {
     return (
@@ -216,13 +218,19 @@ export class BrowserModel3dEngine implements ConversionEngine {
     for (const mesh of meshes) {
       const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       const bakedMaterials = await Promise.all(
-        sourceMaterials.map((material) => this.bakeMmdMaterial(material)),
+        sourceMaterials.map((material, materialIndex) =>
+          this.bakeMmdMaterial(material, mesh, materialIndex),
+        ),
       );
       mesh.material = Array.isArray(mesh.material) ? bakedMaterials : bakedMaterials[0];
     }
   }
 
-  private async bakeMmdMaterial(source: Material): Promise<Material> {
+  private async bakeMmdMaterial(
+    source: Material,
+    mesh: Mesh,
+    materialIndex: number,
+  ): Promise<Material> {
     const toon = source as Material & {
       color?: { r: number; g: number; b: number };
       map?: Texture | null;
@@ -246,8 +254,8 @@ export class BrowserModel3dEngine implements ConversionEngine {
     const toonPixels = this.readTexturePixels(toon.gradientMap ?? undefined);
     const sphereTexture = source.userData.mmdSphereTexture as Texture | undefined;
     const spherePixels = this.readTexturePixels(sphereTexture);
-    const width = Math.min(basePixels?.width ?? 4, 2048);
-    const height = Math.min(basePixels?.height ?? 4, 2048);
+    const width = Math.min(basePixels?.width ?? 512, 1024);
+    const height = Math.min(basePixels?.height ?? 512, 1024);
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -267,24 +275,60 @@ export class BrowserModel3dEngine implements ConversionEngine {
       Math.min(1, diffuse[1] * 0.604 + ambient[1]),
       Math.min(1, diffuse[2] * 0.604 + ambient[2]),
     ];
-    const toonSample = this.sampleTexture(toonPixels, 0, 0.72);
-    const sphereSample = this.sampleTexture(spherePixels, 0.5, 0.5);
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const target = (y * width + x) * 4;
+    const accumulated = new Float32Array(width * height * 4);
+    const samples = new Uint16Array(width * height);
+    this.rasterizeMmdUv(
+      mesh,
+      materialIndex,
+      width,
+      height,
+      toon.map?.flipY ?? false,
+      (x, y, normal) => {
         const base = this.sampleTexture(
           basePixels,
           width === 1 ? 0 : x / (width - 1),
           height === 1 ? 0 : y / (height - 1),
         );
-        for (let channel = 0; channel < 3; channel += 1) {
-          let value = lit[channel] * base[channel] * toonSample[channel];
-          if (metadata.sphereMode === 'multiply') value *= sphereSample[channel];
-          if (metadata.sphereMode === 'add') value += sphereSample[channel] * 2;
-          if (metadata.sphereMode === 'subTexture') value = sphereSample[channel];
-          output.data[target + channel] = Math.round(Math.min(1, value) * 255);
+        const shaded = this.shadeMmdTexel(
+          base,
+          normal,
+          lit,
+          toonPixels,
+          spherePixels,
+          metadata.sphereMode,
+        );
+        const pixel = y * width + x;
+        const target = pixel * 4;
+        for (let channel = 0; channel < 4; channel += 1) {
+          accumulated[target + channel] += shaded[channel];
         }
-        output.data[target + 3] = Math.round(Math.min(1, base[3] * diffuse[3]) * 255);
+        if (samples[pixel] < 65535) samples[pixel] += 1;
+      },
+    );
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const target = (y * width + x) * 4;
+        const count = samples[y * width + x];
+        if (count > 0) {
+          for (let channel = 0; channel < 4; channel += 1) {
+            output.data[target + channel] = Math.round(
+              Math.max(0, Math.min(1, accumulated[target + channel] / count)) * 255,
+            );
+          }
+          output.data[target + 3] = Math.round(
+            Math.min(1, (accumulated[target + 3] / count) * diffuse[3]) * 255,
+          );
+        } else {
+          const base = this.sampleTexture(
+            basePixels,
+            width === 1 ? 0 : x / (width - 1),
+            height === 1 ? 0 : y / (height - 1),
+          );
+          for (let channel = 0; channel < 3; channel += 1) {
+            output.data[target + channel] = Math.round(base[channel] * 255);
+          }
+          output.data[target + 3] = Math.round(base[3] * diffuse[3] * 255);
+        }
       }
     }
     context.putImageData(output, 0, 0);
@@ -310,6 +354,93 @@ export class BrowserModel3dEngine implements ConversionEngine {
       side: metadata.flags?.doubleSided || toon.side === DoubleSide ? DoubleSide : toon.side,
       vertexColors: (source as { vertexColors?: boolean }).vertexColors ?? false,
     });
+  }
+
+  private rasterizeMmdUv(
+    mesh: Mesh,
+    materialIndex: number,
+    width: number,
+    height: number,
+    flipY: boolean,
+    visit: (x: number, y: number, normal: Vector3) => void,
+  ): void {
+    const geometry = mesh.geometry;
+    const uv = geometry.getAttribute('uv');
+    const normal = geometry.getAttribute('normal');
+    if (!uv || !normal) return;
+    const indices = geometry.getIndex();
+    const groups = geometry.groups.filter((group) => (group.materialIndex ?? 0) === materialIndex);
+    const ranges = groups.length
+      ? groups.map(({ start, count }) => ({ start, count }))
+      : materialIndex === 0
+        ? [{ start: 0, count: indices?.count ?? uv.count }]
+        : [];
+    const vertexNormal = new Vector3();
+    const interpolated = new Vector3();
+    for (const range of ranges) {
+      for (let offset = range.start; offset + 2 < range.start + range.count; offset += 3) {
+        const ia = indices ? indices.getX(offset) : offset;
+        const ib = indices ? indices.getX(offset + 1) : offset + 1;
+        const ic = indices ? indices.getX(offset + 2) : offset + 2;
+        const x0 = uv.getX(ia) * (width - 1);
+        const x1 = uv.getX(ib) * (width - 1);
+        const x2 = uv.getX(ic) * (width - 1);
+        const toY = (value: number) => (flipY ? 1 - value : value) * (height - 1);
+        const y0 = toY(uv.getY(ia));
+        const y1 = toY(uv.getY(ib));
+        const y2 = toY(uv.getY(ic));
+        const denominator = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2);
+        if (Math.abs(denominator) < 1e-8) continue;
+        const minX = Math.max(0, Math.floor(Math.min(x0, x1, x2)));
+        const maxX = Math.min(width - 1, Math.ceil(Math.max(x0, x1, x2)));
+        const minY = Math.max(0, Math.floor(Math.min(y0, y1, y2)));
+        const maxY = Math.min(height - 1, Math.ceil(Math.max(y0, y1, y2)));
+        for (let y = minY; y <= maxY; y += 1) {
+          for (let x = minX; x <= maxX; x += 1) {
+            const px = x + 0.5;
+            const py = y + 0.5;
+            const a = ((y1 - y2) * (px - x2) + (x2 - x1) * (py - y2)) / denominator;
+            const b = ((y2 - y0) * (px - x2) + (x0 - x2) * (py - y2)) / denominator;
+            const c = 1 - a - b;
+            if (a < -1e-5 || b < -1e-5 || c < -1e-5) continue;
+            interpolated.set(0, 0, 0);
+            vertexNormal.fromBufferAttribute(normal, ia);
+            interpolated.addScaledVector(vertexNormal, a);
+            vertexNormal.fromBufferAttribute(normal, ib);
+            interpolated.addScaledVector(vertexNormal, b);
+            vertexNormal.fromBufferAttribute(normal, ic);
+            interpolated.addScaledVector(vertexNormal, c).normalize();
+            visit(x, y, interpolated);
+          }
+        }
+      }
+    }
+  }
+
+  private shadeMmdTexel(
+    base: [number, number, number, number],
+    normal: Vector3,
+    lit: number[],
+    toonPixels: { data: Uint8ClampedArray; width: number; height: number } | undefined,
+    spherePixels: { data: Uint8ClampedArray; width: number; height: number } | undefined,
+    sphereMode: 'none' | 'multiply' | 'add' | 'subTexture' | undefined,
+  ): [number, number, number, number] {
+    const toonCoordinate = Math.max(0, Math.min(1, normal.dot(MMD_BAKE_LIGHT) * 0.5 + 0.45));
+    const toonSample = this.sampleTexture(toonPixels, 0, toonCoordinate);
+    const sphereSample = this.sampleTexture(
+      spherePixels,
+      normal.x * 0.5 + 0.5,
+      normal.y * 0.5 + 0.5,
+    );
+    const result: [number, number, number, number] = [0, 0, 0, base[3]];
+    for (let channel = 0; channel < 3; channel += 1) {
+      let value = lit[channel] * base[channel] * toonSample[channel];
+      if (spherePixels && sphereMode === 'multiply') value *= sphereSample[channel];
+      if (spherePixels && sphereMode === 'add') value += sphereSample[channel] * 2;
+      if (spherePixels && sphereMode === 'subTexture') value = sphereSample[channel];
+      result[channel] = Math.max(0, Math.min(1, value));
+    }
+    return result;
   }
 
   private createMmdPbrFallback(
