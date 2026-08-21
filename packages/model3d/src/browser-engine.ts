@@ -599,7 +599,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     const json = JSON.parse(
       new TextDecoder().decode(new Uint8Array(glb, 20, jsonLength)).trim(),
     ) as {
-      nodes?: Array<{ name?: string }>;
+      nodes?: Array<{ name?: string; children?: number[] }>;
       extensionsUsed?: string[];
       extensionsRequired?: string[];
       extensions?: Record<string, unknown>;
@@ -658,19 +658,21 @@ export class BrowserModel3dEngine implements ConversionEngine {
     return output;
   }
 
-  private mapVrmHumanBones(nodes: Array<{ name?: string }>): Record<string, { node: number }> {
+  private mapVrmHumanBones(
+    nodes: Array<{ name?: string; children?: number[] }>,
+  ): Record<string, { node: number }> {
     const aliases: Record<string, string[]> = {
-      hips: ['hips', 'pelvis', 'mixamorighips', 'センター', '下半身'],
+      hips: ['hips', 'pelvis', 'mixamorighips', 'センター', '腰', '下半身'],
       spine: ['spine', 'mixamorigspine', '上半身'],
       chest: ['chest', 'spine1', 'mixamorigspine1', '上半身2'],
       upperChest: ['upperchest', 'spine2', 'mixamorigspine2', '上半身3'],
       neck: ['neck', 'mixamorigneck', '首'],
       head: ['head', 'mixamorighead', '頭'],
-      leftUpperLeg: ['leftupleg', 'leftupperleg', 'mixamorigleftupleg', '左足'],
+      leftUpperLeg: ['leftupleg', 'leftupperleg', 'mixamorigleftupleg', '左足', '左腿'],
       leftLowerLeg: ['leftleg', 'leftlowerleg', 'mixamorigleftleg', '左ひざ', '左膝'],
       leftFoot: ['leftfoot', 'mixamorigleftfoot', '左足首'],
       leftToes: ['lefttoe', 'lefttoebase', 'mixamoriglefttoebase', '左つま先'],
-      rightUpperLeg: ['rightupleg', 'rightupperleg', 'mixamorigrightupleg', '右足'],
+      rightUpperLeg: ['rightupleg', 'rightupperleg', 'mixamorigrightupleg', '右足', '右腿'],
       rightLowerLeg: ['rightleg', 'rightlowerleg', 'mixamorigrightleg', '右ひざ', '右膝'],
       rightFoot: ['rightfoot', 'mixamorigrightfoot', '右足首'],
       rightToes: ['righttoe', 'righttoebase', 'mixamorigrighttoebase', '右つま先'],
@@ -687,23 +689,93 @@ export class BrowserModel3dEngine implements ConversionEngine {
       jaw: ['jaw', 'あご', '顎'],
     };
     const normalize = (name: string) =>
-      name.toLowerCase().replace(/[^a-z0-9\u3040-\u30ff\u3400-\u9fff]/g, '');
+      name
+        .normalize('NFKC')
+        .toLowerCase()
+        .replace(/ひざ/g, '膝')
+        .replace(/ひじ/g, '肘')
+        .replace(/あご/g, '顎')
+        .replace(/[^a-z0-9\u3040-\u30ff\u3400-\u9fff]/g, '');
     const normalizedNodes = nodes.map((node, index) => ({
       index,
       name: normalize(node.name ?? ''),
     }));
+    const parents = new Map<number, number>();
+    nodes.forEach((node, parentIndex) => {
+      node.children?.forEach((childIndex) => parents.set(childIndex, parentIndex));
+    });
+    const isDescendantOf = (nodeIndex: number, ancestorIndex: number): boolean => {
+      const visited = new Set<number>();
+      let current = parents.get(nodeIndex);
+      while (current !== undefined && !visited.has(current)) {
+        if (current === ancestorIndex) return true;
+        visited.add(current);
+        current = parents.get(current);
+      }
+      return false;
+    };
+    const expectedParents: Record<string, string[]> = {
+      spine: ['hips'],
+      chest: ['spine'],
+      upperChest: ['chest'],
+      neck: ['upperChest', 'chest', 'spine'],
+      head: ['neck', 'upperChest', 'chest', 'spine'],
+      leftUpperLeg: ['hips'],
+      leftLowerLeg: ['leftUpperLeg'],
+      leftFoot: ['leftLowerLeg'],
+      leftToes: ['leftFoot'],
+      rightUpperLeg: ['hips'],
+      rightLowerLeg: ['rightUpperLeg'],
+      rightFoot: ['rightLowerLeg'],
+      rightToes: ['rightFoot'],
+      leftShoulder: ['upperChest', 'chest', 'spine'],
+      leftUpperArm: ['leftShoulder', 'upperChest', 'chest', 'spine'],
+      leftLowerArm: ['leftUpperArm'],
+      leftHand: ['leftLowerArm'],
+      rightShoulder: ['upperChest', 'chest', 'spine'],
+      rightUpperArm: ['rightShoulder', 'upperChest', 'chest', 'spine'],
+      rightLowerArm: ['rightUpperArm'],
+      rightHand: ['rightLowerArm'],
+      leftEye: ['head'],
+      rightEye: ['head'],
+      jaw: ['head'],
+    };
+    const helperBonePattern = /(ik|ｉｋ|捩|ねじ|twist|先|tip|dummy|補助|袖|スカート|髪|リボン)/;
     const mapped: Record<string, { node: number }> = {};
     const usedNodes = new Set<number>();
     for (const [humanBone, names] of Object.entries(aliases)) {
       const normalizedAliases = names.map(normalize);
-      const match = normalizedNodes.find(
-        ({ index, name }) =>
-          !usedNodes.has(index) &&
-          normalizedAliases.some((alias) => name === alias || name.endsWith(alias)),
-      );
-      if (match) {
-        mapped[humanBone] = { node: match.index };
-        usedNodes.add(match.index);
+      const parentCandidates = (expectedParents[humanBone] ?? [])
+        .map((bone) => mapped[bone]?.node)
+        .filter((index): index is number => index !== undefined);
+      let best: { index: number; score: number } | undefined;
+      for (const candidate of normalizedNodes) {
+        if (!candidate.name || usedNodes.has(candidate.index)) continue;
+        let score = 0;
+        normalizedAliases.forEach((alias, aliasIndex) => {
+          if (candidate.name === alias) score = Math.max(score, 240 - aliasIndex * 3);
+          else if (candidate.name.endsWith(alias) || candidate.name.startsWith(alias)) {
+            score = Math.max(score, 125 - aliasIndex);
+          }
+        });
+        if (!score) continue;
+        if (helperBonePattern.test(candidate.name)) score -= 180;
+        const isLeftBone = humanBone.startsWith('left');
+        const isRightBone = humanBone.startsWith('right');
+        if (isLeftBone && /(右|right)/.test(candidate.name)) score -= 300;
+        if (isRightBone && /(左|left)/.test(candidate.name)) score -= 300;
+        if (parentCandidates.length) {
+          if (parentCandidates.some((parent) => isDescendantOf(candidate.index, parent))) {
+            score += 80;
+          } else {
+            score -= 140;
+          }
+        }
+        if (!best || score > best.score) best = { index: candidate.index, score };
+      }
+      if (best && best.score >= 150) {
+        mapped[humanBone] = { node: best.index };
+        usedNodes.add(best.index);
       }
     }
     return mapped;
