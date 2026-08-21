@@ -54,7 +54,7 @@ export interface AudioInputFormatDefinition {
 }
 export type Model3dFormat =
   'fbx' | 'obj' | 'gltf' | 'glb' | 'vrm' | 'stl' | 'ply' | 'dae' | '3ds' | 'pmx' | 'pmd';
-export type Model3dOutputFormat = 'glb' | 'gltf' | 'obj' | 'stl';
+export type Model3dOutputFormat = 'glb' | 'gltf' | 'obj' | 'stl' | 'vrm';
 export interface Model3dInputFormatDefinition {
   format: Model3dFormat;
   label: string;
@@ -421,7 +421,47 @@ export const MODEL3D_OUTPUT_FORMATS = [
   'gltf',
   'obj',
   'stl',
+  'vrm',
 ] as const satisfies readonly Model3dOutputFormat[];
+export const MODEL3D_VRM_INPUT_FORMATS = [
+  'fbx',
+  'gltf',
+  'glb',
+  'pmx',
+  'pmd',
+] as const satisfies readonly Model3dFormat[];
+export const MODEL3D_BONE_INPUT_FORMATS = [
+  'fbx',
+  'gltf',
+  'glb',
+  'vrm',
+  'dae',
+  'pmx',
+  'pmd',
+] as const satisfies readonly Model3dFormat[];
+export const MODEL3D_BONE_OUTPUT_FORMATS = [
+  'glb',
+  'gltf',
+  'vrm',
+] as const satisfies readonly Model3dOutputFormat[];
+
+export function model3dFormatMayContainBones(format: Model3dFormat): boolean {
+  return (MODEL3D_BONE_INPUT_FORMATS as readonly Model3dFormat[]).includes(format);
+}
+
+export function model3dOutputSupportsBones(format: Model3dOutputFormat): boolean {
+  return (MODEL3D_BONE_OUTPUT_FORMATS as readonly Model3dOutputFormat[]).includes(format);
+}
+
+export function isModel3dOutputCandidate(
+  input: Model3dFormat,
+  output: Model3dOutputFormat,
+): boolean {
+  return (
+    input !== output &&
+    (output !== 'vrm' || (MODEL3D_VRM_INPUT_FORMATS as readonly Model3dFormat[]).includes(input))
+  );
+}
 
 function buildModel3dRoutes(): Array<{
   from: InputFormat;
@@ -429,7 +469,7 @@ function buildModel3dRoutes(): Array<{
   type: ConversionType;
 }> {
   return MODEL3D_INPUT_FORMATS.flatMap(({ format }) =>
-    MODEL3D_OUTPUT_FORMATS.filter((to) => format !== to).map((to) => ({
+    MODEL3D_OUTPUT_FORMATS.filter((to) => isModel3dOutputCandidate(format, to)).map((to) => ({
       from: format,
       to,
       type: 'model3d' as const,

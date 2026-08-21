@@ -33,10 +33,13 @@ import {
   MODEL3D_OUTPUT_FORMATS,
   canConvert,
   getMimeType,
+  model3dFormatMayContainBones,
+  model3dOutputSupportsBones,
   type ConversionEngine,
   type ConversionJob,
   type ConversionOptions,
   type InputFormat,
+  type Model3dFormat,
   type Model3dOutputFormat,
   type OutputFormat,
 } from '@convertmate/shared';
@@ -64,15 +67,22 @@ export class BrowserModel3dEngine implements ConversionEngine {
       const manager = this.createLoadingManager(auxiliaryFiles, objectUrls);
       const root = await this.loadModel(source, job.inputFormat, auxiliaryFiles, manager);
       options.onProgress?.(45);
-      this.makeStatic(root);
+      const preserveBones =
+        model3dFormatMayContainBones(job.inputFormat as Model3dFormat) &&
+        model3dOutputSupportsBones(job.outputFormat as Model3dOutputFormat);
+      if (!preserveBones) this.makeStatic(root);
       if (
         (job.inputFormat === 'pmx' || job.inputFormat === 'pmd') &&
-        (job.outputFormat === 'glb' || job.outputFormat === 'gltf')
+        (job.outputFormat === 'glb' || job.outputFormat === 'gltf' || job.outputFormat === 'vrm')
       ) {
         await this.bakeMmdMaterials(root);
       }
       options.onProgress?.(65);
-      const blob = await this.exportModel(root, job.outputFormat as Model3dOutputFormat);
+      const blob = await this.exportModel(
+        root,
+        job.outputFormat as Model3dOutputFormat,
+        job.file.name,
+      );
       if (!blob.size) throw new Error('Conversion produced an empty model file.');
       options.onProgress?.(95);
       return { ...job, resultUrl: URL.createObjectURL(blob), status: 'done', progress: 100 };
@@ -551,7 +561,11 @@ export class BrowserModel3dEngine implements ConversionEngine {
     bones.forEach((bone) => bone.removeFromParent());
   }
 
-  private async exportModel(root: Object3D, format: Model3dOutputFormat): Promise<Blob> {
+  private async exportModel(
+    root: Object3D,
+    format: Model3dOutputFormat,
+    sourceName: string,
+  ): Promise<Blob> {
     if (format === 'obj') {
       return new Blob([new OBJExporter().parse(root)], { type: getMimeType(format) });
     }
@@ -561,12 +575,137 @@ export class BrowserModel3dEngine implements ConversionEngine {
       });
     }
     const exported = await new GLTFExporter().parseAsync(root, {
-      binary: format === 'glb',
+      binary: format === 'glb' || format === 'vrm',
       animations: [],
       onlyVisible: true,
       trs: false,
     });
-    if (exported instanceof ArrayBuffer) return new Blob([exported], { type: getMimeType(format) });
+    if (exported instanceof ArrayBuffer) {
+      const output = format === 'vrm' ? this.addVrmExtension(exported, sourceName) : exported;
+      return new Blob([output], { type: getMimeType(format) });
+    }
     return new Blob([JSON.stringify(exported)], { type: getMimeType(format) });
+  }
+
+  private addVrmExtension(glb: ArrayBuffer, sourceName: string): ArrayBuffer {
+    const view = new DataView(glb);
+    if (view.getUint32(0, true) !== 0x46546c67 || view.getUint32(4, true) !== 2) {
+      throw new Error('VRM export requires a valid glTF 2.0 binary.');
+    }
+    const jsonLength = view.getUint32(12, true);
+    if (view.getUint32(16, true) !== 0x4e4f534a) {
+      throw new Error('GLB JSON chunk was not found.');
+    }
+    const json = JSON.parse(
+      new TextDecoder().decode(new Uint8Array(glb, 20, jsonLength)).trim(),
+    ) as {
+      nodes?: Array<{ name?: string }>;
+      extensionsUsed?: string[];
+      extensionsRequired?: string[];
+      extensions?: Record<string, unknown>;
+    };
+    const humanBones = this.mapVrmHumanBones(json.nodes ?? []);
+    const requiredBones = [
+      'hips',
+      'spine',
+      'head',
+      'leftUpperLeg',
+      'leftLowerLeg',
+      'leftFoot',
+      'rightUpperLeg',
+      'rightLowerLeg',
+      'rightFoot',
+      'leftUpperArm',
+      'leftLowerArm',
+      'leftHand',
+      'rightUpperArm',
+      'rightLowerArm',
+      'rightHand',
+    ] as const;
+    const missing = requiredBones.filter((bone) => !humanBones[bone]);
+    if (missing.length) {
+      throw new Error(`Required VRM humanoid bones were not identified: ${missing.join(', ')}`);
+    }
+    json.extensionsUsed = [...new Set([...(json.extensionsUsed ?? []), 'VRMC_vrm'])];
+    json.extensionsRequired = [...new Set([...(json.extensionsRequired ?? []), 'VRMC_vrm'])];
+    json.extensions = {
+      ...(json.extensions ?? {}),
+      VRMC_vrm: {
+        specVersion: '1.0',
+        meta: {
+          name: sourceName.replace(/\.[^.]+$/, ''),
+          authors: ['Unknown'],
+          licenseUrl: 'https://vrm.dev/licenses/1.0/',
+        },
+        humanoid: { humanBones },
+      },
+    };
+
+    const encodedJson = new TextEncoder().encode(JSON.stringify(json));
+    const paddedLength = Math.ceil(encodedJson.length / 4) * 4;
+    const remainingChunks = new Uint8Array(glb, 20 + jsonLength);
+    const output = new ArrayBuffer(20 + paddedLength + remainingChunks.byteLength);
+    const outputView = new DataView(output);
+    outputView.setUint32(0, 0x46546c67, true);
+    outputView.setUint32(4, 2, true);
+    outputView.setUint32(8, output.byteLength, true);
+    outputView.setUint32(12, paddedLength, true);
+    outputView.setUint32(16, 0x4e4f534a, true);
+    const outputBytes = new Uint8Array(output);
+    outputBytes.set(encodedJson, 20);
+    outputBytes.fill(0x20, 20 + encodedJson.length, 20 + paddedLength);
+    outputBytes.set(remainingChunks, 20 + paddedLength);
+    return output;
+  }
+
+  private mapVrmHumanBones(nodes: Array<{ name?: string }>): Record<string, { node: number }> {
+    const aliases: Record<string, string[]> = {
+      hips: ['hips', 'pelvis', 'mixamorighips', 'センター', '下半身'],
+      spine: ['spine', 'mixamorigspine', '上半身'],
+      chest: ['chest', 'spine1', 'mixamorigspine1', '上半身2'],
+      upperChest: ['upperchest', 'spine2', 'mixamorigspine2', '上半身3'],
+      neck: ['neck', 'mixamorigneck', '首'],
+      head: ['head', 'mixamorighead', '頭'],
+      leftUpperLeg: ['leftupleg', 'leftupperleg', 'mixamorigleftupleg', '左足'],
+      leftLowerLeg: ['leftleg', 'leftlowerleg', 'mixamorigleftleg', '左ひざ', '左膝'],
+      leftFoot: ['leftfoot', 'mixamorigleftfoot', '左足首'],
+      leftToes: ['lefttoe', 'lefttoebase', 'mixamoriglefttoebase', '左つま先'],
+      rightUpperLeg: ['rightupleg', 'rightupperleg', 'mixamorigrightupleg', '右足'],
+      rightLowerLeg: ['rightleg', 'rightlowerleg', 'mixamorigrightleg', '右ひざ', '右膝'],
+      rightFoot: ['rightfoot', 'mixamorigrightfoot', '右足首'],
+      rightToes: ['righttoe', 'righttoebase', 'mixamorigrighttoebase', '右つま先'],
+      leftShoulder: ['leftshoulder', 'mixamorigleftshoulder', '左肩'],
+      leftUpperArm: ['leftarm', 'leftupperarm', 'mixamorigleftarm', '左腕'],
+      leftLowerArm: ['leftforearm', 'leftlowerarm', 'mixamorigleftforearm', '左ひじ', '左肘'],
+      leftHand: ['lefthand', 'mixamoriglefthand', '左手首'],
+      rightShoulder: ['rightshoulder', 'mixamorigrightshoulder', '右肩'],
+      rightUpperArm: ['rightarm', 'rightupperarm', 'mixamorigrightarm', '右腕'],
+      rightLowerArm: ['rightforearm', 'rightlowerarm', 'mixamorigrightforearm', '右ひじ', '右肘'],
+      rightHand: ['righthand', 'mixamorigrighthand', '右手首'],
+      leftEye: ['lefteye', '左目'],
+      rightEye: ['righteye', '右目'],
+      jaw: ['jaw', 'あご', '顎'],
+    };
+    const normalize = (name: string) =>
+      name.toLowerCase().replace(/[^a-z0-9\u3040-\u30ff\u3400-\u9fff]/g, '');
+    const normalizedNodes = nodes.map((node, index) => ({
+      index,
+      name: normalize(node.name ?? ''),
+    }));
+    const mapped: Record<string, { node: number }> = {};
+    const usedNodes = new Set<number>();
+    for (const [humanBone, names] of Object.entries(aliases)) {
+      const normalizedAliases = names.map(normalize);
+      const match = normalizedNodes.find(
+        ({ index, name }) =>
+          !usedNodes.has(index) &&
+          normalizedAliases.some((alias) => name === alias || name.endsWith(alias)),
+      );
+      if (match) {
+        mapped[humanBone] = { node: match.index };
+        usedNodes.add(match.index);
+      }
+    }
+    return mapped;
   }
 }

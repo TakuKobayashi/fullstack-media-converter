@@ -171,13 +171,15 @@ export const messages = {
       addRelated: 'Add related files',
       to: 'Convert every model to',
       incompatible: "{{count}} model(s) can't convert to {{format}}.",
+      bonesRemovedWarning:
+        'The selected input format may contain bones, but this output format cannot store them. Bones and skinning will be removed and the current pose will be baked into a static mesh.',
       proseTitle: 'Private static 3D model conversion',
       prose:
-        'Models are loaded and exported with Three.js in your browser. Animation and bone data are intentionally removed. Format-specific data such as physics, morph targets, cameras, lights, constraints, and VRM metadata may also be omitted.',
+        'Models are loaded and exported with Three.js in your browser. Bones and skinning are preserved when exporting to glTF, GLB, or VRM, and baked into a static mesh for OBJ or STL. Animation is not exported. Format-specific data such as physics, morph targets, cameras, lights, constraints, and some VRM metadata may also be omitted.',
       bullets: [
         'Supports {{inputs}} input',
         'Exports {{outputs}}',
-        'Bakes skinned geometry into a static pose',
+        'Preserves bones and skinning in glTF, GLB, and VRM output',
         'Uses related textures, MTL, and BIN files when supplied',
       ],
     },
@@ -375,13 +377,15 @@ export const messages = {
       addRelated: '関連ファイルを追加',
       to: 'すべての3Dモデルを次の形式へ変換',
       incompatible: '{{count}}件のモデルは{{format}}へ変換できません。',
+      bonesRemovedWarning:
+        '選択した入力形式にはボーン情報が含まれる可能性がありますが、この出力形式には引き継げません。ボーンとスキニングを削除し、現在の姿勢を静的メッシュへ焼き込みます。',
       proseTitle: 'アップロード不要の静的3Dモデル変換',
       prose:
-        'Three.jsを使ってブラウザ内で読み込み・書き出します。アニメーションとボーン情報は意図的に除外します。また、物理設定、モーフ、カメラ、ライト、コンストレイント、VRM固有メタデータなどの形式固有情報も失われる場合があります。',
+        'Three.jsを使ってブラウザ内で読み込み・書き出します。glTF、GLB、VRMへの出力ではボーンとスキニングを保持し、OBJまたはSTLでは現在の姿勢を静的メッシュへ焼き込みます。アニメーションは出力しません。また、物理設定、モーフ、カメラ、ライト、コンストレイント、一部のVRM固有メタデータなどは失われる場合があります。',
       bullets: [
         '{{inputs}}入力に対応',
         '{{outputs}}で出力可能',
-        'スキニング済み形状を現在の姿勢へ焼き込み',
+        'glTF、GLB、VRM出力ではボーンとスキニングを保持',
         'MTL、BIN、テクスチャなどの関連ファイルに対応',
       ],
     },

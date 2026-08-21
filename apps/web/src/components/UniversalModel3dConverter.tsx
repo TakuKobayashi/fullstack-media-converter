@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAtom } from 'jotai';
 import {
   MODEL3D_AUXILIARY_EXTENSIONS,
@@ -11,9 +11,13 @@ import {
   canConvert,
   generateId,
   guessFormat,
+  isModel3dOutputCandidate,
+  model3dFormatMayContainBones,
+  model3dOutputSupportsBones,
   type ConversionFile,
   type ConversionJob,
   type InputFormat,
+  type Model3dFormat,
   type Model3dOutputFormat,
 } from '@convertmate/shared';
 import { ConversionQueue } from '@convertmate/core';
@@ -94,8 +98,17 @@ export default function UniversalModel3dConverter() {
 
   const incompatible = useMemo(
     () =>
-      jobs.filter((job) => job.status === 'pending' && !canConvert(job.inputFormat, targetFormat))
-        .length,
+      jobs.filter(
+        (job) =>
+          job.status === 'pending' &&
+          !isModel3dOutputCandidate(job.inputFormat as Model3dFormat, targetFormat),
+      ).length,
+    [jobs, targetFormat],
+  );
+  const bonesWillBeRemoved = useMemo(
+    () =>
+      jobs.some((job) => model3dFormatMayContainBones(job.inputFormat as Model3dFormat)) &&
+      !model3dOutputSupportsBones(targetFormat),
     [jobs, targetFormat],
   );
   const relatedFileHints = useMemo(
@@ -107,6 +120,17 @@ export default function UniversalModel3dConverter() {
       }),
     [jobs],
   );
+  useEffect(() => {
+    if (
+      !jobs.length ||
+      jobs.every((job) => isModel3dOutputCandidate(job.inputFormat as Model3dFormat, targetFormat))
+    )
+      return;
+    setTargetFormat('glb');
+    setJobs((current) =>
+      current.map((job) => (job.status === 'pending' ? { ...job, outputFormat: 'glb' } : job)),
+    );
+  }, [jobs, setTargetFormat, targetFormat]);
   const acceptedRelatedExtensions = useMemo(
     () => [...new Set(relatedFileHints.flatMap(({ extensions }) => extensions))],
     [relatedFileHints],
@@ -240,7 +264,16 @@ export default function UniversalModel3dConverter() {
             disabled={running}
           >
             {MODEL3D_OUTPUT_FORMATS.map((format) => (
-              <option key={format} value={format}>
+              <option
+                key={format}
+                value={format}
+                disabled={
+                  jobs.length > 0 &&
+                  jobs.some(
+                    (job) => !isModel3dOutputCandidate(job.inputFormat as Model3dFormat, format),
+                  )
+                }
+              >
                 {format.toUpperCase()}
               </option>
             ))}
@@ -251,6 +284,9 @@ export default function UniversalModel3dConverter() {
             ⚠{' '}
             {t('model3d.incompatible', { count: incompatible, format: targetFormat.toUpperCase() })}
           </p>
+        )}
+        {bonesWillBeRemoved && (
+          <p className={s.boneWarning}>⚠ {t('model3d.bonesRemovedWarning')}</p>
         )}
 
         {jobs.length > 0 && (

@@ -435,6 +435,14 @@
   gap: 6px;
 }
 
+.boneWarning {
+  margin-top: 10px;
+  color: var(--coral);
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
 @media (max-width: 640px) {
   .formatBar {
     flex-direction: column;
