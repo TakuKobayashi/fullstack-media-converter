@@ -5,6 +5,7 @@
   "types": "./src/index.ts",
   "dependencies": {
     "@convertmate/shared": "workspace:*",
+    "@yohawing/three-mmd-loader": "^0.8.2",
     "three": "^0.180.0"
   },
   "devDependencies": {

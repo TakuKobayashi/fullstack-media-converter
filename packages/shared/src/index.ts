@@ -52,13 +52,15 @@ export interface AudioInputFormatDefinition {
   label: string;
   extensions: readonly `.${string}`[];
 }
-export type Model3dFormat = 'fbx' | 'obj' | 'gltf' | 'glb' | 'vrm' | 'stl' | 'ply' | 'dae' | '3ds';
+export type Model3dFormat =
+  'fbx' | 'obj' | 'gltf' | 'glb' | 'vrm' | 'stl' | 'ply' | 'dae' | '3ds' | 'pmx' | 'pmd';
 export type Model3dOutputFormat = 'glb' | 'gltf' | 'obj' | 'stl';
 export interface Model3dInputFormatDefinition {
   format: Model3dFormat;
   label: string;
   extensions: readonly `.${string}`[];
 }
+export type Model3dRelatedFileMap = Partial<Record<Model3dFormat, readonly `.${string}`[]>>;
 export type DocumentFormat = 'pdf';
 export type OutputFormat = ImageFormat | VideoFormat | AudioFormat | Model3dFormat | DocumentFormat;
 export type InputFormat = ImageFormat | VideoFormat | AudioFormat | Model3dFormat | DocumentFormat;
@@ -191,6 +193,8 @@ export function getMimeType(format: OutputFormat): string {
     ply: 'application/octet-stream',
     dae: 'model/vnd.collada+xml',
     '3ds': 'application/x-3ds',
+    pmx: 'application/octet-stream',
+    pmd: 'application/octet-stream',
     pdf: 'application/pdf',
   };
   return map[format] ?? 'application/octet-stream';
@@ -245,6 +249,8 @@ export function guessFormat(filename: string): InputFormat | null {
     'ply',
     'dae',
     '3ds',
+    'pmx',
+    'pmd',
     'pdf',
   ];
   return (valid.includes(ext as InputFormat) ? ext : null) as InputFormat | null;
@@ -369,6 +375,8 @@ export const MODEL3D_INPUT_FORMATS = [
   { format: 'ply', label: 'PLY', extensions: ['.ply'] },
   { format: 'dae', label: 'DAE', extensions: ['.dae'] },
   { format: '3ds', label: '3DS', extensions: ['.3ds'] },
+  { format: 'pmx', label: 'MMD/PMX', extensions: ['.pmx'] },
+  { format: 'pmd', label: 'MMD/PMD', extensions: ['.pmd'] },
 ] as const satisfies readonly Model3dInputFormatDefinition[];
 
 export const MODEL3D_INPUT_FORMAT_LABELS = MODEL3D_INPUT_FORMATS.map(({ label }) => label);
@@ -386,7 +394,28 @@ export const MODEL3D_AUXILIARY_EXTENSIONS = [
   '.tga',
   '.dds',
   '.ktx2',
+  '.sph',
+  '.spa',
 ] as const;
+const MODEL3D_TEXTURE_EXTENSIONS = [
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp',
+  '.bmp',
+  '.tga',
+  '.dds',
+  '.ktx2',
+] as const;
+export const MODEL3D_RELATED_FILE_EXTENSIONS = {
+  obj: ['.mtl', ...MODEL3D_TEXTURE_EXTENSIONS],
+  gltf: ['.bin', ...MODEL3D_TEXTURE_EXTENSIONS],
+  fbx: MODEL3D_TEXTURE_EXTENSIONS,
+  dae: MODEL3D_TEXTURE_EXTENSIONS,
+  '3ds': MODEL3D_TEXTURE_EXTENSIONS,
+  pmx: [...MODEL3D_TEXTURE_EXTENSIONS, '.sph', '.spa'],
+  pmd: [...MODEL3D_TEXTURE_EXTENSIONS, '.sph', '.spa'],
+} as const satisfies Model3dRelatedFileMap;
 export const MODEL3D_OUTPUT_FORMATS = [
   'glb',
   'gltf',

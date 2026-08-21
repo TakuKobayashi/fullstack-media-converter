@@ -20,6 +20,7 @@ import { TDSLoader } from 'three/examples/jsm/loaders/TDSLoader.js';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
+import { ThreeMmdLoader } from '@yohawing/three-mmd-loader';
 import {
   MODEL3D_INPUT_EXTENSIONS,
   MODEL3D_OUTPUT_FORMATS,
@@ -138,9 +139,56 @@ export class BrowserModel3dEngine implements ConversionEngine {
         return new ColladaLoader(manager).parse(text(), '').scene;
       case '3ds':
         return new TDSLoader(manager).parse(buffer, '');
+      case 'pmx':
+      case 'pmd': {
+        const relatedFilesByPath = this.indexRelatedFiles(auxiliaryFiles);
+        const mmdModel3d = await new ThreeMmdLoader({
+          textureResolver: {
+            resolve: async (referencedPath) =>
+              this.resolveRelatedFile(referencedPath, relatedFilesByPath),
+          },
+        }).loadModel(source, {
+          outline: false,
+          materialRenderOrder: false,
+          morphAttributes: false,
+          morphSplit: false,
+        });
+        return mmdModel3d.root;
+      }
       default:
         throw new Error(`Unsupported model input: ${format}`);
     }
+  }
+
+  private indexRelatedFiles(files: File[]): Map<string, File> {
+    const indexed = new Map<string, File>();
+    for (const file of files) {
+      const relativePath = file.webkitRelativePath || file.name;
+      const normalizedPath = this.normalizeRelatedPath(relativePath);
+      indexed.set(normalizedPath, file);
+      indexed.set(this.relatedBasename(normalizedPath), file);
+    }
+    return indexed;
+  }
+
+  private resolveRelatedFile(referencedPath: string, indexed: Map<string, File>): File | undefined {
+    const normalizedPath = this.normalizeRelatedPath(referencedPath);
+    return indexed.get(normalizedPath) ?? indexed.get(this.relatedBasename(normalizedPath));
+  }
+
+  private normalizeRelatedPath(path: string): string {
+    const decoded = (() => {
+      try {
+        return decodeURIComponent(path);
+      } catch {
+        return path;
+      }
+    })();
+    return decoded.replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
+  }
+
+  private relatedBasename(path: string): string {
+    return path.split('/').pop() ?? path;
   }
 
   /** Bake the current skinned pose into ordinary mesh vertices, then remove bones. */
@@ -165,6 +213,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       geometry.setAttribute('position', new BufferAttribute(baked, 3));
       geometry.deleteAttribute('skinIndex');
       geometry.deleteAttribute('skinWeight');
+      geometry.morphAttributes = {};
       geometry.computeVertexNormals();
       const replacement = new Mesh(geometry, source.material);
       replacement.name = source.name;

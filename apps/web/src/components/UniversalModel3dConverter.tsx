@@ -7,6 +7,7 @@ import {
   MODEL3D_INPUT_EXTENSIONS,
   MODEL3D_INPUT_FORMAT_LABELS,
   MODEL3D_OUTPUT_FORMATS,
+  MODEL3D_RELATED_FILE_EXTENSIONS,
   canConvert,
   generateId,
   guessFormat,
@@ -38,6 +39,7 @@ export default function UniversalModel3dConverter() {
   const [running, setRunning] = useState(false);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const relatedInputRef = useRef<HTMLInputElement>(null);
   const queueRef = useRef<ConversionQueue | null>(null);
   const inputFormats = MODEL3D_INPUT_FORMAT_LABELS.join(locale === 'ja' ? '・' : ' · ');
   const outputFormats = MODEL3D_OUTPUT_FORMATS.map((format) => format.toUpperCase()).join(
@@ -58,7 +60,9 @@ export default function UniversalModel3dConverter() {
         return (MODEL3D_AUXILIARY_EXTENSIONS as readonly string[]).includes(extension);
       });
       setAuxiliaryFiles((current) => {
-        const merged = new Map([...current, ...auxiliary].map((file) => [file.name, file]));
+        const merged = new Map(
+          [...current, ...auxiliary].map((file) => [file.webkitRelativePath || file.name, file]),
+        );
         return [...merged.values()];
       });
       setJobs((current) => [
@@ -93,6 +97,19 @@ export default function UniversalModel3dConverter() {
       jobs.filter((job) => job.status === 'pending' && !canConvert(job.inputFormat, targetFormat))
         .length,
     [jobs, targetFormat],
+  );
+  const relatedFileHints = useMemo(
+    () =>
+      [...new Set(jobs.map((job) => job.inputFormat))].flatMap((format) => {
+        const extensions =
+          MODEL3D_RELATED_FILE_EXTENSIONS[format as keyof typeof MODEL3D_RELATED_FILE_EXTENSIONS];
+        return extensions ? [{ format, extensions }] : [];
+      }),
+    [jobs],
+  );
+  const acceptedRelatedExtensions = useMemo(
+    () => [...new Set(relatedFileHints.flatMap(({ extensions }) => extensions))],
+    [relatedFileHints],
   );
 
   const convert = useCallback(async () => {
@@ -184,6 +201,33 @@ export default function UniversalModel3dConverter() {
 
         {auxiliaryFiles.length > 0 && (
           <p className={s.mixedHint}>{t('model3d.auxiliary', { count: auxiliaryFiles.length })}</p>
+        )}
+        {relatedFileHints.length > 0 && (
+          <div className={s.mixedHint}>
+            <strong>{t('model3d.relatedTitle')}</strong>
+            {relatedFileHints.map(({ format, extensions }) => (
+              <span key={format}>
+                {' '}
+                {format.toUpperCase()}: {extensions.join(', ')}
+              </span>
+            ))}
+            <button
+              type="button"
+              className={s.browseBtn}
+              onClick={() => relatedInputRef.current?.click()}
+              disabled={running}
+            >
+              {t('model3d.addRelated')}
+            </button>
+            <input
+              ref={relatedInputRef}
+              type="file"
+              multiple
+              accept={acceptedRelatedExtensions.join(',')}
+              hidden
+              onChange={(event) => event.target.files && addFiles(event.target.files)}
+            />
+          </div>
         )}
 
         <div className={s.formatBar}>

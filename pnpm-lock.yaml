@@ -164,6 +164,9 @@ importers:
       '@convertmate/shared':
         specifier: workspace:*
         version: link:../shared
+      '@yohawing/three-mmd-loader':
+        specifier: ^0.8.2
+        version: 0.8.2(three@0.180.0)
       three:
         specifier: ^0.180.0
         version: 0.180.0
@@ -858,6 +861,11 @@ packages:
   '@xmldom/xmldom@0.9.10':
     resolution: {integrity: sha512-A9gOqLdi6cV4ibazAjcQufGj0B1y/vDqYrcuP6d/6x8P27gRS8643Dj9o1dEKtB6O7fwxb2FgBmJS2mX7gpvdw==}
     engines: {node: '>=14.6'}
+
+  '@yohawing/three-mmd-loader@0.8.2':
+    resolution: {integrity: sha512-A9o4gGKyeJ+inQAJRXdDI8Bv/Oa9WnOfEzxbyPD17J4SuZHZmLi0NccHGkhvAXR7JjWvlavO+1HbTW2E4aL2Tw==}
+    peerDependencies:
+      three: '>=0.176.0 <1.0.0'
 
   ag-psd@31.0.2:
     resolution: {integrity: sha512-5s5PvqbomPIIJ9YjL6robz55rT4RYPiQkww4brisyZEb5jzlHB1EKh47IJg7gIFj0RUrD0cMgdntM907qaZjXA==}
@@ -1700,6 +1708,11 @@ snapshots:
 
   '@xmldom/xmldom@0.9.10':
     optional: true
+
+  '@yohawing/three-mmd-loader@0.8.2(three@0.180.0)':
+    dependencies:
+      '@types/three': 0.180.0
+      three: 0.180.0
 
   ag-psd@31.0.2:
     dependencies:
