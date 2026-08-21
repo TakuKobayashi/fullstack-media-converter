@@ -4,9 +4,11 @@ import {
   IMAGE_OUTPUT_FORMATS,
   VIDEO_OUTPUT_FORMATS,
   AUDIO_OUTPUT_FORMATS,
+  MODEL3D_OUTPUT_FORMATS,
   type ImageOutputFormat,
   type VideoOutputFormat,
   type AudioOutputFormat,
+  type Model3dOutputFormat,
 } from '@convertmate/shared';
 
 const MIN_IMAGE_QUALITY = 60;
@@ -95,4 +97,21 @@ export const audioBitrateAtom = atom(
       storedAudioBitrateAtom,
       AUDIO_BITRATES.includes(bitrate as (typeof AUDIO_BITRATES)[number]) ? bitrate : 320,
     ),
+);
+
+function isModel3dOutputFormat(value: string): value is Model3dOutputFormat {
+  return (MODEL3D_OUTPUT_FORMATS as readonly string[]).includes(value);
+}
+
+const storedModel3dOutputFormatAtom = atomWithStorage<string>(
+  'fullstack-media-converter:model3d-output-format',
+  'glb',
+);
+
+export const model3dOutputFormatAtom = atom(
+  (get) => {
+    const format = get(storedModel3dOutputFormatAtom);
+    return isModel3dOutputFormat(format) ? format : 'glb';
+  },
+  (_get, set, format: Model3dOutputFormat) => set(storedModel3dOutputFormatAtom, format),
 );

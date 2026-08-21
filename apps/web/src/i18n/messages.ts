@@ -5,12 +5,14 @@ export const messages = {
       image: 'Image Converter',
       video: 'Video Converter',
       audio: 'Audio Converter',
+      model3d: '3D Model Converter',
       exif: 'EXIF',
     },
     footer: {
       image: 'Image Converter',
       video: 'Video Converter',
       audio: 'Audio Converter',
+      model3d: '3D Model Converter',
       exif: 'Export EXIF',
       privacy: 'All processing happens in your browser · No uploads',
     },
@@ -19,11 +21,11 @@ export const messages = {
       title: 'Convert media.',
       titleAccent: 'Keep it yours.',
       subtitle:
-        'A focused workspace for batch image, video, and audio conversion. Nothing is uploaded; every file is processed on your device.',
+        'A focused workspace for batch image, video, audio, and 3D model conversion. Nothing is uploaded; every file is processed on your device.',
       imageCta: 'Convert images',
       videoCta: 'Convert videos',
       sectionEyebrow: 'Choose a workspace',
-      sectionTitle: 'Three converters. Every route.',
+      sectionTitle: 'Four converters. Every route.',
       sectionIntro:
         'Choose what you are working with, then select the output format inside the converter.',
       open: 'Open converter',
@@ -37,6 +39,10 @@ export const messages = {
         {
           title: 'Audio Converter',
           description: 'Convert mixed batches of {{formats}} audio files with FFmpeg.',
+        },
+        {
+          title: '3D Model Converter',
+          description: 'Convert static {{formats}} models locally in your browser.',
         },
       ],
       benefits: [
@@ -153,6 +159,26 @@ export const messages = {
         'Download individually or as a ZIP',
       ],
     },
+    model3d: {
+      badge: '3D Model Converter',
+      title: 'Static 3D Model',
+      suffix: 'Converter',
+      subtitle: 'Convert {{inputs}} models to {{outputs}} without uploading them.',
+      drop: 'Drop models and related files here',
+      dropSub: '{{formats}} · Include MTL, BIN, and texture files together',
+      auxiliary: '{{count}} related file(s) detected',
+      to: 'Convert every model to',
+      incompatible: "{{count}} model(s) can't convert to {{format}}.",
+      proseTitle: 'Private static 3D model conversion',
+      prose:
+        'Models are loaded and exported with Three.js in your browser. Animation and bone data are intentionally removed. Format-specific data such as physics, morph targets, cameras, lights, constraints, and VRM metadata may also be omitted.',
+      bullets: [
+        'Supports {{inputs}} input',
+        'Exports {{outputs}}',
+        'Bakes skinned geometry into a static pose',
+        'Uses related textures, MTL, and BIN files when supplied',
+      ],
+    },
     exif: {
       badge: 'Metadata Tool',
       title: '<em>EXIF</em> Data Viewer & Bulk Export',
@@ -173,15 +199,24 @@ export const messages = {
       image: 'Universal Image Converter | Fullstack Media Converter',
       video: 'Universal Video Converter | Fullstack Media Converter',
       audio: 'Universal Audio Converter | Fullstack Media Converter',
+      model3d: 'Static 3D Model Converter | Fullstack Media Converter',
       exif: 'EXIF Export | Fullstack Media Converter',
     },
   },
   ja: {
-    nav: { home: 'ホーム', image: '画像変換', video: '動画変換', audio: '音声変換', exif: 'EXIF' },
+    nav: {
+      home: 'ホーム',
+      image: '画像変換',
+      video: '動画変換',
+      audio: '音声変換',
+      model3d: '3Dモデル変換',
+      exif: 'EXIF',
+    },
     footer: {
       image: '画像変換',
       video: '動画変換',
       audio: '音声変換',
+      model3d: '3Dモデル変換',
       exif: 'EXIF書き出し',
       privacy: 'すべてブラウザ内で処理・アップロード不要',
     },
@@ -190,12 +225,13 @@ export const messages = {
       title: 'メディアを変換。',
       titleAccent: 'ファイルは手元に。',
       subtitle:
-        '画像、動画、音声をまとめて変換できるシンプルなワークスペースです。ファイルはアップロードされず、すべてお使いの端末内で処理されます。',
+        '画像、動画、音声、3Dモデルをまとめて変換できるシンプルなワークスペースです。ファイルはアップロードされず、すべてお使いの端末内で処理されます。',
       imageCta: '画像を変換する',
       videoCta: '動画を変換する',
       sectionEyebrow: '変換ツールを選択',
-      sectionTitle: '3つのツールですべての変換に対応',
-      sectionIntro: '画像、動画または音声を選び、変換ページ内で出力形式を指定してください。',
+      sectionTitle: '4つのツールですべての変換に対応',
+      sectionIntro:
+        '画像、動画、音声または3Dモデルを選び、変換ページ内で出力形式を指定してください。',
       open: '変換ツールを開く',
       local: '端末内で処理',
       converters: [
@@ -207,6 +243,10 @@ export const messages = {
         {
           title: '音声変換ツール',
           description: '{{formats}}が混在した音声をFFmpegでまとめて変換します。',
+        },
+        {
+          title: '3Dモデル変換ツール',
+          description: '{{formats}}の静的3Dモデルをブラウザ内で変換します。',
         },
       ],
       benefits: [
@@ -321,6 +361,26 @@ export const messages = {
         '個別保存とZIP一括保存に対応',
       ],
     },
+    model3d: {
+      badge: '3Dモデル変換ツール',
+      title: '静的3Dモデル',
+      suffix: '変換',
+      subtitle: '{{inputs}}を{{outputs}}へ、アップロードせずに変換できます。',
+      drop: '3Dモデルと関連ファイルをここにドロップ',
+      dropSub: '{{formats}}・MTL、BIN、テクスチャも一緒に追加してください',
+      auxiliary: '関連ファイルを{{count}}件検出しました',
+      to: 'すべての3Dモデルを次の形式へ変換',
+      incompatible: '{{count}}件のモデルは{{format}}へ変換できません。',
+      proseTitle: 'アップロード不要の静的3Dモデル変換',
+      prose:
+        'Three.jsを使ってブラウザ内で読み込み・書き出します。アニメーションとボーン情報は意図的に除外します。また、物理設定、モーフ、カメラ、ライト、コンストレイント、VRM固有メタデータなどの形式固有情報も失われる場合があります。',
+      bullets: [
+        '{{inputs}}入力に対応',
+        '{{outputs}}で出力可能',
+        'スキニング済み形状を現在の姿勢へ焼き込み',
+        'MTL、BIN、テクスチャなどの関連ファイルに対応',
+      ],
+    },
     exif: {
       badge: 'メタデータツール',
       title: '<em>EXIF</em>情報の確認・一括書き出し',
@@ -341,6 +401,7 @@ export const messages = {
       image: '画像変換ツール — 一括・アップロード不要 | Fullstack Media Converter',
       video: '動画変換ツール | Fullstack Media Converter',
       audio: '音声変換ツール | Fullstack Media Converter',
+      model3d: '3Dモデル変換ツール | Fullstack Media Converter',
       exif: 'EXIF情報の確認・一括書き出し | Fullstack Media Converter',
     },
   },

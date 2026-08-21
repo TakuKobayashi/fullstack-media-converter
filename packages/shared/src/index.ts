@@ -52,11 +52,18 @@ export interface AudioInputFormatDefinition {
   label: string;
   extensions: readonly `.${string}`[];
 }
+export type Model3dFormat = 'fbx' | 'obj' | 'gltf' | 'glb' | 'vrm' | 'stl' | 'ply' | 'dae' | '3ds';
+export type Model3dOutputFormat = 'glb' | 'gltf' | 'obj' | 'stl';
+export interface Model3dInputFormatDefinition {
+  format: Model3dFormat;
+  label: string;
+  extensions: readonly `.${string}`[];
+}
 export type DocumentFormat = 'pdf';
-export type OutputFormat = ImageFormat | VideoFormat | AudioFormat | DocumentFormat;
-export type InputFormat = ImageFormat | VideoFormat | AudioFormat | DocumentFormat;
+export type OutputFormat = ImageFormat | VideoFormat | AudioFormat | Model3dFormat | DocumentFormat;
+export type InputFormat = ImageFormat | VideoFormat | AudioFormat | Model3dFormat | DocumentFormat;
 
-export type ConversionType = 'image' | 'video' | 'audio' | 'document' | 'exif';
+export type ConversionType = 'image' | 'video' | 'audio' | 'model3d' | 'document' | 'exif';
 
 // ─── Job / Queue Types ───────────────────────────────────────────────
 export type JobStatus = 'pending' | 'processing' | 'done' | 'error';
@@ -105,10 +112,15 @@ export interface AudioConvertOptions {
   sampleRate?: number;
 }
 
+export interface Model3dConvertOptions {
+  auxiliaryFiles?: File[];
+}
+
 export interface ConversionOptions {
   image?: ImageConvertOptions;
   video?: VideoConvertOptions;
   audio?: AudioConvertOptions;
+  model3d?: Model3dConvertOptions;
   /** Runtime progress hook used by queues and interactive clients. */
   onProgress?: (progress: number) => void;
 }
@@ -170,6 +182,15 @@ export function getMimeType(format: OutputFormat): string {
     opus: 'audio/opus',
     aiff: 'audio/aiff',
     aif: 'audio/aiff',
+    fbx: 'application/octet-stream',
+    obj: 'text/plain',
+    gltf: 'model/gltf+json',
+    glb: 'model/gltf-binary',
+    vrm: 'model/gltf-binary',
+    stl: 'model/stl',
+    ply: 'application/octet-stream',
+    dae: 'model/vnd.collada+xml',
+    '3ds': 'application/x-3ds',
     pdf: 'application/pdf',
   };
   return map[format] ?? 'application/octet-stream';
@@ -215,6 +236,15 @@ export function guessFormat(filename: string): InputFormat | null {
     'opus',
     'aif',
     'aiff',
+    'fbx',
+    'obj',
+    'gltf',
+    'glb',
+    'vrm',
+    'stl',
+    'ply',
+    'dae',
+    '3ds',
     'pdf',
   ];
   return (valid.includes(ext as InputFormat) ? ext : null) as InputFormat | null;
@@ -329,6 +359,55 @@ function buildAudioRoutes(): Array<{ from: InputFormat; to: OutputFormat; type: 
   });
 }
 
+export const MODEL3D_INPUT_FORMATS = [
+  { format: 'fbx', label: 'FBX', extensions: ['.fbx'] },
+  { format: 'obj', label: 'OBJ/MTL', extensions: ['.obj'] },
+  { format: 'gltf', label: 'glTF', extensions: ['.gltf'] },
+  { format: 'glb', label: 'GLB', extensions: ['.glb'] },
+  { format: 'vrm', label: 'VRM', extensions: ['.vrm'] },
+  { format: 'stl', label: 'STL', extensions: ['.stl'] },
+  { format: 'ply', label: 'PLY', extensions: ['.ply'] },
+  { format: 'dae', label: 'DAE', extensions: ['.dae'] },
+  { format: '3ds', label: '3DS', extensions: ['.3ds'] },
+] as const satisfies readonly Model3dInputFormatDefinition[];
+
+export const MODEL3D_INPUT_FORMAT_LABELS = MODEL3D_INPUT_FORMATS.map(({ label }) => label);
+export const MODEL3D_INPUT_EXTENSIONS = MODEL3D_INPUT_FORMATS.flatMap(({ extensions }) => [
+  ...extensions,
+]);
+export const MODEL3D_AUXILIARY_EXTENSIONS = [
+  '.mtl',
+  '.bin',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp',
+  '.bmp',
+  '.tga',
+  '.dds',
+  '.ktx2',
+] as const;
+export const MODEL3D_OUTPUT_FORMATS = [
+  'glb',
+  'gltf',
+  'obj',
+  'stl',
+] as const satisfies readonly Model3dOutputFormat[];
+
+function buildModel3dRoutes(): Array<{
+  from: InputFormat;
+  to: OutputFormat;
+  type: ConversionType;
+}> {
+  return MODEL3D_INPUT_FORMATS.flatMap(({ format }) =>
+    MODEL3D_OUTPUT_FORMATS.filter((to) => format !== to).map((to) => ({
+      from: format,
+      to,
+      type: 'model3d' as const,
+    })),
+  );
+}
+
 export const SUPPORTED_CONVERSIONS: Array<{
   from: InputFormat;
   to: OutputFormat;
@@ -339,6 +418,7 @@ export const SUPPORTED_CONVERSIONS: Array<{
   // Video
   ...buildVideoRoutes(),
   ...buildAudioRoutes(),
+  ...buildModel3dRoutes(),
   // Document
   { from: 'jpg', to: 'pdf', type: 'document' },
   { from: 'jpeg', to: 'pdf', type: 'document' },

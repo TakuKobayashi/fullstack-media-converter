@@ -4,6 +4,8 @@ import {
   AUDIO_INPUT_FORMAT_LABELS,
   AUDIO_OUTPUT_FORMATS,
   IMAGE_INPUT_FORMAT_LABELS,
+  MODEL3D_INPUT_FORMAT_LABELS,
+  MODEL3D_OUTPUT_FORMATS,
   VIDEO_INPUT_FORMAT_LABELS,
   VIDEO_OUTPUT_FORMATS,
 } from '@convertmate/shared';
@@ -18,8 +20,12 @@ const audioInputsEn = AUDIO_INPUT_FORMAT_LABELS.join(', ');
 const audioInputsJa = AUDIO_INPUT_FORMAT_LABELS.join('、');
 const audioOutputsEn = AUDIO_OUTPUT_FORMATS.map((format) => format.toUpperCase()).join(', ');
 const audioOutputsJa = AUDIO_OUTPUT_FORMATS.map((format) => format.toUpperCase()).join('・');
+const model3dInputsEn = MODEL3D_INPUT_FORMAT_LABELS.join(', ');
+const model3dInputsJa = MODEL3D_INPUT_FORMAT_LABELS.join('、');
+const model3dOutputsEn = MODEL3D_OUTPUT_FORMATS.map((format) => format.toUpperCase()).join(', ');
+const model3dOutputsJa = MODEL3D_OUTPUT_FORMATS.map((format) => format.toUpperCase()).join('・');
 
-export type ToolName = 'image' | 'video' | 'audio' | 'exif';
+export type ToolName = 'image' | 'video' | 'audio' | 'model3d' | 'exif';
 export type SeoLocale = 'en' | 'ja';
 
 export const SITE_URL = (
@@ -97,6 +103,28 @@ const tools = {
       description: `${audioInputsJa}を${audioOutputsJa}へ無料で一括変換。アップロード不要でブラウザ内処理します。`,
       imageAlt: '音声波形を別のファイル形式へ変換するイメージ',
       keywords: ['音声変換', 'MP3 変換', 'WAV FLAC 変換', '音声 一括変換', '音声変換 無料'],
+    },
+  },
+  model3d: {
+    path: '/model3d-converter',
+    image: '/og/home.png',
+    en: {
+      title: 'Free Static 3D Model Converter — FBX, OBJ, GLB & More',
+      description: `Convert ${model3dInputsEn} static models to ${model3dOutputsEn} privately in your browser. Animation and bones are removed.`,
+      imageAlt: 'Static 3D models being converted between file formats',
+      keywords: [
+        '3D model converter',
+        'FBX to GLB',
+        'OBJ to GLB',
+        'static model converter',
+        'Three.js converter',
+      ],
+    },
+    ja: {
+      title: '無料3Dモデル変換ツール｜FBX・OBJ・GLBなどに対応',
+      description: `${model3dInputsJa}の静的モデルを${model3dOutputsJa}へ無料変換。アニメーションとボーンを除外し、ブラウザ内で処理します。`,
+      imageAlt: '静的3Dモデルを別のファイル形式へ変換するイメージ',
+      keywords: ['3Dモデル変換', 'FBX GLB 変換', 'OBJ GLB 変換', '静的モデル変換', 'Three.js 変換'],
     },
   },
   exif: {
@@ -245,6 +273,33 @@ const faq = {
       [
         '複数ファイルを変換できますか？',
         'はい。異なる音声形式をまとめて変換し、ZIPで保存できます。',
+      ],
+    ],
+  },
+  model3d: {
+    en: [
+      ['Are models uploaded?', 'No. Three.js processes models locally in your browser.'],
+      [
+        'Which data is removed?',
+        'Animations, bones, and skinning data are removed. Skinned geometry is baked into its current static pose.',
+      ],
+      [
+        'Which formats are supported?',
+        `${model3dInputsEn} input and ${model3dOutputsEn} output are supported.`,
+      ],
+    ],
+    ja: [
+      [
+        '3Dモデルはアップロードされますか？',
+        'いいえ。Three.jsがブラウザ内で3Dモデルを処理します。',
+      ],
+      [
+        'どの情報が除外されますか？',
+        'アニメーション、ボーン、スキニング情報を除外し、形状を現在の静的な姿勢へ焼き込みます。',
+      ],
+      [
+        'どの形式に対応していますか？',
+        `${model3dInputsJa}の入力と${model3dOutputsJa}の出力に対応しています。`,
       ],
     ],
   },

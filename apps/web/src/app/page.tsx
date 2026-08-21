@@ -9,6 +9,7 @@ import { useLocalizedPath } from '@/hooks/useLocalizedPath';
 import {
   AUDIO_INPUT_FORMAT_LABELS,
   IMAGE_INPUT_FORMAT_LABELS,
+  MODEL3D_INPUT_FORMAT_LABELS,
   VIDEO_INPUT_FORMAT_LABELS,
 } from '@convertmate/shared';
 
@@ -36,6 +37,13 @@ export default function HomePage() {
       icon: '♫',
       formats: AUDIO_INPUT_FORMAT_LABELS,
       accent: 'violet',
+    },
+    {
+      href: '/model3d-converter',
+      number: '04',
+      icon: '◇',
+      formats: MODEL3D_INPUT_FORMAT_LABELS,
+      accent: 'coral',
     },
   ] as const;
   return (

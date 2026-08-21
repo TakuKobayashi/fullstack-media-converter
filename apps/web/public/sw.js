@@ -5,15 +5,16 @@
 // Bump this whenever the app's loading/runtime behaviour changes. In
 // particular, v1 may contain the old ffmpeg build that incorrectly required
 // SharedArrayBuffer even though the app uses the single-thread core.
-const CACHE_VERSION = 'v5';
-const STATIC_CACHE = `convertmate-static-${CACHE_VERSION}`;
-const RUNTIME_CACHE = `convertmate-runtime-${CACHE_VERSION}`;
+const CACHE_VERSION = 'v6';
+const STATIC_CACHE = `fullstack-media-converter-static-${CACHE_VERSION}`;
+const RUNTIME_CACHE = `fullstack-media-converter-runtime-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
   '/',
   '/image-converter/',
   '/video-converter/',
   '/audio-converter/',
+  '/model3d-converter/',
   '/export-exif/',
   '/manifest.json',
   '/icon.svg',

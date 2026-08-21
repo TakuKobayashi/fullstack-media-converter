@@ -1,7 +1,7 @@
 {
   "name": "Fullstack Media Converter",
   "short_name": "Media Converter",
-  "description": "Private batch image and video conversion in your browser.",
+  "description": "Private batch image, video, audio, and 3D model conversion in your browser.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0D1117",
@@ -26,6 +26,11 @@
       "name": "Audio Converter",
       "url": "/audio-converter",
       "description": "Convert audio locally"
+    },
+    {
+      "name": "3D Model Converter",
+      "url": "/model3d-converter",
+      "description": "Convert static 3D models locally"
     },
     { "name": "EXIF Export", "url": "/export-exif", "description": "Export image metadata" }
   ]

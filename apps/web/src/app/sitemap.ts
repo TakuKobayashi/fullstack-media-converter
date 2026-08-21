@@ -4,7 +4,7 @@ import { SITE_URL, routeFor, type ToolName } from '@/lib/seo';
 export const dynamic = 'force-static';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const tools: ToolName[] = ['image', 'video', 'audio', 'exif'];
+  const tools: ToolName[] = ['image', 'video', 'audio', 'model3d', 'exif'];
   const pages: MetadataRoute.Sitemap = [
     {
       url: SITE_URL,

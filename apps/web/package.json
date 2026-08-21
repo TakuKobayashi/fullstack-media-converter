@@ -12,6 +12,7 @@
     "@convertmate/core": "workspace:*",
     "@convertmate/exif": "workspace:*",
     "@convertmate/image": "workspace:*",
+    "@convertmate/model3d": "workspace:*",
     "@convertmate/shared": "workspace:*",
     "@convertmate/video": "workspace:*",
     "i18next": "^26.3.6",

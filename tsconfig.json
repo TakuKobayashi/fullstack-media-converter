@@ -13,6 +13,7 @@
     { "path": "./packages/core" },
     { "path": "./packages/image" },
     { "path": "./packages/video" },
+    { "path": "./packages/model3d" },
     { "path": "./packages/exif" },
     { "path": "./apps/web" },
     { "path": "./apps/cli" }
