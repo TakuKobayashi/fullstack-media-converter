@@ -13,7 +13,9 @@ import {
   generateId,
   guessFormat,
   isModel3dOutputCandidate,
+  model3dFormatMayContainAnimations,
   model3dFormatMayContainBones,
+  model3dOutputSupportsAnimations,
   model3dOutputSupportsBones,
   type ConversionFile,
   type ConversionJob,
@@ -62,6 +64,12 @@ function relatedExtensionsFor(format: InputFormat): readonly string[] {
       format as keyof typeof MODEL3D_RELATED_FILE_EXTENSIONS
     ] ?? []
   );
+}
+
+function revokeJobOutputs(job: ConversionJob): void {
+  const urls = new Set(job.outputs?.map((output) => output.url) ?? []);
+  if (job.resultUrl) urls.add(job.resultUrl);
+  urls.forEach((url) => URL.revokeObjectURL(url));
 }
 
 const TRANSPARENCY_PREVIEW_OUTPUTS = new Set<Model3dOutputFormat>(['glb', 'gltf', 'vrm']);
@@ -143,9 +151,9 @@ export default function UniversalModel3dConverter() {
   );
   const { downloadAll, isAllComplete, isPackaging, packageProgress, packageError } =
     useBatchDownload(batchDownloadJobs, 'FullstackMediaConverter-model3d');
-  const completedBatchDownloadCount = batchDownloadJobs.filter(
-    (job) => job.status === 'done' && job.resultUrl,
-  ).length;
+  const completedBatchDownloadCount = batchDownloadJobs
+    .filter((job) => job.status === 'done')
+    .reduce((count, job) => count + (job.outputs?.length ?? (job.resultUrl ? 1 : 0)), 0);
   const relatedFilesByJobId = useMemo(
     () =>
       Object.fromEntries(
@@ -237,7 +245,7 @@ export default function UniversalModel3dConverter() {
     setTargetFormat(format);
     setJobs((current) => {
       current.forEach((job) => {
-        if (job.status !== 'pending' && job.resultUrl) URL.revokeObjectURL(job.resultUrl);
+        if (job.status !== 'pending') revokeJobOutputs(job);
       });
       return current
         .filter((job) => job.status === 'pending')
@@ -258,6 +266,13 @@ export default function UniversalModel3dConverter() {
     () =>
       jobs.some((job) => model3dFormatMayContainBones(job.inputFormat as Model3dFormat)) &&
       !model3dOutputSupportsBones(targetFormat),
+    [jobs, targetFormat],
+  );
+  const animationsWillBeRemoved = useMemo(
+    () =>
+      jobs.some((job) =>
+        model3dFormatMayContainAnimations(job.inputFormat as Model3dFormat),
+      ) && !model3dOutputSupportsAnimations(targetFormat),
     [jobs, targetFormat],
   );
   useEffect(() => {
@@ -353,7 +368,12 @@ export default function UniversalModel3dConverter() {
       if (type === 'job:start') Object.assign(patch, { status: 'processing', progress: 0 });
       if (type === 'job:progress') patch.progress = job.progress;
       if (type === 'job:done') {
-        Object.assign(patch, { status: 'done', progress: 100, resultUrl: job.resultUrl });
+        Object.assign(patch, {
+          status: 'done',
+          progress: 100,
+          resultUrl: job.resultUrl,
+          outputs: job.outputs,
+        });
         jotaiStore.set(vrmTransparencySettingsAtomFamily(job.file.name), RESET);
         setAppliedTransparencySettings((current) => {
           const next = { ...current };
@@ -374,7 +394,7 @@ export default function UniversalModel3dConverter() {
 
   const clear = () => {
     if (running) queueRef.current?.abort();
-    jobs.forEach((job) => job.resultUrl && URL.revokeObjectURL(job.resultUrl));
+    jobs.forEach(revokeJobOutputs);
     setJobs([]);
     setAuxiliaryFiles([]);
     setPreviewFailures({});
@@ -477,6 +497,9 @@ export default function UniversalModel3dConverter() {
         {bonesWillBeRemoved && (
           <p className={s.boneWarning}>⚠ {t('model3d.bonesRemovedWarning')}</p>
         )}
+        {animationsWillBeRemoved && (
+          <p className={s.boneWarning}>⚠ {t('model3d.animationsRemovedWarning')}</p>
+        )}
 
         {jobs.length > 0 && (
           <div className={s.controls}>
@@ -545,15 +568,25 @@ export default function UniversalModel3dConverter() {
                       style={{ width: `${job.progress}%` }}
                     />
                   </div>
-                  {job.status === 'done' && job.resultUrl && (
-                    <a
-                      className={s.dlLink}
-                      href={job.resultUrl}
-                      download={job.file.name.replace(/\.[^.]+$/, `.${job.outputFormat}`)}
-                    >
-                      {t('common.save')}
-                    </a>
-                  )}
+                  {job.status === 'done' &&
+                    (job.outputs?.length
+                      ? job.outputs
+                      : job.resultUrl
+                        ? [{
+                            name: job.file.name.replace(/\.[^.]+$/, `.${job.outputFormat}`),
+                            url: job.resultUrl,
+                          }]
+                        : []
+                    ).map((output) => (
+                      <a
+                        key={output.name}
+                        className={s.dlLink}
+                        href={output.url}
+                        download={output.name}
+                      >
+                        {output.name}
+                      </a>
+                    ))}
                   {job.status === 'pending' && (
                     <button
                       onClick={() =>

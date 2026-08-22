@@ -53,7 +53,7 @@ export interface AudioInputFormatDefinition {
   extensions: readonly `.${string}`[];
 }
 export type Model3dFormat =
-  'fbx' | 'obj' | 'gltf' | 'glb' | 'vrm' | 'stl' | 'ply' | 'dae' | '3ds' | 'pmx' | 'pmd';
+  'fbx' | 'obj' | 'gltf' | 'glb' | 'vrm' | 'stl' | 'ply' | 'dae' | '3ds' | 'pmx' | 'pmd' | 'vmd';
 export type Model3dOutputFormat = 'glb' | 'gltf' | 'obj' | 'stl' | 'vrm';
 export interface Model3dInputFormatDefinition {
   format: Model3dFormat;
@@ -78,6 +78,12 @@ export interface ConversionFile {
   source: File | ArrayBuffer | string;
 }
 
+export interface ConversionOutput {
+  name: string;
+  url: string;
+  mimeType: string;
+}
+
 export interface ConversionJob {
   id: string;
   file: ConversionFile;
@@ -87,6 +93,7 @@ export interface ConversionJob {
   progress: number; // 0–100
   error?: string;
   resultUrl?: string; // object URL (browser) or filepath (node)
+  outputs?: ConversionOutput[];
 }
 
 export interface BatchJob {
@@ -208,6 +215,7 @@ export function getMimeType(format: OutputFormat): string {
     '3ds': 'application/x-3ds',
     pmx: 'application/octet-stream',
     pmd: 'application/octet-stream',
+    vmd: 'application/octet-stream',
     pdf: 'application/pdf',
   };
   return map[format] ?? 'application/octet-stream';
@@ -264,6 +272,7 @@ export function guessFormat(filename: string): InputFormat | null {
     '3ds',
     'pmx',
     'pmd',
+    'vmd',
     'pdf',
   ];
   return (valid.includes(ext as InputFormat) ? ext : null) as InputFormat | null;
@@ -390,6 +399,7 @@ export const MODEL3D_INPUT_FORMATS = [
   { format: '3ds', label: '3DS', extensions: ['.3ds'] },
   { format: 'pmx', label: 'MMD/PMX', extensions: ['.pmx'] },
   { format: 'pmd', label: 'MMD/PMD', extensions: ['.pmd'] },
+  { format: 'vmd', label: 'MMD/VMD Motion', extensions: ['.vmd'] },
 ] as const satisfies readonly Model3dInputFormatDefinition[];
 
 export const MODEL3D_INPUT_FORMAT_LABELS = MODEL3D_INPUT_FORMATS.map(({ label }) => label);
@@ -442,6 +452,7 @@ export const MODEL3D_VRM_INPUT_FORMATS = [
   'glb',
   'pmx',
   'pmd',
+  'vmd',
 ] as const satisfies readonly Model3dFormat[];
 export const MODEL3D_BONE_INPUT_FORMATS = [
   'fbx',
@@ -457,6 +468,16 @@ export const MODEL3D_BONE_OUTPUT_FORMATS = [
   'gltf',
   'vrm',
 ] as const satisfies readonly Model3dOutputFormat[];
+export const MODEL3D_ANIMATION_INPUT_FORMATS = ['fbx', 'gltf', 'glb', 'dae', 'vmd'] as const;
+export const MODEL3D_ANIMATION_OUTPUT_FORMATS = ['glb', 'gltf', 'vrm'] as const;
+
+export function model3dFormatMayContainAnimations(format: Model3dFormat): boolean {
+  return (MODEL3D_ANIMATION_INPUT_FORMATS as readonly Model3dFormat[]).includes(format);
+}
+
+export function model3dOutputSupportsAnimations(format: Model3dOutputFormat): boolean {
+  return (MODEL3D_ANIMATION_OUTPUT_FORMATS as readonly Model3dOutputFormat[]).includes(format);
+}
 
 export function model3dFormatMayContainBones(format: Model3dFormat): boolean {
   return (MODEL3D_BONE_INPUT_FORMATS as readonly Model3dFormat[]).includes(format);
@@ -472,6 +493,7 @@ export function isModel3dOutputCandidate(
 ): boolean {
   return (
     input !== output &&
+    (input !== 'vmd' || model3dOutputSupportsAnimations(output)) &&
     (output !== 'vrm' || (MODEL3D_VRM_INPUT_FORMATS as readonly Model3dFormat[]).includes(input))
   );
 }

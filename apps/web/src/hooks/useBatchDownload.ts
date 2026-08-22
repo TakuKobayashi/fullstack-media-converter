@@ -9,7 +9,7 @@ export function useBatchDownload(jobs: ConversionJob[], archivePrefix: string) {
   const [packageProgress, setPackageProgress] = useState(0);
   const [packageError, setPackageError] = useState<string | null>(null);
   const completed = useMemo(
-    () => jobs.filter((job) => job.status === 'done' && job.resultUrl),
+    () => jobs.filter((job) => job.status === 'done' && (job.outputs?.length || job.resultUrl)),
     [jobs],
   );
   const hasUnfinishedJobs = jobs.some(
@@ -22,10 +22,20 @@ export function useBatchDownload(jobs: ConversionJob[], archivePrefix: string) {
 
   const downloadAll = useCallback(async () => {
     if (!isAllComplete || isPackaging) return;
-    if (completed.length === 1) {
+    const outputs = completed.flatMap((job) =>
+      job.outputs?.length
+        ? job.outputs
+        : job.resultUrl
+          ? [{
+              name: job.file.name.replace(/\.[^.]+$/, `.${job.outputFormat}`),
+              url: job.resultUrl,
+            }]
+          : [],
+    );
+    if (outputs.length === 1) {
       const anchor = document.createElement('a');
-      anchor.href = completed[0].resultUrl!;
-      anchor.download = completed[0].file.name.replace(/\.[^.]+$/, `.${completed[0].outputFormat}`);
+      anchor.href = outputs[0].url;
+      anchor.download = outputs[0].name;
       anchor.click();
       return;
     }
@@ -35,14 +45,14 @@ export function useBatchDownload(jobs: ConversionJob[], archivePrefix: string) {
     setPackageError(null);
     try {
       const zip = new JSZip();
-      for (let index = 0; index < completed.length; index += 1) {
-        const job = completed[index];
-        const data = await fetch(job.resultUrl!).then((response) => {
-          if (!response.ok) throw new Error(`Could not read ${job.file.name}.`);
+      for (let index = 0; index < outputs.length; index += 1) {
+        const output = outputs[index];
+        const data = await fetch(output.url).then((response) => {
+          if (!response.ok) throw new Error(`Could not read ${output.name}.`);
           return response.arrayBuffer();
         });
-        zip.file(job.file.name.replace(/\.[^.]+$/, `.${job.outputFormat}`), data);
-        setPackageProgress(Math.round(((index + 1) / completed.length) * 50));
+        zip.file(output.name, data);
+        setPackageProgress(Math.round(((index + 1) / outputs.length) * 50));
       }
       const blob = await zip.generateAsync(
         { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } },

@@ -1,4 +1,5 @@
 import {
+  AnimationClip,
   Bone,
   Box3,
   BufferAttribute,
@@ -12,9 +13,13 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
+  PropertyBinding,
+  Quaternion,
+  QuaternionKeyframeTrack,
   SkinnedMesh,
   SRGBColorSpace,
   Texture,
+  VectorKeyframeTrack,
   Vector3,
 } from 'three';
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
@@ -28,7 +33,12 @@ import { TDSLoader } from 'three/examples/jsm/loaders/TDSLoader.js';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
-import { FallbackCore, ThreeMmdLoader } from '@yohawing/three-mmd-loader';
+import {
+  FallbackCore,
+  ThreeMmdLoader,
+  type VmdBoneTrack,
+  type VmdMorphTrack,
+} from '@yohawing/three-mmd-loader';
 import {
   MODEL3D_INPUT_EXTENSIONS,
   MODEL3D_OUTPUT_FORMATS,
@@ -149,6 +159,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
         options.model3d?.auxiliaryFilesByJobId?.[job.id] ?? options.model3d?.auxiliaryFiles ?? [];
       const manager = this.createLoadingManager(auxiliaryFiles, objectUrls);
       const root = await this.loadModel(source, job.inputFormat, auxiliaryFiles, manager);
+      const animations = root.animations ?? [];
       options.onProgress?.(45);
       const preserveBones =
         model3dFormatMayContainBones(job.inputFormat as Model3dFormat) &&
@@ -172,15 +183,47 @@ export class BrowserModel3dEngine implements ConversionEngine {
         this.normalizeMmdVrmScale(root);
       }
       options.onProgress?.(65);
-      const blob = await this.exportModel(
-        root,
-        job.outputFormat as Model3dOutputFormat,
-        job.file.name,
-        job.inputFormat,
-      );
-      if (!blob.size) throw new Error('Conversion produced an empty model file.');
+      const baseName = job.file.name.replace(/\.[^.]+$/, '');
+      const blobs: Array<{ name: string; blob: Blob }> = [];
+      let hasMesh = false;
+      root.traverse((object) => {
+        if ((object as Mesh).isMesh) hasMesh = true;
+      });
+      if (job.outputFormat !== 'vrm' || hasMesh) {
+        const blob = await this.exportModel(
+          root,
+          job.outputFormat as Model3dOutputFormat,
+          job.file.name,
+          job.inputFormat,
+          job.outputFormat === 'vrm' ? [] : animations,
+        );
+        if (!blob.size) throw new Error('Conversion produced an empty model file.');
+        blobs.push({ name: `${baseName}.${job.outputFormat}`, blob });
+      }
+      if (job.outputFormat === 'vrm') {
+        for (let index = 0; index < animations.length; index += 1) {
+          const clip = animations[index];
+          const clipName = this.safeOutputName(clip.name || `animation-${index + 1}`);
+          blobs.push({
+            name: `${baseName}-${String(index + 1).padStart(2, '0')}-${clipName}.vrma`,
+            blob: await this.exportVrma(root, clip),
+          });
+        }
+      }
+      if (!blobs.length) throw new Error('No model or animation data was found to export.');
       options.onProgress?.(95);
-      return { ...job, resultUrl: URL.createObjectURL(blob), status: 'done', progress: 100 };
+      const outputs = blobs.map(({ name, blob }) => ({
+        name,
+        url: URL.createObjectURL(blob),
+        mimeType: blob.type || 'application/octet-stream',
+      }));
+      return {
+        ...job,
+        resultUrl: outputs[0]?.url,
+        outputs,
+        status: 'done',
+        progress: 100,
+      };
     } catch (error) {
       return {
         ...job,
@@ -201,7 +244,9 @@ export class BrowserModel3dEngine implements ConversionEngine {
       { ...job, outputFormat: 'vrm', status: 'pending', progress: 0 },
       { model3d: { auxiliaryFiles, transparency } },
     );
-    if (result.resultUrl) URL.revokeObjectURL(result.resultUrl);
+    const urls = new Set(result.outputs?.map((output) => output.url) ?? []);
+    if (result.resultUrl) urls.add(result.resultUrl);
+    urls.forEach((url) => URL.revokeObjectURL(url));
     return result.status === 'done'
       ? { valid: true }
       : { valid: false, error: result.error ?? 'VRM conversion is not supported for this model.' };
@@ -425,7 +470,10 @@ export class BrowserModel3dEngine implements ConversionEngine {
           new GLTFLoader(manager).parse(
             format === 'gltf' ? text() : buffer,
             '',
-            (gltf) => resolve(gltf.scene),
+            (gltf) => {
+              gltf.scene.animations = gltf.animations;
+              resolve(gltf.scene);
+            },
             reject,
           ),
         );
@@ -445,8 +493,11 @@ export class BrowserModel3dEngine implements ConversionEngine {
           }),
         );
       }
-      case 'dae':
-        return new ColladaLoader(manager).parse(text(), '').scene;
+      case 'dae': {
+        const collada = new ColladaLoader(manager).parse(text(), '');
+        collada.scene.animations = collada.animations;
+        return collada.scene;
+      }
       case '3ds':
         return new TDSLoader(manager).parse(buffer, '');
       case 'pmx':
@@ -465,9 +516,194 @@ export class BrowserModel3dEngine implements ConversionEngine {
         });
         return mmdModel3d.root;
       }
+      case 'vmd':
+        return this.createVmdAnimationRoot(buffer, source instanceof File ? source.name : 'motion');
       default:
         throw new Error(`Unsupported model input: ${format}`);
     }
+  }
+
+  private createVmdAnimationRoot(buffer: ArrayBuffer, sourceName: string): Object3D {
+    const animation = new FallbackCore().loadVmd(buffer);
+    const root = new Group();
+    root.name = 'VRMA_Root';
+    const definitions: Array<{
+      name: string;
+      parent?: string;
+      position: [number, number, number];
+      aliases: string[];
+    }> = [
+      { name: 'hips', position: [0, 1, 0], aliases: ['下半身', 'センター', 'hips'] },
+      { name: 'spine', parent: 'hips', position: [0, 0.18, 0], aliases: ['上半身', 'spine'] },
+      { name: 'chest', parent: 'spine', position: [0, 0.18, 0], aliases: ['上半身2', 'chest'] },
+      { name: 'upperChest', parent: 'chest', position: [0, 0.14, 0], aliases: ['上半身3', 'upperChest'] },
+      { name: 'neck', parent: 'upperChest', position: [0, 0.14, 0], aliases: ['首', 'neck'] },
+      { name: 'head', parent: 'neck', position: [0, 0.12, 0], aliases: ['頭', 'head'] },
+      { name: 'leftUpperLeg', parent: 'hips', position: [0.1, -0.1, 0], aliases: ['左足', 'leftUpperLeg'] },
+      { name: 'leftLowerLeg', parent: 'leftUpperLeg', position: [0, -0.42, 0], aliases: ['左ひざ', '左膝', 'leftLowerLeg'] },
+      { name: 'leftFoot', parent: 'leftLowerLeg', position: [0, -0.4, 0], aliases: ['左足首', 'leftFoot'] },
+      { name: 'leftToes', parent: 'leftFoot', position: [0, -0.05, 0.12], aliases: ['左つま先', 'leftToes'] },
+      { name: 'rightUpperLeg', parent: 'hips', position: [-0.1, -0.1, 0], aliases: ['右足', 'rightUpperLeg'] },
+      { name: 'rightLowerLeg', parent: 'rightUpperLeg', position: [0, -0.42, 0], aliases: ['右ひざ', '右膝', 'rightLowerLeg'] },
+      { name: 'rightFoot', parent: 'rightLowerLeg', position: [0, -0.4, 0], aliases: ['右足首', 'rightFoot'] },
+      { name: 'rightToes', parent: 'rightFoot', position: [0, -0.05, 0.12], aliases: ['右つま先', 'rightToes'] },
+      { name: 'leftShoulder', parent: 'upperChest', position: [0.1, 0.08, 0], aliases: ['左肩', 'leftShoulder'] },
+      { name: 'leftUpperArm', parent: 'leftShoulder', position: [0.12, 0, 0], aliases: ['左腕', 'leftUpperArm'] },
+      { name: 'leftLowerArm', parent: 'leftUpperArm', position: [0.28, 0, 0], aliases: ['左ひじ', '左肘', 'leftLowerArm'] },
+      { name: 'leftHand', parent: 'leftLowerArm', position: [0.25, 0, 0], aliases: ['左手首', 'leftHand'] },
+      { name: 'rightShoulder', parent: 'upperChest', position: [-0.1, 0.08, 0], aliases: ['右肩', 'rightShoulder'] },
+      { name: 'rightUpperArm', parent: 'rightShoulder', position: [-0.12, 0, 0], aliases: ['右腕', 'rightUpperArm'] },
+      { name: 'rightLowerArm', parent: 'rightUpperArm', position: [-0.28, 0, 0], aliases: ['右ひじ', '右肘', 'rightLowerArm'] },
+      { name: 'rightHand', parent: 'rightLowerArm', position: [-0.25, 0, 0], aliases: ['右手首', 'rightHand'] },
+    ];
+    const nodes = new Map<string, Object3D>();
+    definitions.forEach((definition) => {
+      const node = new Object3D();
+      node.name = definition.name;
+      node.position.fromArray(definition.position);
+      nodes.set(definition.name, node);
+      (definition.parent ? nodes.get(definition.parent) : root)?.add(node);
+    });
+    const tracks: Array<QuaternionKeyframeTrack | VectorKeyframeTrack> = [];
+    const findTrack = (aliases: string[]): VmdBoneTrack | undefined =>
+      aliases.map((alias) => animation.boneTracks[alias]).find(Boolean);
+    definitions.forEach((definition) => {
+      const sourceTrack = findTrack(definition.aliases);
+      if (!sourceTrack?.frames.length) return;
+      const frameCount = animation.metadata.maxFrame + 1;
+      const times = new Float32Array(frameCount);
+      const rotations = new Float32Array(frameCount * 4);
+      for (let frame = 0; frame < frameCount; frame += 1) {
+        times[frame] = frame / 30;
+        const sampled = this.sampleVmdBoneTrack(sourceTrack, frame);
+        rotations[frame * 4] = -sampled.rotation[0];
+        rotations[frame * 4 + 1] = -sampled.rotation[1];
+        rotations[frame * 4 + 2] = sampled.rotation[2];
+        rotations[frame * 4 + 3] = sampled.rotation[3];
+      }
+      tracks.push(new QuaternionKeyframeTrack(`${definition.name}.quaternion`, times, rotations));
+    });
+    const centerTrack = findTrack(['センター', '全ての親', 'hips']);
+    if (centerTrack?.frames.length) {
+      const frameCount = animation.metadata.maxFrame + 1;
+      const times = new Float32Array(frameCount);
+      const values = new Float32Array(frameCount * 3);
+      for (let frame = 0; frame < frameCount; frame += 1) {
+        times[frame] = frame / 30;
+        const sampled = this.sampleVmdBoneTrack(centerTrack, frame);
+        values[frame * 3] = sampled.translation[0] * 0.08;
+        values[frame * 3 + 1] = 1 + sampled.translation[1] * 0.08;
+        values[frame * 3 + 2] = -sampled.translation[2] * 0.08;
+      }
+      tracks.push(new VectorKeyframeTrack('hips.position', times, values));
+    }
+    const presetExpressions: Record<string, string> = {
+      まばたき: 'blink',
+      あ: 'aa',
+      い: 'ih',
+      う: 'ou',
+      え: 'ee',
+      お: 'oh',
+      笑い: 'happy',
+    };
+    Object.entries(animation.morphTracks).forEach(([morphName, morphTrack]) => {
+      if (!morphTrack.frames.length) return;
+      const expressionName = presetExpressions[morphName] ?? this.safeOutputName(morphName);
+      const expressionType = presetExpressions[morphName] ? 'Preset' : 'Custom';
+      const node = new Object3D();
+      node.name = `VRMAExpression${expressionType}__${expressionName}`;
+      root.add(node);
+      const frameCount = animation.metadata.maxFrame + 1;
+      const times = new Float32Array(frameCount);
+      const values = new Float32Array(frameCount * 3);
+      for (let frame = 0; frame < frameCount; frame += 1) {
+        times[frame] = frame / 30;
+        values[frame * 3] = this.sampleVmdMorphTrack(morphTrack, frame);
+      }
+      tracks.push(new VectorKeyframeTrack(`${node.name}.position`, times, values));
+    });
+    root.animations = [new AnimationClip(sourceName.replace(/\.[^.]+$/, ''), -1, tracks)];
+    return root;
+  }
+
+  private sampleVmdBoneTrack(
+    track: VmdBoneTrack,
+    frame: number,
+  ): { translation: [number, number, number]; rotation: [number, number, number, number] } {
+    let nextIndex = track.frames.findIndex((keyframe) => keyframe >= frame);
+    if (nextIndex < 0) nextIndex = track.frames.length - 1;
+    const previousIndex = Math.max(0, nextIndex - (track.frames[nextIndex] === frame ? 0 : 1));
+    if (previousIndex === nextIndex) {
+      return {
+        translation: [
+          track.translations[nextIndex * 3] ?? 0,
+          track.translations[nextIndex * 3 + 1] ?? 0,
+          track.translations[nextIndex * 3 + 2] ?? 0,
+        ],
+        rotation: [
+          track.rotations[nextIndex * 4] ?? 0,
+          track.rotations[nextIndex * 4 + 1] ?? 0,
+          track.rotations[nextIndex * 4 + 2] ?? 0,
+          track.rotations[nextIndex * 4 + 3] ?? 1,
+        ],
+      };
+    }
+    const previousFrame = track.frames[previousIndex] ?? 0;
+    const nextFrame = track.frames[nextIndex] ?? previousFrame;
+    const ratio = nextFrame === previousFrame ? 0 : (frame - previousFrame) / (nextFrame - previousFrame);
+    const interpolationOffset = nextIndex * 16;
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+    const translation = [0, 1, 2].map((axis) =>
+      lerp(
+        track.translations[previousIndex * 3 + axis] ?? 0,
+        track.translations[nextIndex * 3 + axis] ?? 0,
+        this.interpolateVmdCurve(track.interpolations, interpolationOffset + axis * 4, ratio),
+      ),
+    ) as [number, number, number];
+    const rotationRatio = this.interpolateVmdCurve(
+      track.interpolations,
+      interpolationOffset + 12,
+      ratio,
+    );
+    const previous = new Quaternion().fromArray(track.rotations, previousIndex * 4);
+    const next = new Quaternion().fromArray(track.rotations, nextIndex * 4);
+    const rotation = previous.slerp(next, rotationRatio).toArray() as [number, number, number, number];
+    return { translation, rotation };
+  }
+
+  private interpolateVmdCurve(values: Float32Array, offset: number, x: number): number {
+    const x1 = values[offset] ?? 0;
+    const y1 = values[offset + 1] ?? 0;
+    const x2 = values[offset + 2] ?? 1;
+    const y2 = values[offset + 3] ?? 1;
+    if (Math.abs(x1 - y1) < 1e-6 && Math.abs(x2 - y2) < 1e-6) return x;
+    const bezier = (t: number, p1: number, p2: number) => {
+      const inverse = 1 - t;
+      return 3 * inverse * inverse * t * p1 + 3 * inverse * t * t * p2 + t * t * t;
+    };
+    let lower = 0;
+    let upper = 1;
+    let parameter = x;
+    for (let index = 0; index < 16; index += 1) {
+      const sampledX = bezier(parameter, x1, x2);
+      if (Math.abs(sampledX - x) < 1e-5) break;
+      if (sampledX < x) lower = parameter;
+      else upper = parameter;
+      parameter = (lower + upper) / 2;
+    }
+    return bezier(parameter, y1, y2);
+  }
+
+  private sampleVmdMorphTrack(track: VmdMorphTrack, frame: number): number {
+    let nextIndex = track.frames.findIndex((keyframe) => keyframe >= frame);
+    if (nextIndex < 0) return track.weights[track.weights.length - 1] ?? 0;
+    if (nextIndex === 0 || track.frames[nextIndex] === frame) return track.weights[nextIndex] ?? 0;
+    const previousIndex = nextIndex - 1;
+    const previousFrame = track.frames[previousIndex] ?? 0;
+    const nextFrame = track.frames[nextIndex] ?? previousFrame;
+    const ratio = nextFrame === previousFrame ? 0 : (frame - previousFrame) / (nextFrame - previousFrame);
+    const previous = track.weights[previousIndex] ?? 0;
+    return previous + ((track.weights[nextIndex] ?? previous) - previous) * ratio;
   }
 
   async getReferencedRelatedPaths(
@@ -1100,11 +1336,227 @@ export class BrowserModel3dEngine implements ConversionEngine {
     bones.forEach((bone) => bone.removeFromParent());
   }
 
+  private safeOutputName(name: string): string {
+    return name.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '-').replace(/^-+|-+$/g, '') || 'animation';
+  }
+
+  private vrmaExpressionNodeName(sourceName: string): string {
+    const normalized = sourceName.normalize('NFKC').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const presets: Record<string, string> = {
+      aa: 'aa',
+      ih: 'ih',
+      ou: 'ou',
+      ee: 'ee',
+      oh: 'oh',
+      blink: 'blink',
+      blinkleft: 'blinkLeft',
+      blinkright: 'blinkRight',
+      happy: 'happy',
+      angry: 'angry',
+      sad: 'sad',
+      relaxed: 'relaxed',
+      surprised: 'surprised',
+    };
+    const preset = presets[normalized];
+    return preset
+      ? `VRMAExpressionPreset__${preset}`
+      : `VRMAExpressionCustom__${this.safeOutputName(sourceName)}`;
+  }
+
+  private async exportVrma(root: Object3D, clip: AnimationClip): Promise<Blob> {
+    const sourceNodes: Object3D[] = [];
+    root.traverse((node) => sourceNodes.push(node));
+    const sourceIndices = new Map(sourceNodes.map((node, index) => [node, index]));
+    const sourceHumanBones = this.mapVrmHumanBones(
+      sourceNodes.map((node) => ({
+        name: node.name,
+        children: node.children
+          .map((child) => sourceIndices.get(child))
+          .filter((index): index is number => index !== undefined),
+      })),
+    );
+    const humanoidTargetNodes = Object.values(sourceHumanBones)
+      .map(({ node }) => sourceNodes[node])
+      .filter((node): node is Object3D => Boolean(node));
+    const humanoidTargets = new Map(
+      humanoidTargetNodes.flatMap((node) => [
+        [node.name, node] as const,
+        [node.uuid, node] as const,
+      ]),
+    );
+    const expressionTargets = new Map(
+      sourceNodes
+        .filter((node) => node.name.startsWith('VRMAExpression'))
+        .flatMap((node) => [
+          [node.name, node] as const,
+          [node.uuid, node] as const,
+        ]),
+    );
+    const hipsNode = sourceHumanBones.hips ? sourceNodes[sourceHumanBones.hips.node] : undefined;
+    const hipsTargets = new Set([hipsNode?.name, hipsNode?.uuid]);
+    const generatedExpressions = new Map<string, VectorKeyframeTrack>();
+    clip.tracks.forEach((track) => {
+      const parsed = PropertyBinding.parseTrackName(track.name);
+      if (parsed.propertyName !== 'morphTargetInfluences') return;
+      const target = parsed.objectIndex ?? parsed.nodeName;
+      const mesh = sourceNodes.find((node) => node.name === target || node.uuid === target) as
+        | Mesh
+        | undefined;
+      if (!mesh?.morphTargetDictionary || !track.times.length) return;
+      const stride = track.values.length / track.times.length;
+      Object.entries(mesh.morphTargetDictionary).forEach(([morphName, morphIndex]) => {
+        if (morphIndex >= stride) return;
+        const nodeName = this.vrmaExpressionNodeName(morphName);
+        if (generatedExpressions.has(nodeName)) return;
+        const values = new Float32Array(track.times.length * 3);
+        for (let index = 0; index < track.times.length; index += 1) {
+          values[index * 3] = track.values[index * stride + morphIndex] ?? 0;
+        }
+        generatedExpressions.set(
+          nodeName,
+          new VectorKeyframeTrack(`${nodeName}.position`, track.times, values),
+        );
+      });
+    });
+    const portableClip = clip.clone();
+    portableClip.tracks = portableClip.tracks.flatMap((track) => {
+      const parsed = PropertyBinding.parseTrackName(track.name);
+      const target = parsed.objectIndex ?? parsed.nodeName;
+      const property = parsed.propertyName;
+      const targetNode = humanoidTargets.get(target) ?? expressionTargets.get(target);
+      if (!targetNode) return [];
+      const isExpressionWeight = property === 'position' && expressionTargets.has(target);
+      if (
+        property !== 'quaternion' &&
+        !(property === 'position' && hipsTargets.has(target)) &&
+        !isExpressionWeight
+      ) {
+        return [];
+      }
+      const portableTrack = track.clone();
+      portableTrack.name = `${targetNode.name}.${property}`;
+      return [portableTrack];
+    });
+    portableClip.tracks.push(...generatedExpressions.values());
+    if (!portableClip.tracks.length) {
+      throw new Error(`Animation "${clip.name}" has no humanoid tracks that can be exported to VRMA.`);
+    }
+    const cloneHierarchy = (source: Object3D): Object3D => {
+      const clone = new Object3D();
+      clone.name = source.name;
+      clone.position.copy(source.position);
+      clone.quaternion.copy(source.quaternion);
+      clone.scale.copy(source.scale);
+      clone.visible = source.visible;
+      source.children.forEach((child) => clone.add(cloneHierarchy(child)));
+      return clone;
+    };
+    const animationRoot = cloneHierarchy(root);
+    generatedExpressions.forEach((_track, nodeName) => {
+      const node = new Object3D();
+      node.name = nodeName;
+      animationRoot.add(node);
+    });
+    const exported = await new GLTFExporter().parseAsync(animationRoot, {
+      binary: true,
+      animations: [portableClip],
+      onlyVisible: false,
+      trs: true,
+    });
+    if (!(exported instanceof ArrayBuffer)) {
+      throw new Error('VRMA export requires a binary glTF result.');
+    }
+    return new Blob([this.addVrmaExtension(exported)], { type: 'model/gltf-binary' });
+  }
+
+  private addVrmaExtension(glb: ArrayBuffer): ArrayBuffer {
+    const view = new DataView(glb);
+    if (view.getUint32(0, true) !== 0x46546c67 || view.getUint32(4, true) !== 2) {
+      throw new Error('VRMA export requires a valid glTF 2.0 binary.');
+    }
+    const jsonLength = view.getUint32(12, true);
+    if (view.getUint32(16, true) !== 0x4e4f534a) {
+      throw new Error('VRMA GLB JSON chunk was not found.');
+    }
+    const json = JSON.parse(
+      new TextDecoder().decode(new Uint8Array(glb, 20, jsonLength)).trim(),
+    ) as {
+      nodes?: Array<{ name?: string; children?: number[] }>;
+      extensionsUsed?: string[];
+      extensionsRequired?: string[];
+      extensions?: Record<string, unknown>;
+    };
+    const humanBones = this.mapVrmHumanBones(json.nodes ?? []);
+    delete humanBones.leftEye;
+    delete humanBones.rightEye;
+    const required = [
+      'hips',
+      'spine',
+      'head',
+      'leftUpperLeg',
+      'leftLowerLeg',
+      'leftFoot',
+      'rightUpperLeg',
+      'rightLowerLeg',
+      'rightFoot',
+      'leftUpperArm',
+      'leftLowerArm',
+      'leftHand',
+      'rightUpperArm',
+      'rightLowerArm',
+      'rightHand',
+    ];
+    const missing = required.filter((name) => !humanBones[name]);
+    if (missing.length) {
+      throw new Error(`Required VRMA humanoid bones were not identified: ${missing.join(', ')}`);
+    }
+    json.extensionsUsed = [...new Set([...(json.extensionsUsed ?? []), 'VRMC_vrm_animation'])];
+    json.extensionsRequired = [
+      ...new Set([...(json.extensionsRequired ?? []), 'VRMC_vrm_animation']),
+    ];
+    const presetExpressions: Record<string, { node: number }> = {};
+    const customExpressions: Record<string, { node: number }> = {};
+    (json.nodes ?? []).forEach((node, index) => {
+      const preset = node.name?.match(/^VRMAExpressionPreset__(.+)$/)?.[1];
+      const custom = node.name?.match(/^VRMAExpressionCustom__(.+)$/)?.[1];
+      if (preset) presetExpressions[preset] = { node: index };
+      if (custom) customExpressions[custom] = { node: index };
+    });
+    const expressions =
+      Object.keys(presetExpressions).length || Object.keys(customExpressions).length
+        ? { preset: presetExpressions, custom: customExpressions }
+        : undefined;
+    json.extensions = {
+      ...(json.extensions ?? {}),
+      VRMC_vrm_animation: {
+        specVersion: '1.0',
+        humanoid: { humanBones },
+        ...(expressions ? { expressions } : {}),
+      },
+    };
+    const encodedJson = new TextEncoder().encode(JSON.stringify(json));
+    const paddedLength = Math.ceil(encodedJson.length / 4) * 4;
+    const remainingChunks = new Uint8Array(glb, 20 + jsonLength);
+    const output = new ArrayBuffer(20 + paddedLength + remainingChunks.byteLength);
+    const outputView = new DataView(output);
+    outputView.setUint32(0, 0x46546c67, true);
+    outputView.setUint32(4, 2, true);
+    outputView.setUint32(8, output.byteLength, true);
+    outputView.setUint32(12, paddedLength, true);
+    outputView.setUint32(16, 0x4e4f534a, true);
+    const outputBytes = new Uint8Array(output);
+    outputBytes.set(encodedJson, 20);
+    outputBytes.fill(0x20, 20 + encodedJson.length, 20 + paddedLength);
+    outputBytes.set(remainingChunks, 20 + paddedLength);
+    return output;
+  }
+
   private async exportModel(
     root: Object3D,
     format: Model3dOutputFormat,
     sourceName: string,
     sourceFormat: InputFormat,
+    animations: AnimationClip[] = [],
   ): Promise<Blob> {
     if (format === 'obj') {
       return new Blob([new OBJExporter().parse(root)], { type: getMimeType(format) });
@@ -1116,7 +1568,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     }
     const exported = await new GLTFExporter().parseAsync(root, {
       binary: format === 'glb' || format === 'vrm',
-      animations: [],
+      animations,
       onlyVisible: true,
       trs: false,
     });

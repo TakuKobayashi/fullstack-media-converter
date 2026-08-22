@@ -207,9 +207,11 @@ export const messages = {
       },
       bonesRemovedWarning:
         'The selected input format may contain bones, but this output format cannot store them. Bones and skinning will be removed and the current pose will be baked into a static mesh.',
+      animationsRemovedWarning:
+        'The selected input may contain animation, but this output format cannot store it. Animation clips will be ignored during conversion.',
       proseTitle: 'Private static 3D model conversion',
       prose:
-        'Models are loaded and exported with Three.js in your browser. Bones and skinning are preserved when exporting to glTF, GLB, or VRM, and baked into a static mesh for OBJ or STL. Animation is not exported. Format-specific data such as physics, morph targets, cameras, lights, constraints, and some VRM metadata may also be omitted.',
+        'Models are loaded and exported with Three.js in your browser. Bones, skinning, and animation clips are preserved in glTF or GLB. VRM exports animation clips as separate VRMA files. OBJ and STL bake the current pose into a static mesh and ignore animation. Format-specific data such as physics, cameras, lights, constraints, and some metadata may still be omitted.',
       bullets: [
         'Supports {{inputs}} input',
         'Exports {{outputs}}',
@@ -446,9 +448,11 @@ export const messages = {
       },
       bonesRemovedWarning:
         '選択した入力形式にはボーン情報が含まれる可能性がありますが、この出力形式には引き継げません。ボーンとスキニングを削除し、現在の姿勢を静的メッシュへ焼き込みます。',
+      animationsRemovedWarning:
+        '選択した入力にはアニメーション情報が含まれる可能性がありますが、この出力形式には保存できないため、アニメーションを無視して変換します。',
       proseTitle: 'アップロード不要の静的3Dモデル変換',
       prose:
-        'Three.jsを使ってブラウザ内で読み込み・書き出します。glTF、GLB、VRMへの出力ではボーンとスキニングを保持し、OBJまたはSTLでは現在の姿勢を静的メッシュへ焼き込みます。アニメーションは出力しません。また、物理設定、モーフ、カメラ、ライト、コンストレイント、一部のVRM固有メタデータなどは失われる場合があります。',
+        'Three.jsを使ってブラウザ内で読み込み・書き出します。glTFとGLBではボーン、スキニング、アニメーションクリップを保持し、VRMでは各アニメーションを個別のVRMAとして出力します。OBJとSTLでは現在の姿勢を静的メッシュへ焼き込み、アニメーションを無視します。物理設定、カメラ、ライト、コンストレイント、一部のメタデータなどは失われる場合があります。',
       bullets: [
         '{{inputs}}入力に対応',
         '{{outputs}}で出力可能',
