@@ -804,11 +804,8 @@ export class BrowserModel3dEngine implements ConversionEngine {
           }),
         );
       }
-      case 'dae': {
-        const collada = new ColladaLoader(manager).parse(text(), '');
-        collada.scene.animations = collada.animations;
-        return collada.scene;
-      }
+      case 'dae':
+        return new ColladaLoader(manager).parse(text(), '').scene;
       case '3ds':
         return new TDSLoader(manager).parse(buffer, '');
       case 'pmx':
