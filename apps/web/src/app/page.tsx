@@ -23,6 +23,7 @@ export default function HomePage() {
       icon: '◫',
       formats: IMAGE_INPUT_FORMAT_LABELS,
       accent: 'violet',
+      beta: false,
     },
     {
       href: '/video-converter',
@@ -30,6 +31,7 @@ export default function HomePage() {
       icon: '▶',
       formats: VIDEO_INPUT_FORMAT_LABELS,
       accent: 'coral',
+      beta: false,
     },
     {
       href: '/audio-converter',
@@ -37,6 +39,7 @@ export default function HomePage() {
       icon: '♫',
       formats: AUDIO_INPUT_FORMAT_LABELS,
       accent: 'violet',
+      beta: false,
     },
     {
       href: '/model3d-converter',
@@ -44,6 +47,7 @@ export default function HomePage() {
       icon: '◇',
       formats: MODEL3D_INPUT_FORMAT_LABELS,
       accent: 'coral',
+      beta: true,
     },
   ] as const;
   return (
@@ -67,6 +71,13 @@ export default function HomePage() {
                 </Link>
                 <Link href={localizedPath('/video-converter')} className={s.ctaSecondary}>
                   {t('home.videoCta')}
+                </Link>
+                <Link href={localizedPath('/audio-converter')} className={s.ctaSecondary}>
+                  {t('home.audioCta')}
+                </Link>
+                <Link href={localizedPath('/model3d-converter')} className={s.ctaSecondary}>
+                  {t('home.model3dCta')}
+                  <span className={s.ctaBeta}>{t('home.beta')}</span>
                 </Link>
               </div>
             </div>
@@ -103,7 +114,10 @@ export default function HomePage() {
                     <span className={s.cardNumber}>{converter.number}</span>
                     <span className={s.cardIcon}>{converter.icon}</span>
                   </div>
-                  <h3>{t(`home.converters.${index}.title`)}</h3>
+                  <h3>
+                    {t(`home.converters.${index}.title`)}
+                    {converter.beta && <span className={s.cardBeta}>{t('home.beta')}</span>}
+                  </h3>
                   <p>
                     {t(`home.converters.${index}.description`, {
                       formats: converter.formats.join(locale === 'ja' ? '・' : ', '),

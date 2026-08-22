@@ -189,6 +189,15 @@ export default function UniversalModel3dConverter() {
         </div>
       </section>
       <div className="container">
+        <aside className={s.betaNotice} role="note" aria-label={t('model3d.betaTitle')}>
+          <span className={s.betaNoticeIcon} aria-hidden="true">
+            ⚠
+          </span>
+          <div>
+            <strong>{t('model3d.betaTitle')}</strong>
+            <p>{t('model3d.betaNotice')}</p>
+          </div>
+        </aside>
         <div className={s.adSlot} aria-hidden="true">
           {t('common.ad')}
         </div>

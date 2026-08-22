@@ -41,6 +41,9 @@
   gap: 4px;
 }
 .link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 6px 14px;
   border-radius: var(--radius-sm);
   font-size: 0.875rem;
@@ -48,6 +51,17 @@
   transition:
     color 0.15s,
     background 0.15s;
+}
+.betaBadge {
+  padding: 1px 5px;
+  border: 1px solid rgba(255, 132, 109, 0.55);
+  border-radius: 999px;
+  color: var(--coral);
+  font-size: 0.58rem;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 .link:hover {
   color: var(--cream);
@@ -67,5 +81,8 @@
   .link {
     padding-inline: 9px;
     font-size: 0.78rem;
+  }
+  .betaBadge {
+    display: none;
   }
 }

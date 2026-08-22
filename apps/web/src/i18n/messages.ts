@@ -7,6 +7,7 @@ export const messages = {
       audio: 'Audio Converter',
       model3d: '3D Model Converter',
       exif: 'EXIF',
+      beta: 'Beta',
     },
     footer: {
       image: 'Image Converter',
@@ -24,6 +25,9 @@ export const messages = {
         'A focused workspace for batch image, video, audio, and 3D model conversion. Nothing is uploaded; every file is processed on your device.',
       imageCta: 'Convert images',
       videoCta: 'Convert videos',
+      audioCta: 'Convert audio',
+      model3dCta: 'Convert 3D models',
+      beta: 'Beta',
       sectionEyebrow: 'Choose a workspace',
       sectionTitle: 'Four converters. Every route.',
       sectionIntro:
@@ -161,6 +165,9 @@ export const messages = {
     },
     model3d: {
       badge: '3D Model Converter',
+      betaTitle: 'This feature is currently in beta',
+      betaNotice:
+        'Some models may not convert correctly. Materials, textures, transparency, bones, and other format-specific data can look different or be omitted in the converted file. Keep your original files and verify the result before using it.',
       title: 'Static 3D Model',
       suffix: 'Converter',
       subtitle: 'Convert {{inputs}} models to {{outputs}} without uploading them.',
@@ -215,6 +222,7 @@ export const messages = {
       audio: '音声変換',
       model3d: '3Dモデル変換',
       exif: 'EXIF',
+      beta: 'ベータ',
     },
     footer: {
       image: '画像変換',
@@ -232,6 +240,9 @@ export const messages = {
         '画像、動画、音声、3Dモデルをまとめて変換できるシンプルなワークスペースです。ファイルはアップロードされず、すべてお使いの端末内で処理されます。',
       imageCta: '画像を変換する',
       videoCta: '動画を変換する',
+      audioCta: '音声を変換する',
+      model3dCta: '3Dモデルを変換する',
+      beta: 'ベータ',
       sectionEyebrow: '変換ツールを選択',
       sectionTitle: '4つのツールですべての変換に対応',
       sectionIntro:
@@ -367,6 +378,9 @@ export const messages = {
     },
     model3d: {
       badge: '3Dモデル変換ツール',
+      betaTitle: '3Dモデル変換機能はベータ版です',
+      betaNotice:
+        'モデルによっては正常に変換できない場合があります。変換後は、マテリアル、テクスチャ、透過、ボーンなどの情報が元のモデルと異なったり、一部失われたりする可能性があります。元ファイルを保管し、変換結果を確認してからご利用ください。',
       title: '静的3Dモデル',
       suffix: '変換',
       subtitle: '{{inputs}}を{{outputs}}へ、アップロードせずに変換できます。',

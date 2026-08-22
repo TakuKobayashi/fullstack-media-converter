@@ -14,8 +14,7 @@ export default function Nav() {
     { href: localizedPath('/image-converter'), label: t('nav.image') },
     { href: localizedPath('/video-converter'), label: t('nav.video') },
     { href: localizedPath('/audio-converter'), label: t('nav.audio') },
-    { href: localizedPath('/model3d-converter'), label: t('nav.model3d') },
-    { href: localizedPath('/export-exif'), label: t('nav.exif') },
+    { href: localizedPath('/model3d-converter'), label: t('nav.model3d'), beta: true },
   ];
   return (
     <nav className={s.nav}>
@@ -31,7 +30,8 @@ export default function Nav() {
               href={l.href}
               className={`${s.link} ${path === l.href ? s.linkActive : ''}`}
             >
-              {l.label}
+              <span>{l.label}</span>
+              {l.beta && <span className={s.betaBadge}>{t('nav.beta')}</span>}
             </Link>
           ))}
         </div>

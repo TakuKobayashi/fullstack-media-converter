@@ -83,6 +83,7 @@
 }
 .ctaGroup {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   margin-top: 38px;
 }
@@ -116,6 +117,22 @@
 }
 .ctaSecondary:hover {
   border-color: rgba(255, 255, 255, 0.22);
+}
+.ctaBeta,
+.cardBeta {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255, 132, 109, 0.55);
+  border-radius: 999px;
+  color: var(--coral);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.ctaBeta {
+  margin-left: 8px;
+  padding: 1px 6px;
+  font-size: 0.6rem;
 }
 .heroVisual {
   position: relative;
@@ -269,10 +286,18 @@
   font-size: 1.2rem;
 }
 .converterCard h3 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
   margin-bottom: 14px;
   color: var(--white);
   font-size: clamp(1.65rem, 3vw, 2.25rem);
   font-weight: 600;
+}
+.cardBeta {
+  padding: 2px 7px;
+  font-size: 0.62rem;
 }
 .converterCard > p {
   max-width: 490px;
