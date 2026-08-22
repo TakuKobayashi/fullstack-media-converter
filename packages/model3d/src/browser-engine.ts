@@ -75,7 +75,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
         (job.inputFormat === 'pmx' || job.inputFormat === 'pmd') &&
         (job.outputFormat === 'glb' || job.outputFormat === 'gltf' || job.outputFormat === 'vrm')
       ) {
-        await this.bakeMmdMaterials(root);
+        await this.bakeMmdMaterials(root, job.outputFormat === 'vrm');
       }
       options.onProgress?.(65);
       const blob = await this.exportModel(
@@ -220,7 +220,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
    * Bake MMD's diffuse texture, toon ramp and sphere texture into a portable
    * unlit material. glTF cannot serialize the loader's onBeforeCompile shader.
    */
-  private async bakeMmdMaterials(root: Object3D): Promise<void> {
+  private async bakeMmdMaterials(root: Object3D, useMToon: boolean): Promise<void> {
     const meshes: Mesh[] = [];
     root.traverse((object) => {
       if ((object as Mesh).isMesh) meshes.push(object as Mesh);
@@ -229,7 +229,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       const bakedMaterials = await Promise.all(
         sourceMaterials.map((material, materialIndex) =>
-          this.bakeMmdMaterial(material, mesh, materialIndex),
+          this.bakeMmdMaterial(material, mesh, materialIndex, useMToon),
         ),
       );
       mesh.material = Array.isArray(mesh.material) ? bakedMaterials : bakedMaterials[0];
@@ -240,6 +240,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     source: Material,
     mesh: Mesh,
     materialIndex: number,
+    useMToon: boolean,
   ): Promise<Material> {
     const toon = source as Material & {
       color?: { r: number; g: number; b: number };
@@ -254,11 +255,15 @@ export class BrowserModel3dEngine implements ConversionEngine {
       | {
           diffuse?: [number, number, number, number];
           ambient?: [number, number, number];
+          specular?: [number, number, number];
           sphereMode?: 'none' | 'multiply' | 'add' | 'subTexture';
-          flags?: { doubleSided?: boolean };
+          edgeColor?: [number, number, number, number];
+          edgeSize?: number;
+          flags?: { doubleSided?: boolean; edge?: boolean };
         }
       | undefined;
     if (!metadata) return source;
+    if (useMToon) return this.createMmdMToonFallback(source, metadata, toon);
 
     const basePixels = this.readTexturePixels(toon.map ?? undefined);
     const toonPixels = this.readTexturePixels(toon.gradientMap ?? undefined);
@@ -364,6 +369,69 @@ export class BrowserModel3dEngine implements ConversionEngine {
       side: metadata.flags?.doubleSided || toon.side === DoubleSide ? DoubleSide : toon.side,
       vertexColors: (source as { vertexColors?: boolean }).vertexColors ?? false,
     });
+  }
+
+  private createMmdMToonFallback(
+    source: Material,
+    metadata: {
+      diffuse?: [number, number, number, number];
+      ambient?: [number, number, number];
+      specular?: [number, number, number];
+      sphereMode?: 'none' | 'multiply' | 'add' | 'subTexture';
+      edgeColor?: [number, number, number, number];
+      edgeSize?: number;
+      flags?: { doubleSided?: boolean; edge?: boolean };
+    },
+    toon: Material & {
+      map?: Texture | null;
+      opacity?: number;
+      alphaTest?: number;
+      transparent?: boolean;
+      side?: number;
+    },
+  ): Material {
+    const diffuse = metadata.diffuse ?? [1, 1, 1, toon.opacity ?? 1];
+    const ambient = metadata.ambient ?? [0.2, 0.2, 0.2];
+    const edgeColor = metadata.edgeColor ?? [0, 0, 0, 1];
+    const sphereTexture = source.userData.mmdSphereTexture as Texture | undefined;
+    const useMatcap = metadata.sphereMode === 'add' && Boolean(sphereTexture);
+    const material = new MeshStandardMaterial({
+      name: source.name,
+      color: new Color(diffuse[0], diffuse[1], diffuse[2]),
+      map: toon.map ?? null,
+      metalness: 0,
+      roughness: 1,
+      transparent: toon.transparent || diffuse[3] < 1,
+      opacity: diffuse[3],
+      alphaTest: toon.alphaTest ?? 0,
+      side: metadata.flags?.doubleSided || toon.side === DoubleSide ? DoubleSide : toon.side,
+      emissive: useMatcap ? new Color(1, 1, 1) : new Color(0, 0, 0),
+      emissiveMap: useMatcap ? sphereTexture : null,
+    });
+    const outlineEnabled = Boolean(metadata.flags?.edge && (metadata.edgeSize ?? 0) > 0);
+    material.userData.vrmMToon = {
+      specVersion: '1.0',
+      transparentWithZWrite: material.transparent,
+      shadeColorFactor: ambient.map((value, index) =>
+        Math.max(0, Math.min(1, value + diffuse[index] * 0.25)),
+      ),
+      shadingShiftFactor: -0.05,
+      shadingToonyFactor: 0.95,
+      giEqualizationFactor: 0.9,
+      parametricRimColorFactor: metadata.specular ?? [0, 0, 0],
+      parametricRimFresnelPowerFactor: 5,
+      parametricRimLiftFactor: 0,
+      rimLightingMixFactor: 0,
+      outlineWidthMode: outlineEnabled ? 'worldCoordinates' : 'none',
+      outlineWidthFactor: outlineEnabled
+        ? Math.max(0.0001, Math.min(0.01, (metadata.edgeSize ?? 1) * 0.001))
+        : 0,
+      outlineColorFactor: edgeColor.slice(0, 3),
+      outlineLightingMixFactor: 0,
+      matcapFromEmissive: useMatcap,
+      matcapFactor: [1, 1, 1],
+    };
+    return material;
   }
 
   private rasterizeMmdUv(
@@ -600,6 +668,12 @@ export class BrowserModel3dEngine implements ConversionEngine {
       new TextDecoder().decode(new Uint8Array(glb, 20, jsonLength)).trim(),
     ) as {
       nodes?: Array<{ name?: string; children?: number[] }>;
+      materials?: Array<{
+        emissiveFactor?: number[];
+        emissiveTexture?: { index: number; texCoord?: number };
+        extensions?: Record<string, unknown>;
+        extras?: Record<string, unknown>;
+      }>;
       extensionsUsed?: string[];
       extensionsRequired?: string[];
       extensions?: Record<string, unknown>;
@@ -640,6 +714,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
         humanoid: { humanBones },
       },
     };
+    this.applyMToonExtensions(json);
 
     const encodedJson = new TextEncoder().encode(JSON.stringify(json));
     const paddedLength = Math.ceil(encodedJson.length / 4) * 4;
@@ -656,6 +731,39 @@ export class BrowserModel3dEngine implements ConversionEngine {
     outputBytes.fill(0x20, 20 + encodedJson.length, 20 + paddedLength);
     outputBytes.set(remainingChunks, 20 + paddedLength);
     return output;
+  }
+
+  private applyMToonExtensions(json: {
+    materials?: Array<{
+      emissiveFactor?: number[];
+      emissiveTexture?: { index: number; texCoord?: number };
+      extensions?: Record<string, unknown>;
+      extras?: Record<string, unknown>;
+    }>;
+    extensionsUsed?: string[];
+  }): void {
+    let hasMToon = false;
+    for (const material of json.materials ?? []) {
+      const marker = material.extras?.vrmMToon as
+        (Record<string, unknown> & { matcapFromEmissive?: boolean }) | undefined;
+      if (!marker) continue;
+      hasMToon = true;
+      const { matcapFromEmissive, ...mtoon } = marker;
+      if (matcapFromEmissive && material.emissiveTexture) {
+        mtoon.matcapTexture = { ...material.emissiveTexture };
+        delete material.emissiveTexture;
+        delete material.emissiveFactor;
+      }
+      material.extensions = {
+        ...(material.extensions ?? {}),
+        VRMC_materials_mtoon: mtoon,
+      };
+      delete material.extras?.vrmMToon;
+      if (material.extras && !Object.keys(material.extras).length) delete material.extras;
+    }
+    if (hasMToon) {
+      json.extensionsUsed = [...new Set([...(json.extensionsUsed ?? []), 'VRMC_materials_mtoon'])];
+    }
   }
 
   private mapVrmHumanBones(
