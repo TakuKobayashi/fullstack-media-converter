@@ -66,6 +66,18 @@ import {
 const MMD_VRM_TARGET_HEIGHT_METERS = 1.7;
 const MMD_BAKE_LIGHT = new Vector3(0.5, 1, 1).normalize();
 
+function asArray<T>(value: T | T[]): T[] {
+  return [value].flat() as T[];
+}
+
+function preserveArrayShape<T>(source: T | T[], values: T[]): T | T[] {
+  return Array.isArray(source) ? values : values[0];
+}
+
+function configureMaterials(material: Material | Material[], properties: Partial<Material>): void {
+  asArray(material).forEach((entry) => Object.assign(entry, properties));
+}
+
 /**
  * Tunable thresholds used when converting MMD transparency to glTF/VRM.
  *
@@ -317,7 +329,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       root.traverse((object) => {
         if (!(object as Mesh).isMesh) return;
         const mesh = object as Mesh;
-        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        const materials = asArray(mesh.material);
         materialSources.set(mesh, materials);
         for (const material of materials) {
           maxMaterialIndex = Math.max(
@@ -369,7 +381,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
           generatedMaterials.add(convertedMaterial);
           return convertedMaterial;
         });
-        mesh.material = Array.isArray(mesh.material) ? converted : converted[0];
+        mesh.material = preserveArrayShape(mesh.material, converted);
       }
     };
     updateTransparency(initialSettings);
@@ -425,9 +437,11 @@ export class BrowserModel3dEngine implements ConversionEngine {
     boneOverlay.name = 'PreviewBoneOverlay';
     boneOverlay.visible = false;
     const skeletonHelper = new SkeletonHelper(root);
-    skeletonHelper.material.transparent = true;
-    skeletonHelper.material.opacity = 0.28;
-    skeletonHelper.material.depthTest = false;
+    configureMaterials(skeletonHelper.material, {
+      transparent: true,
+      opacity: 0.28,
+      depthTest: false,
+    });
     boneOverlay.add(skeletonHelper);
     const boneObjects = new Map<string, Bone>();
     root.updateMatrixWorld(true);
@@ -459,12 +473,8 @@ export class BrowserModel3dEngine implements ConversionEngine {
         Math.min(length * 0.2, markerRadius * 2),
         Math.min(length * 0.12, markerRadius),
       );
-      arrow.line.material.transparent = true;
-      arrow.line.material.opacity = 0.2;
-      arrow.cone.material.transparent = true;
-      arrow.cone.material.opacity = 0.2;
-      arrow.line.material.depthTest = false;
-      arrow.cone.material.depthTest = false;
+      configureMaterials(arrow.line.material, { transparent: true, opacity: 0.2, depthTest: false });
+      configureMaterials(arrow.cone.material, { transparent: true, opacity: 0.2, depthTest: false });
       boneOverlay.add(arrow);
       directionalBoneArrows.push({ bone, child: childBone, arrow });
     });
@@ -485,8 +495,8 @@ export class BrowserModel3dEngine implements ConversionEngine {
     selectedBoneMarker.renderOrder = 1000;
     selectedBoneArrow.line.renderOrder = 1000;
     selectedBoneArrow.cone.renderOrder = 1000;
-    selectedBoneArrow.line.material.depthWrite = false;
-    selectedBoneArrow.cone.material.depthWrite = false;
+    configureMaterials(selectedBoneArrow.line.material, { depthWrite: false });
+    configureMaterials(selectedBoneArrow.cone.material, { depthWrite: false });
     boneOverlay.add(selectedBoneMarker, selectedBoneArrow);
     let selectedBoneObject: Bone | undefined;
     const updateBoneOverlay = () => {
@@ -588,18 +598,10 @@ export class BrowserModel3dEngine implements ConversionEngine {
         mixer.stopAllAction();
         mixer.uncacheRoot(root);
         skeletonHelper.dispose();
-        directionalBoneArrows.forEach(({ arrow }) => {
-          arrow.line.geometry.dispose();
-          arrow.line.material.dispose();
-          arrow.cone.geometry.dispose();
-          arrow.cone.material.dispose();
-        });
+        directionalBoneArrows.forEach(({ arrow }) => arrow.dispose());
         selectedBoneMarker.geometry.dispose();
-        selectedBoneMarker.material.dispose();
-        selectedBoneArrow.line.geometry.dispose();
-        selectedBoneArrow.line.material.dispose();
-        selectedBoneArrow.cone.geometry.dispose();
-        selectedBoneArrow.cone.material.dispose();
+        asArray(selectedBoneMarker.material).forEach((material) => material.dispose());
+        selectedBoneArrow.dispose();
         boneOverlay.clear();
         for (const material of generatedMaterials) material.dispose();
         for (const sources of materialSources.values()) {
@@ -1218,13 +1220,13 @@ export class BrowserModel3dEngine implements ConversionEngine {
       if ((object as Mesh).isMesh) meshes.push(object as Mesh);
     });
     for (const mesh of meshes) {
-      const sources = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const sources = asArray(mesh.material);
       const baked = await Promise.all(
         sources.map((source, materialIndex) =>
           this.bakeMmdRgbMaterial(source, mesh, materialIndex),
         ),
       );
-      mesh.material = Array.isArray(mesh.material) ? baked : baked[0];
+      mesh.material = preserveArrayShape(mesh.material, baked);
     }
   }
 
@@ -1436,7 +1438,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       if ((object as Mesh).isMesh) meshes.push(object as Mesh);
     });
     const materialIndices = meshes.flatMap((mesh) =>
-      (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).map(
+      asArray(mesh.material).map(
         (material) =>
           (material.userData.mmdMaterial as { materialIndex?: number } | undefined)
             ?.materialIndex ?? 0,
@@ -1444,7 +1446,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     );
     const maxMaterialIndex = Math.max(0, ...materialIndices);
     for (const mesh of meshes) {
-      const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const sourceMaterials = asArray(mesh.material);
       const portableMaterials = sourceMaterials.map((source) => {
         const metadata = source.userData.mmdMaterial as
           | {
@@ -1476,7 +1478,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
         );
         return material;
       });
-      mesh.material = Array.isArray(mesh.material) ? portableMaterials : portableMaterials[0];
+      mesh.material = preserveArrayShape(mesh.material, portableMaterials);
     }
   }
 
