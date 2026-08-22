@@ -53,7 +53,7 @@ export interface AudioInputFormatDefinition {
   extensions: readonly `.${string}`[];
 }
 export type Model3dFormat =
-  'fbx' | 'obj' | 'gltf' | 'glb' | 'vrm' | 'stl' | 'ply' | 'dae' | '3ds' | 'pmx' | 'pmd' | 'vmd';
+  'fbx' | 'obj' | 'gltf' | 'glb' | 'vrm' | 'vrma' | 'stl' | 'ply' | 'dae' | '3ds' | 'pmx' | 'pmd' | 'vmd';
 export type Model3dOutputFormat = 'glb' | 'gltf' | 'obj' | 'stl' | 'vrm';
 export interface Model3dInputFormatDefinition {
   format: Model3dFormat;
@@ -209,6 +209,7 @@ export function getMimeType(format: OutputFormat): string {
     gltf: 'model/gltf+json',
     glb: 'model/gltf-binary',
     vrm: 'model/gltf-binary',
+    vrma: 'model/gltf-binary',
     stl: 'model/stl',
     ply: 'application/octet-stream',
     dae: 'model/vnd.collada+xml',
@@ -266,6 +267,7 @@ export function guessFormat(filename: string): InputFormat | null {
     'gltf',
     'glb',
     'vrm',
+    'vrma',
     'stl',
     'ply',
     'dae',
@@ -393,6 +395,7 @@ export const MODEL3D_INPUT_FORMATS = [
   { format: 'gltf', label: 'glTF', extensions: ['.gltf'] },
   { format: 'glb', label: 'GLB', extensions: ['.glb'] },
   { format: 'vrm', label: 'VRM', extensions: ['.vrm'] },
+  { format: 'vrma', label: 'VRM Animation', extensions: ['.vrma'] },
   { format: 'stl', label: 'STL', extensions: ['.stl'] },
   { format: 'ply', label: 'PLY', extensions: ['.ply'] },
   { format: 'dae', label: 'DAE', extensions: ['.dae'] },
@@ -468,13 +471,14 @@ export const MODEL3D_BONE_OUTPUT_FORMATS = [
   'gltf',
   'vrm',
 ] as const satisfies readonly Model3dOutputFormat[];
-export const MODEL3D_ANIMATION_INPUT_FORMATS = ['fbx', 'gltf', 'glb', 'dae', 'vmd'] as const;
+export const MODEL3D_ANIMATION_INPUT_FORMATS = ['fbx', 'gltf', 'glb', 'vrm', 'vrma', 'dae', 'vmd'] as const;
 export const MODEL3D_ANIMATION_OUTPUT_FORMATS = ['glb', 'gltf', 'vrm'] as const;
 export const MODEL3D_EXPRESSION_INPUT_FORMATS = [
   'fbx',
   'gltf',
   'glb',
   'vrm',
+  'vrma',
   'dae',
   'pmx',
   'pmd',

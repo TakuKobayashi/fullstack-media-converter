@@ -13,14 +13,13 @@ import {
   generateId,
   guessFormat,
   isModel3dOutputCandidate,
-  model3dFormatMayContainAnimations,
   model3dFormatMayContainBones,
   model3dFormatMayContainExpressions,
-  model3dOutputSupportsAnimations,
   model3dOutputSupportsBones,
   model3dOutputSupportsExpressions,
   type ConversionFile,
   type ConversionJob,
+  type ConversionOutput,
   type InputFormat,
   type Model3dFormat,
   type Model3dOutputFormat,
@@ -28,6 +27,7 @@ import {
 } from '@convertmate/shared';
 import { ConversionQueue } from '@convertmate/core';
 import { BrowserModel3dEngine, MMD_TRANSPARENCY_THRESHOLDS } from '@convertmate/model3d';
+import type { Model3dAnimationOutputFormat, Model3dAnimationSource } from '@convertmate/model3d';
 import { model3dOutputFormatAtom, vrmTransparencySettingsAtomFamily } from '@/state/preferences';
 import VrmTransparencyPreviewModal from '@/components/VrmTransparencyPreviewModal';
 import { useBatchDownload } from '@/hooks/useBatchDownload';
@@ -82,6 +82,21 @@ type VrmValidation = {
   error?: string;
 };
 
+type AnimationItem = Model3dAnimationSource & {
+  id: string;
+  status: 'pending' | 'processing' | 'done' | 'error';
+  progress: number;
+  error?: string;
+  outputs?: ConversionOutput[];
+};
+
+const ANIMATION_OUTPUT_FORMATS: Model3dAnimationOutputFormat[] = [
+  'glb',
+  'gltf',
+  'vrma',
+  'three-json',
+];
+
 function Model3dTransparencySummary({
   fileName,
   outputFormat,
@@ -123,6 +138,10 @@ export default function UniversalModel3dConverter() {
   const { t, locale } = useTranslation();
   const [targetFormat, setTargetFormat] = useAtom(model3dOutputFormatAtom);
   const [jobs, setJobs] = useState<ConversionJob[]>([]);
+  const [animationItems, setAnimationItems] = useState<AnimationItem[]>([]);
+  const [animationTargetFormat, setAnimationTargetFormat] =
+    useState<Model3dAnimationOutputFormat>('vrma');
+  const [inspectingFiles, setInspectingFiles] = useState(false);
   const [auxiliaryFiles, setAuxiliaryFiles] = useState<File[]>([]);
   const [running, setRunning] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -183,7 +202,7 @@ export default function UniversalModel3dConverter() {
   }, []);
 
   const addFiles = useCallback(
-    (list: FileList | File[]) => {
+    async (list: FileList | File[]) => {
       const files = Array.from(list);
       const primary = files.filter((file) => {
         const extension = `.${file.name.split('.').pop()?.toLowerCase() ?? ''}`;
@@ -194,22 +213,47 @@ export default function UniversalModel3dConverter() {
         return (MODEL3D_AUXILIARY_EXTENSIONS as readonly string[]).includes(extension);
       });
       addRelatedFiles(auxiliary);
+      setInspectingFiles(true);
+      const inspected = await Promise.all(primary.map(async (file) => {
+        const format = (guessFormat(file.name) ?? 'glb') as Model3dFormat;
+        try {
+          const inspection = await engine.inspectModel3dSource(file, format, files);
+          return { file, format, ...inspection };
+        } catch {
+          return {
+            file,
+            format,
+            hasMesh: format !== 'vmd' && format !== 'vrma',
+            animations: [] as Array<{ index: number; name: string }>,
+          };
+        }
+      }));
       setJobs((current) => [
         ...current,
-        ...primary.map((file) => ({
+        ...inspected.filter(({ hasMesh }) => hasMesh).map(({ file, format }) => ({
           id: generateId(),
-          file: {
-            id: generateId(),
-            name: file.name,
-            size: file.size,
-            source: file,
-          } as ConversionFile,
-          inputFormat: (guessFormat(file.name) ?? 'glb') as InputFormat,
+          file: { id: generateId(), name: file.name, size: file.size, source: file } as ConversionFile,
+          inputFormat: format,
           outputFormat: targetFormat,
           status: 'pending' as const,
           progress: 0,
         })),
       ]);
+      setAnimationItems((current) => [
+        ...current,
+        ...inspected.flatMap(({ file, format, animations }) =>
+          animations.map((clip) => ({
+            id: generateId(),
+            file,
+            format,
+            clipIndex: clip.index,
+            clipName: clip.name,
+            status: 'pending' as const,
+            progress: 0,
+          })),
+        ),
+      ]);
+      setInspectingFiles(false);
     },
     [addRelatedFiles, targetFormat],
   );
@@ -268,13 +312,6 @@ export default function UniversalModel3dConverter() {
     () =>
       jobs.some((job) => model3dFormatMayContainBones(job.inputFormat as Model3dFormat)) &&
       !model3dOutputSupportsBones(targetFormat),
-    [jobs, targetFormat],
-  );
-  const animationsWillBeRemoved = useMemo(
-    () =>
-      jobs.some((job) =>
-        model3dFormatMayContainAnimations(job.inputFormat as Model3dFormat),
-      ) && !model3dOutputSupportsAnimations(targetFormat),
     [jobs, targetFormat],
   );
   const expressionsWillBeRemoved = useMemo(
@@ -401,10 +438,42 @@ export default function UniversalModel3dConverter() {
     setRunning(false);
   }, [appliedTransparencySettings, auxiliaryFiles, jobs, relatedFilesByJobId, targetFormat, vrmValidations]);
 
+  const convertAnimations = useCallback(async () => {
+    const pendingAnimations = animationItems.filter((item) => item.status === 'pending');
+    if (!pendingAnimations.length) return;
+    setRunning(true);
+    for (const item of pendingAnimations) {
+      setAnimationItems((current) => current.map((entry) =>
+        entry.id === item.id ? { ...entry, status: 'processing', progress: 20 } : entry,
+      ));
+      try {
+        const blob = await engine.convertAnimationSource(item, animationTargetFormat, auxiliaryFiles);
+        const extension = animationTargetFormat === 'three-json' ? 'json' : animationTargetFormat;
+        const safeClipName = item.clipName.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '-');
+        const name = `${item.file.name.replace(/\.[^.]+$/, '')}-${safeClipName}.${extension}`;
+        const output = { name, url: URL.createObjectURL(blob), mimeType: blob.type };
+        setAnimationItems((current) => current.map((entry) =>
+          entry.id === item.id
+            ? { ...entry, status: 'done', progress: 100, outputs: [output] }
+            : entry,
+        ));
+      } catch (error) {
+        setAnimationItems((current) => current.map((entry) =>
+          entry.id === item.id
+            ? { ...entry, status: 'error', progress: 0, error: error instanceof Error ? error.message : String(error) }
+            : entry,
+        ));
+      }
+    }
+    setRunning(false);
+  }, [animationItems, animationTargetFormat, auxiliaryFiles]);
+
   const clear = () => {
     if (running) queueRef.current?.abort();
     jobs.forEach(revokeJobOutputs);
+    animationItems.forEach((item) => item.outputs?.forEach((output) => URL.revokeObjectURL(output.url)));
     setJobs([]);
+    setAnimationItems([]);
     setAuxiliaryFiles([]);
     setPreviewFailures({});
     setAppliedTransparencySettings({});
@@ -481,7 +550,7 @@ export default function UniversalModel3dConverter() {
           />
         </div>
 
-        <div className={s.formatBar}>
+        {jobs.length > 0 && <div className={s.formatBar}>
           <span className={s.formatBarLabel}>{t('model3d.to')}</span>
           <span className={s.formatArrowIcon}>→</span>
           <select
@@ -496,7 +565,30 @@ export default function UniversalModel3dConverter() {
               </option>
             ))}
           </select>
-        </div>
+        </div>}
+        {animationItems.length > 0 && <div className={`${s.formatBar} ${s.animationFormatBar}`}>
+          <span className={s.formatBarLabel}>{t('model3d.animationTo')}</span>
+          <span className={s.formatArrowIcon}>→</span>
+          <select
+            className={s.formatSelect}
+            value={animationTargetFormat}
+            onChange={(event) => {
+              const next = event.target.value as Model3dAnimationOutputFormat;
+              setAnimationItems((current) => current.filter((item) => {
+                if (item.status === 'pending') return true;
+                item.outputs?.forEach((output) => URL.revokeObjectURL(output.url));
+                return false;
+              }));
+              setAnimationTargetFormat(next);
+            }}
+            disabled={running}
+          >
+            {ANIMATION_OUTPUT_FORMATS.map((format) => (
+              <option key={format} value={format}>{format === 'three-json' ? 'three.js JSON' : format.toUpperCase()}</option>
+            ))}
+          </select>
+        </div>}
+        {inspectingFiles && <p className={s.mixedHint}>{t('model3d.inspectingFiles')}</p>}
         {incompatible > 0 && (
           <p className={s.mixedHint}>
             ⚠{' '}
@@ -505,9 +597,6 @@ export default function UniversalModel3dConverter() {
         )}
         {bonesWillBeRemoved && (
           <p className={s.boneWarning}>⚠ {t('model3d.bonesRemovedWarning')}</p>
-        )}
-        {animationsWillBeRemoved && (
-          <p className={s.boneWarning}>⚠ {t('model3d.animationsRemovedWarning')}</p>
         )}
         {expressionsWillBeRemoved && (
           <p className={s.boneWarning}>⚠ {t('model3d.expressionsRemovedWarning')}</p>
@@ -534,6 +623,29 @@ export default function UniversalModel3dConverter() {
             >
               {t('common.clear')}
             </button>
+          </div>
+        )}
+        {animationItems.length > 0 && (
+          <div className={s.controls}>
+            <button
+              className={s.convertBtn}
+              onClick={convertAnimations}
+              disabled={running || !animationItems.some((item) => item.status === 'pending')}
+            >
+              {running ? t('common.converting') : t('model3d.convertAnimations', {
+                count: animationItems.filter((item) => item.status === 'pending').length,
+              })}
+            </button>
+            {jobs.length === 0 && (
+              <button
+                type="button"
+                onClick={clear}
+                disabled={running}
+                style={{ marginLeft: 'auto', background: 'none', color: 'var(--muted)' }}
+              >
+                {t('common.clear')}
+              </button>
+            )}
           </div>
         )}
         {packageError && (
@@ -661,6 +773,19 @@ export default function UniversalModel3dConverter() {
                     </label>
                   </div>
                 )}
+                {animationItems.length > 0 && (
+                  <div className={s.linkedAnimationsPanel}>
+                    <strong>{t('model3d.linkedAnimations')}</strong>
+                    <ul className={s.relatedFilesList}>
+                      {animationItems.map((item) => (
+                        <li key={`${job.id}:${item.id}`}>
+                          <span>{item.file.name} — {item.clipName}</span>
+                          <small>{item.format.toUpperCase()}</small>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {job.error && <p className={s.errorDetail}>{job.error}</p>}
                 {job.outputFormat === 'vrm' && vrmValidations[job.id]?.status === 'checking' && (
                   <p className={s.mixedHint}>{t('model3d.checkingVrmCompatibility')}</p>
@@ -705,11 +830,43 @@ export default function UniversalModel3dConverter() {
           </div>
         )}
 
+        {animationItems.length > 0 && (
+          <section className={s.animationSection}>
+            <h2>{t('model3d.animationFiles')}</h2>
+            <div className={s.fileList}>
+              {animationItems.map((item) => (
+                <div key={item.id} className={`${s.fileRow} ${s.animationFileRow}`}>
+                  <span className={s.fileIcon}>▶</span>
+                  <span className={s.fileName}>{item.file.name}</span>
+                  <span className={s.animationClipName}>{item.clipName}</span>
+                  <span className={s.detectedBadge}>{item.format}</span>
+                  <span>→</span>
+                  <span className={s.detectedBadge}>{animationTargetFormat}</span>
+                  {item.outputs?.map((output) => (
+                    <a key={output.name} className={s.dlLink} href={output.url} download={output.name}>
+                      {output.name}
+                    </a>
+                  ))}
+                  {item.error && <span className={s.errorDetail}>{item.error}</span>}
+                  {item.status === 'pending' && (
+                    <button
+                      type="button"
+                      onClick={() => setAnimationItems((current) => current.filter((entry) => entry.id !== item.id))}
+                      style={{ background: 'none', color: 'var(--muted)' }}
+                    >×</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {previewJob && (
           <VrmTransparencyPreviewModal
             key={previewJob.id}
             job={previewJob}
-            auxiliaryFiles={relatedFilesByJobId[previewJob.id] ?? []}
+            auxiliaryFiles={auxiliaryFiles}
+            animationSources={animationItems}
             onClose={() => setPreviewJob(undefined)}
             onApply={(settings) => {
               setAppliedTransparencySettings((current) => ({

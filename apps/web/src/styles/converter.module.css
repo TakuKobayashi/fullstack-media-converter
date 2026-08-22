@@ -234,6 +234,42 @@
 .relatedFilesPanel {
   padding: 0 16px 16px;
 }
+.linkedAnimationsPanel {
+  margin: 0 16px 16px;
+  padding: 12px;
+  border: 1px solid rgba(168, 85, 247, 0.45);
+  border-radius: 8px;
+  background: rgba(88, 28, 135, 0.2);
+}
+.linkedAnimationsPanel > strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #d8b4fe;
+  font-size: 0.8rem;
+}
+.animationFormatBar {
+  border-color: rgba(168, 85, 247, 0.5);
+  background: rgba(88, 28, 135, 0.16);
+}
+.animationSection {
+  margin-top: 30px;
+  padding: 18px;
+  border: 1px solid rgba(168, 85, 247, 0.45);
+  border-radius: var(--radius-md);
+  background: rgba(59, 20, 91, 0.22);
+}
+.animationSection h2 {
+  color: #d8b4fe;
+  font-size: 1rem;
+}
+.animationFileRow {
+  border-color: rgba(168, 85, 247, 0.38);
+  background: rgba(88, 28, 135, 0.25);
+}
+.animationClipName {
+  color: #d8b4fe;
+  font-size: 0.8rem;
+}
 
 .relatedFilesHeader {
   display: flex;

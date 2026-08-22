@@ -191,6 +191,11 @@ export const messages = {
       noExpressions: 'No morph expressions were found.',
       noBones: 'No bones were found.',
       resetExpression: 'Reset expression',
+      animationTo: 'Convert animations to',
+      inspectingFiles: 'Inspecting model and animation contents…',
+      convertAnimations: 'Convert {{count}} animations',
+      linkedAnimations: 'Animation files linked to this model',
+      animationFiles: 'Animation files',
       updatingPreview: 'Loading the preview model…',
       previewFailed: 'Could not generate the model preview.',
       checkingVrmCompatibility: 'Checking whether this model can be converted to VRM…',
@@ -220,7 +225,7 @@ export const messages = {
         'The selected input may contain facial expressions, but this output format cannot store them. Expression morphs and expression animation will be ignored during conversion.',
       proseTitle: 'Private static 3D model conversion',
       prose:
-        'Models are loaded and exported with Three.js in your browser. Bones, skinning, morph expressions, and animation clips are preserved in glTF or GLB. VRM stores morph expressions in the model and exports animation clips as separate VRMA files. OBJ and STL bake the current pose into a static mesh and ignore expressions and animation. Format-specific data such as physics, cameras, lights, constraints, and some metadata may still be omitted.',
+        'Models and animation clips are separated after import and converted independently in your browser. Model conversion does not embed animation clips. Animations can be exported as GLB, glTF, VRMA, or three.js JSON and remain linked to every model for preview. OBJ and STL bake the current pose into a static mesh and ignore expressions. Format-specific data such as physics, cameras, lights, constraints, and some metadata may still be omitted.',
       bullets: [
         'Supports {{inputs}} input',
         'Exports {{outputs}}',
@@ -442,6 +447,11 @@ export const messages = {
       noExpressions: '表情モーフは見つかりませんでした。',
       noBones: 'ボーンは見つかりませんでした。',
       resetExpression: '表情を初期化',
+      animationTo: 'アニメーションの変換先',
+      inspectingFiles: 'モデルとアニメーションの内容を解析中…',
+      convertAnimations: 'アニメーション{{count}}件を変換',
+      linkedAnimations: 'このモデルに関連付けられたアニメーション',
+      animationFiles: 'アニメーションファイル',
       updatingPreview: 'プレビューモデルを読み込み中…',
       previewFailed: '3Dモデルのプレビューを生成できませんでした。',
       checkingVrmCompatibility: 'このモデルをVRMに変換できるか確認しています…',
@@ -470,7 +480,7 @@ export const messages = {
         '選択した入力には表情情報が含まれる可能性がありますが、この出力形式には保存できないため、表情モーフと表情アニメーションを無視して変換します。',
       proseTitle: 'アップロード不要の静的3Dモデル変換',
       prose:
-        'Three.jsを使ってブラウザ内で読み込み・書き出します。glTFとGLBではボーン、スキニング、モーフ表情、アニメーションクリップを保持します。VRMではモーフ表情をモデル内へ保存し、各アニメーションを個別のVRMAとして出力します。OBJとSTLでは現在の姿勢を静的メッシュへ焼き込み、表情とアニメーションを無視します。物理設定、カメラ、ライト、コンストレイント、一部のメタデータなどは失われる場合があります。',
+        '入力後にモデルとアニメーションクリップを分離し、ブラウザ内で個別に変換します。モデル変換にはアニメーションを埋め込みません。アニメーションはGLB、glTF、VRMA、three.js JSONとして出力でき、Preview用として全モデルに関連付けられます。OBJとSTLでは現在の姿勢を静的メッシュへ焼き込み、表情を無視します。物理設定、カメラ、ライト、コンストレイント、一部のメタデータなどは失われる場合があります。',
       bullets: [
         '{{inputs}}入力に対応',
         '{{outputs}}で出力可能',

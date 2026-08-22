@@ -18,6 +18,7 @@ import {
   BrowserModel3dEngine,
   MMD_TRANSPARENCY_THRESHOLDS,
   type Model3dPreviewSession,
+  type Model3dAnimationSource,
 } from '@convertmate/model3d';
 import { vrmTransparencySettingsAtomFamily } from '@/state/preferences';
 import { useTranslation } from '@/i18n';
@@ -44,6 +45,7 @@ const VRM_ONLY_SETTING_KEYS = new Set<SettingKey>([
 export interface VrmTransparencyPreviewModalProps {
   job: ConversionJob;
   auxiliaryFiles: File[];
+  animationSources: Model3dAnimationSource[];
   onClose: () => void;
   onLoadFailure: (error: string) => void;
   onApply: (settings: Model3dTransparencySettings) => void;
@@ -52,6 +54,7 @@ export interface VrmTransparencyPreviewModalProps {
 export default function VrmTransparencyPreviewModal({
   job,
   auxiliaryFiles,
+  animationSources,
   onClose,
   onLoadFailure,
   onApply,
@@ -102,7 +105,7 @@ export default function VrmTransparencyPreviewModal({
       camera.updateProjectionMatrix();
     };
     previewEngine
-      .createModel3dPreviewSession(job, auxiliaryFiles, draftRef.current)
+      .createModel3dPreviewSession(job, auxiliaryFiles, draftRef.current, animationSources)
       .then((session) => {
         if (disposed) {
           session.dispose();

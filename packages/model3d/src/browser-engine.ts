@@ -155,6 +155,18 @@ export interface Model3dPreviewSession {
 /** @deprecated Use Model3dPreviewSession. */
 export type VrmPreviewSession = Model3dPreviewSession;
 
+export type Model3dAnimationOutputFormat = 'glb' | 'gltf' | 'vrma' | 'three-json';
+export interface Model3dAnimationSource {
+  file: File;
+  format: Model3dFormat;
+  clipIndex: number;
+  clipName: string;
+}
+export interface Model3dSourceInspection {
+  hasMesh: boolean;
+  animations: Array<{ index: number; name: string }>;
+}
+
 export class BrowserModel3dEngine implements ConversionEngine {
   private readonly textureAlphaHistogramCache = new WeakMap<Texture, Uint32Array>();
 
@@ -178,7 +190,6 @@ export class BrowserModel3dEngine implements ConversionEngine {
         options.model3d?.auxiliaryFilesByJobId?.[job.id] ?? options.model3d?.auxiliaryFiles ?? [];
       const manager = this.createLoadingManager(auxiliaryFiles, objectUrls);
       const root = await this.loadModel(source, job.inputFormat, auxiliaryFiles, manager);
-      const animations = root.animations ?? [];
       options.onProgress?.(45);
       const preserveBones =
         model3dFormatMayContainBones(job.inputFormat as Model3dFormat) &&
@@ -214,20 +225,10 @@ export class BrowserModel3dEngine implements ConversionEngine {
           job.outputFormat as Model3dOutputFormat,
           job.file.name,
           job.inputFormat,
-          job.outputFormat === 'vrm' ? [] : animations,
+          [],
         );
         if (!blob.size) throw new Error('Conversion produced an empty model file.');
         blobs.push({ name: `${baseName}.${job.outputFormat}`, blob });
-      }
-      if (job.outputFormat === 'vrm') {
-        for (let index = 0; index < animations.length; index += 1) {
-          const clip = animations[index];
-          const clipName = this.safeOutputName(clip.name || `animation-${index + 1}`);
-          blobs.push({
-            name: `${baseName}-${String(index + 1).padStart(2, '0')}-${clipName}.vrma`,
-            blob: await this.exportVrma(root, clip),
-          });
-        }
       }
       if (!blobs.length) throw new Error('No model or animation data was found to export.');
       options.onProgress?.(95);
@@ -275,6 +276,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     job: ConversionJob,
     auxiliaryFiles: File[],
     initialSettings: Model3dTransparencySettings,
+    animationSources: Model3dAnimationSource[] = [],
   ): Promise<Model3dPreviewSession> {
     const source = job.file.source;
     if (!(source instanceof File) && !(source instanceof ArrayBuffer)) {
@@ -283,6 +285,27 @@ export class BrowserModel3dEngine implements ConversionEngine {
     const objectUrls: string[] = [];
     const manager = this.createLoadingManager(auxiliaryFiles, objectUrls);
     const root = await this.loadModel(source, job.inputFormat, auxiliaryFiles, manager);
+    // Preview animations come exclusively from the separately listed animation assets.
+    root.animations = [];
+    const loadedAnimationRoots = new Map<File, Object3D>();
+    for (const animationSource of animationSources) {
+      let animationRoot = loadedAnimationRoots.get(animationSource.file);
+      if (!animationRoot) {
+        animationRoot = await this.loadModel(
+          animationSource.file,
+          animationSource.format,
+          auxiliaryFiles,
+          manager,
+        );
+        loadedAnimationRoots.set(animationSource.file, animationRoot);
+      }
+      const clip = animationRoot.animations?.[animationSource.clipIndex];
+      if (clip) {
+        const previewClip = this.retargetPreviewClip(animationRoot, root, clip);
+        previewClip.name = animationSource.clipName;
+        root.animations.push(previewClip);
+      }
+    }
     const isMmd = job.inputFormat === 'pmx' || job.inputFormat === 'pmd';
     if (isMmd && (job.outputFormat === 'glb' || job.outputFormat === 'gltf')) {
       await this.bakeMmdRgbMaterials(root);
@@ -599,6 +622,49 @@ export class BrowserModel3dEngine implements ConversionEngine {
     return this.createModel3dPreviewSession(job, auxiliaryFiles, initialSettings);
   }
 
+  private retargetPreviewClip(
+    sourceRoot: Object3D,
+    targetRoot: Object3D,
+    clip: AnimationClip,
+  ): AnimationClip {
+    const describe = (root: Object3D) => {
+      const nodes: Object3D[] = [];
+      root.traverse((node) => nodes.push(node));
+      const indices = new Map(nodes.map((node, index) => [node, index]));
+      const humanBones = this.mapVrmHumanBones(nodes.map((node) => ({
+        name: node.name,
+        children: node.children
+          .map((child) => indices.get(child))
+          .filter((index): index is number => index !== undefined),
+      })));
+      return { nodes, humanBones };
+    };
+    const source = describe(sourceRoot);
+    const target = describe(targetRoot);
+    const sourceNameToHumanBone = new Map<string, string>();
+    Object.entries(source.humanBones).forEach(([humanBone, binding]) => {
+      const node = source.nodes[binding.node];
+      if (node) sourceNameToHumanBone.set(node.name, humanBone);
+    });
+    const targetNameByHumanBone = new Map<string, string>();
+    Object.entries(target.humanBones).forEach(([humanBone, binding]) => {
+      const node = target.nodes[binding.node];
+      if (node) targetNameByHumanBone.set(humanBone, node.name);
+    });
+    const result = clip.clone();
+    result.tracks = result.tracks.map((track) => {
+      const parsed = PropertyBinding.parseTrackName(track.name);
+      const sourceName = parsed.nodeName;
+      const humanBone = sourceNameToHumanBone.get(sourceName);
+      const targetName = humanBone ? targetNameByHumanBone.get(humanBone) : undefined;
+      if (!targetName || targetName === sourceName) return track;
+      const retargeted = track.clone();
+      retargeted.name = `${targetName}.${parsed.propertyName}`;
+      return retargeted;
+    });
+    return result;
+  }
+
   private createLoadingManager(files: File[], objectUrls: string[]): LoadingManager {
     const manager = new LoadingManager();
     const byName = new Map(files.map((file) => [file.name.toLowerCase(), file]));
@@ -709,6 +775,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       case 'gltf':
       case 'glb':
       case 'vrm':
+      case 'vrma':
         return new Promise((resolve, reject) =>
           new GLTFLoader(manager).parse(
             format === 'gltf' ? text() : buffer,
@@ -763,6 +830,80 @@ export class BrowserModel3dEngine implements ConversionEngine {
         return this.createVmdAnimationRoot(buffer, source instanceof File ? source.name : 'motion');
       default:
         throw new Error(`Unsupported model input: ${format}`);
+    }
+  }
+
+  async inspectModel3dSource(
+    file: File,
+    format: Model3dFormat,
+    auxiliaryFiles: File[] = [],
+  ): Promise<Model3dSourceInspection> {
+    const objectUrls: string[] = [];
+    try {
+      const root = await this.loadModel(
+        file,
+        format,
+        auxiliaryFiles,
+        this.createLoadingManager(auxiliaryFiles, objectUrls),
+      );
+      let hasMesh = false;
+      root.traverse((object) => {
+        if ((object as Mesh).isMesh) hasMesh = true;
+      });
+      return {
+        hasMesh,
+        animations: (root.animations ?? []).map((clip, index) => ({
+          index,
+          name: clip.name.trim() || `Animation ${index + 1}`,
+        })),
+      };
+    } finally {
+      objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    }
+  }
+
+  async convertAnimationSource(
+    source: Model3dAnimationSource,
+    outputFormat: Model3dAnimationOutputFormat,
+    auxiliaryFiles: File[] = [],
+  ): Promise<Blob> {
+    const objectUrls: string[] = [];
+    try {
+      const root = await this.loadModel(
+        source.file,
+        source.format,
+        auxiliaryFiles,
+        this.createLoadingManager(auxiliaryFiles, objectUrls),
+      );
+      const clip = root.animations?.[source.clipIndex];
+      if (!clip) throw new Error(`Animation clip "${source.clipName}" was not found.`);
+      if (outputFormat === 'vrma') return this.exportVrma(root, clip);
+      if (outputFormat === 'three-json') {
+        return new Blob([JSON.stringify(AnimationClip.toJSON(clip), null, 2)], {
+          type: 'application/json',
+        });
+      }
+      const cloneHierarchy = (node: Object3D): Object3D => {
+        const clone = (node as Bone).isBone ? new Bone() : new Object3D();
+        clone.name = node.name;
+        clone.position.copy(node.position);
+        clone.quaternion.copy(node.quaternion);
+        clone.scale.copy(node.scale);
+        node.children.forEach((child) => clone.add(cloneHierarchy(child)));
+        return clone;
+      };
+      const animationRoot = cloneHierarchy(root);
+      const exported = await new GLTFExporter().parseAsync(animationRoot, {
+        binary: outputFormat === 'glb',
+        animations: [clip],
+        onlyVisible: false,
+        trs: true,
+      });
+      return exported instanceof ArrayBuffer
+        ? new Blob([exported], { type: 'model/gltf-binary' })
+        : new Blob([JSON.stringify(exported)], { type: 'model/gltf+json' });
+    } finally {
+      objectUrls.forEach((url) => URL.revokeObjectURL(url));
     }
   }
 
