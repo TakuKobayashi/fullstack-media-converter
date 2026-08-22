@@ -20,6 +20,7 @@ import {
   type InputFormat,
   type Model3dFormat,
   type Model3dOutputFormat,
+  type Model3dTransparencySettings,
 } from '@convertmate/shared';
 import { ConversionQueue } from '@convertmate/core';
 import { BrowserModel3dEngine, MMD_TRANSPARENCY_THRESHOLDS } from '@convertmate/model3d';
@@ -38,12 +39,22 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function VrmTransparencySummary({
+const TRANSPARENCY_PREVIEW_OUTPUTS = new Set<Model3dOutputFormat>(['glb', 'gltf', 'vrm']);
+
+type VrmValidation = {
+  signature: string;
+  status: 'checking' | 'valid' | 'invalid';
+  error?: string;
+};
+
+function Model3dTransparencySummary({
   fileName,
+  outputFormat,
   onPreview,
   disabled,
 }: {
   fileName: string;
+  outputFormat: Model3dOutputFormat;
   onPreview: () => void;
   disabled: boolean;
 }) {
@@ -53,12 +64,17 @@ function VrmTransparencySummary({
   return (
     <div className={s.vrmSettingsSummary}>
       <span>
-        {t('model3d.currentTransparency', {
+        {t(
+          outputFormat === 'vrm'
+            ? 'model3d.currentTransparency'
+            : 'model3d.currentTransparencyPortable',
+          {
           transparent: settings.textureTransparentMaxAlphaByte,
           opaque: settings.textureOpaqueMinAlphaByte,
           cutout: Math.round(settings.cutoutMaxIntermediateAlphaRatio * 100),
           zwrite: Math.round(settings.blendZWriteMinExtremeAlphaRatio * 100),
-        })}
+          },
+        )}
       </span>
       {!stored && <small>{t('model3d.defaultTransparency')}</small>}
       <button type="button" onClick={onPreview} disabled={disabled}>
@@ -76,7 +92,12 @@ export default function UniversalModel3dConverter() {
   const [running, setRunning] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [previewJob, setPreviewJob] = useState<ConversionJob>();
-  const [vrmPreviewFailures, setVrmPreviewFailures] = useState<Record<string, string>>({});
+  const [previewFailures, setPreviewFailures] = useState<Record<string, string>>({});
+  const [appliedTransparencySettings, setAppliedTransparencySettings] = useState<
+    Record<string, Model3dTransparencySettings>
+  >({});
+  const [vrmValidations, setVrmValidations] = useState<Record<string, VrmValidation>>({});
+  const vrmValidationsRef = useRef<Record<string, VrmValidation>>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const relatedInputRef = useRef<HTMLInputElement>(null);
   const queueRef = useRef<ConversionQueue | null>(null);
@@ -125,6 +146,7 @@ export default function UniversalModel3dConverter() {
   );
 
   const changeTarget = (format: Model3dOutputFormat) => {
+    setPreviewJob(undefined);
     setTargetFormat(format);
     setJobs((current) =>
       current.map((job) => (job.status === 'pending' ? { ...job, outputFormat: format } : job)),
@@ -155,28 +177,80 @@ export default function UniversalModel3dConverter() {
       }),
     [jobs],
   );
-  useEffect(() => {
-    if (
-      !jobs.length ||
-      jobs.every((job) => isModel3dOutputCandidate(job.inputFormat as Model3dFormat, targetFormat))
-    )
-      return;
-    setTargetFormat('glb');
-    setJobs((current) =>
-      current.map((job) => (job.status === 'pending' ? { ...job, outputFormat: 'glb' } : job)),
-    );
-  }, [jobs, setTargetFormat, targetFormat]);
   const acceptedRelatedExtensions = useMemo(
     () => [...new Set(relatedFileHints.flatMap(({ extensions }) => extensions))],
     [relatedFileHints],
   );
+
+  useEffect(() => {
+    if (targetFormat !== 'vrm') return;
+    let cancelled = false;
+    const auxiliarySignature = auxiliaryFiles
+      .map((file) => `${file.webkitRelativePath || file.name}:${file.size}:${file.lastModified}`)
+      .sort()
+      .join('|');
+    const candidates = jobs.filter((job) => job.status === 'pending');
+    const pendingChecks = candidates.flatMap((job) => {
+      const source = job.file.source;
+      const sourceVersion =
+        source instanceof File ? `${source.size}:${source.lastModified}` : job.file.size;
+      const signature = `${job.id}:${sourceVersion}:${auxiliarySignature}`;
+      if (vrmValidationsRef.current[job.id]?.signature === signature) return [];
+      return [{ job, signature }];
+    });
+    if (!pendingChecks.length) return;
+    setVrmValidations((current) => {
+      const next = { ...current };
+      for (const { job, signature } of pendingChecks) {
+        next[job.id] = isModel3dOutputCandidate(job.inputFormat as Model3dFormat, 'vrm')
+          ? { signature, status: 'checking' }
+          : { signature, status: 'invalid' };
+      }
+      vrmValidationsRef.current = next;
+      return next;
+    });
+    void (async () => {
+      for (const { job, signature } of pendingChecks) {
+        if (cancelled || !isModel3dOutputCandidate(job.inputFormat as Model3dFormat, 'vrm')) continue;
+        const settings =
+          appliedTransparencySettings[job.id] ??
+          jotaiStore.get(vrmTransparencySettingsAtomFamily(job.file.name)) ??
+          MMD_TRANSPARENCY_THRESHOLDS;
+        const result = await engine.validateVrmConversion(job, auxiliaryFiles, settings);
+        if (cancelled) return;
+        setVrmValidations((current) => {
+          const next = {
+            ...current,
+            [job.id]: {
+              signature,
+              status: result.valid ? 'valid' : 'invalid',
+              error: result.error,
+            },
+          } satisfies Record<string, VrmValidation>;
+          vrmValidationsRef.current = next;
+          return next;
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+      for (const { job, signature } of pendingChecks) {
+        const current = vrmValidationsRef.current[job.id];
+        if (current?.signature === signature && current.status === 'checking') {
+          const next = { ...vrmValidationsRef.current };
+          delete next[job.id];
+          vrmValidationsRef.current = next;
+        }
+      }
+    };
+  }, [appliedTransparencySettings, auxiliaryFiles, jobs, targetFormat]);
 
   const convert = useCallback(async () => {
     const pending = jobs.filter(
       (job) =>
         job.status === 'pending' &&
         canConvert(job.inputFormat, targetFormat) &&
-        (targetFormat !== 'vrm' || !vrmPreviewFailures[job.id]),
+        (targetFormat !== 'vrm' || vrmValidations[job.id]?.status === 'valid'),
     );
     if (!pending.length) return;
     setPreviewJob(undefined);
@@ -184,7 +258,8 @@ export default function UniversalModel3dConverter() {
     const transparencyByFileName = Object.fromEntries(
       pending.map((job) => [
         job.file.name,
-        jotaiStore.get(vrmTransparencySettingsAtomFamily(job.file.name)) ??
+        appliedTransparencySettings[job.id] ??
+          jotaiStore.get(vrmTransparencySettingsAtomFamily(job.file.name)) ??
           MMD_TRANSPARENCY_THRESHOLDS,
       ]),
     );
@@ -201,6 +276,11 @@ export default function UniversalModel3dConverter() {
       if (type === 'job:done') {
         Object.assign(patch, { status: 'done', progress: 100, resultUrl: job.resultUrl });
         jotaiStore.set(vrmTransparencySettingsAtomFamily(job.file.name), RESET);
+        setAppliedTransparencySettings((current) => {
+          const next = { ...current };
+          delete next[job.id];
+          return next;
+        });
       }
       if (type === 'job:error')
         Object.assign(patch, { status: 'error', progress: 0, error: job.error });
@@ -211,20 +291,26 @@ export default function UniversalModel3dConverter() {
     await queue.run();
     unsubscribe();
     setRunning(false);
-  }, [auxiliaryFiles, jobs, targetFormat, vrmPreviewFailures]);
+  }, [appliedTransparencySettings, auxiliaryFiles, jobs, targetFormat, vrmValidations]);
 
   const clear = () => {
     if (running) queueRef.current?.abort();
     jobs.forEach((job) => job.resultUrl && URL.revokeObjectURL(job.resultUrl));
     setJobs([]);
     setAuxiliaryFiles([]);
-    setVrmPreviewFailures({});
+    setPreviewFailures({});
+    setAppliedTransparencySettings({});
+    setVrmValidations({});
+    vrmValidationsRef.current = {};
     setPreviewJob(undefined);
     setRunning(false);
   };
 
   const pending = jobs.filter(
-    (job) => job.status === 'pending' && (targetFormat !== 'vrm' || !vrmPreviewFailures[job.id]),
+    (job) =>
+      job.status === 'pending' &&
+      canConvert(job.inputFormat, targetFormat) &&
+      (targetFormat !== 'vrm' || vrmValidations[job.id]?.status === 'valid'),
   ).length;
   const done = jobs.filter((job) => job.status === 'done').length;
   const errors = jobs.filter((job) => job.status === 'error').length;
@@ -327,16 +413,7 @@ export default function UniversalModel3dConverter() {
             disabled={running}
           >
             {MODEL3D_OUTPUT_FORMATS.map((format) => (
-              <option
-                key={format}
-                value={format}
-                disabled={
-                  jobs.length > 0 &&
-                  jobs.some(
-                    (job) => !isModel3dOutputCandidate(job.inputFormat as Model3dFormat, format),
-                  )
-                }
-              >
+              <option key={format} value={format}>
                 {format.toUpperCase()}
               </option>
             ))}
@@ -440,17 +517,31 @@ export default function UniversalModel3dConverter() {
                   )}
                 </div>
                 {job.error && <p className={s.errorDetail}>{job.error}</p>}
-                {job.outputFormat === 'vrm' && vrmPreviewFailures[job.id] && (
+                {job.outputFormat === 'vrm' && vrmValidations[job.id]?.status === 'checking' && (
+                  <p className={s.mixedHint}>{t('model3d.checkingVrmCompatibility')}</p>
+                )}
+                {job.outputFormat === 'vrm' && vrmValidations[job.id]?.status === 'invalid' && (
                   <p className={s.errorDetail}>
-                    {t('model3d.vrmPreviewIncompatible', { error: vrmPreviewFailures[job.id] })}
+                    {t('model3d.vrmPreviewIncompatible', {
+                      error: vrmValidations[job.id]?.error ?? '',
+                    })}
                   </p>
                 )}
-                {job.outputFormat === 'vrm' &&
+                {previewFailures[`${job.id}:${job.outputFormat}`] && (
+                  <p className={s.errorDetail}>
+                    {t('model3d.previewFailed')} {previewFailures[`${job.id}:${job.outputFormat}`]}
+                  </p>
+                )}
+                {(job.inputFormat === 'pmx' || job.inputFormat === 'pmd') &&
+                  TRANSPARENCY_PREVIEW_OUTPUTS.has(job.outputFormat as Model3dOutputFormat) &&
                   job.status === 'pending' &&
                   !running &&
-                  !vrmPreviewFailures[job.id] && (
-                    <VrmTransparencySummary
+                  (job.outputFormat !== 'vrm' ||
+                    vrmValidations[job.id]?.status === 'valid') &&
+                  !previewFailures[`${job.id}:${job.outputFormat}`] && (
+                    <Model3dTransparencySummary
                       fileName={job.file.name}
+                      outputFormat={job.outputFormat as Model3dOutputFormat}
                       onPreview={() => setPreviewJob(job)}
                       disabled={running}
                     />
@@ -466,8 +557,17 @@ export default function UniversalModel3dConverter() {
             job={previewJob}
             auxiliaryFiles={auxiliaryFiles}
             onClose={() => setPreviewJob(undefined)}
+            onApply={(settings) => {
+              setAppliedTransparencySettings((current) => ({
+                ...current,
+                [previewJob.id]: settings,
+              }));
+            }}
             onLoadFailure={(error) => {
-              setVrmPreviewFailures((current) => ({ ...current, [previewJob.id]: error }));
+              setPreviewFailures((current) => ({
+                ...current,
+                [`${previewJob.id}:${previewJob.outputFormat}`]: error,
+              }));
               setPreviewJob(undefined);
             }}
           />

@@ -17,7 +17,7 @@ import type { ConversionJob, Model3dTransparencySettings } from '@convertmate/sh
 import {
   BrowserModel3dEngine,
   MMD_TRANSPARENCY_THRESHOLDS,
-  type VrmPreviewSession,
+  type Model3dPreviewSession,
 } from '@convertmate/model3d';
 import { vrmTransparencySettingsAtomFamily } from '@/state/preferences';
 import { useTranslation } from '@/i18n';
@@ -36,11 +36,17 @@ const controls: Array<{ key: SettingKey; min: number; max: number; step: number 
   { key: 'mtoonRenderQueueOffsetLimit', min: 0, max: 9, step: 1 },
 ];
 
+const VRM_ONLY_SETTING_KEYS = new Set<SettingKey>([
+  'blendZWriteMinExtremeAlphaRatio',
+  'mtoonRenderQueueOffsetLimit',
+]);
+
 export interface VrmTransparencyPreviewModalProps {
   job: ConversionJob;
   auxiliaryFiles: File[];
   onClose: () => void;
   onLoadFailure: (error: string) => void;
+  onApply: (settings: Model3dTransparencySettings) => void;
 }
 
 export default function VrmTransparencyPreviewModal({
@@ -48,6 +54,7 @@ export default function VrmTransparencyPreviewModal({
   auxiliaryFiles,
   onClose,
   onLoadFailure,
+  onApply,
 }: VrmTransparencyPreviewModalProps) {
   const { t } = useTranslation();
   const [stored, setStored] = useAtom(vrmTransparencySettingsAtomFamily(job.file.name));
@@ -58,7 +65,7 @@ export default function VrmTransparencyPreviewModal({
   const [previewing, setPreviewing] = useState(true);
   const [previewError, setPreviewError] = useState<string>();
   const canvasHostRef = useRef<HTMLDivElement>(null);
-  const sessionRef = useRef<VrmPreviewSession | undefined>(undefined);
+  const sessionRef = useRef<Model3dPreviewSession | undefined>(undefined);
   const draftRef = useRef(draft);
   draftRef.current = draft;
 
@@ -86,7 +93,7 @@ export default function VrmTransparencyPreviewModal({
       camera.updateProjectionMatrix();
     };
     previewEngine
-      .createVrmPreviewSession(job, auxiliaryFiles, draftRef.current)
+      .createModel3dPreviewSession(job, auxiliaryFiles, draftRef.current)
       .then((session) => {
         if (disposed) {
           session.dispose();
@@ -145,12 +152,20 @@ export default function VrmTransparencyPreviewModal({
         className={s.previewModal}
         role="dialog"
         aria-modal="true"
-        aria-label={t('model3d.previewTitle', { file: job.file.name })}
+        aria-label={t('model3d.previewTitle', {
+          file: job.file.name,
+          format: job.outputFormat.toUpperCase(),
+        })}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className={s.previewHeader}>
           <div>
-            <strong>{t('model3d.previewTitle', { file: job.file.name })}</strong>
+            <strong>
+              {t('model3d.previewTitle', {
+                file: job.file.name,
+                format: job.outputFormat.toUpperCase(),
+              })}
+            </strong>
             <p>{t('model3d.previewHelp')}</p>
           </div>
           <button type="button" onClick={onClose} aria-label={t('model3d.closePreview')}>
@@ -164,29 +179,31 @@ export default function VrmTransparencyPreviewModal({
             {previewError && <span className={s.previewError}>{previewError}</span>}
           </div>
           <div className={s.previewSettings}>
-            {controls.map(({ key, min, max, step }) => (
-              <label className={s.previewControl} key={key}>
-                <span>{t(`model3d.transparency.${key}`)}</span>
-                <div>
-                  <input
-                    type="range"
-                    min={min}
-                    max={max}
-                    step={step}
-                    value={draft[key]}
-                    onChange={(event) => update(key, Number(event.target.value))}
-                  />
-                  <input
-                    type="number"
-                    min={min}
-                    max={max}
-                    step={step}
-                    value={draft[key]}
-                    onChange={(event) => update(key, Number(event.target.value))}
-                  />
-                </div>
-              </label>
-            ))}
+            {controls
+              .filter(({ key }) => job.outputFormat === 'vrm' || !VRM_ONLY_SETTING_KEYS.has(key))
+              .map(({ key, min, max, step }) => (
+                <label className={s.previewControl} key={key}>
+                  <span>{t(`model3d.transparency.${key}`)}</span>
+                  <div>
+                    <input
+                      type="range"
+                      min={min}
+                      max={max}
+                      step={step}
+                      value={draft[key]}
+                      onChange={(event) => update(key, Number(event.target.value))}
+                    />
+                    <input
+                      type="number"
+                      min={min}
+                      max={max}
+                      step={step}
+                      value={draft[key]}
+                      onChange={(event) => update(key, Number(event.target.value))}
+                    />
+                  </div>
+                </label>
+              ))}
           </div>
         </div>
         <footer className={s.previewFooter}>
@@ -201,6 +218,7 @@ export default function VrmTransparencyPreviewModal({
             className={s.previewApply}
             onClick={() => {
               setStored(draft);
+              onApply(draft);
               onClose();
             }}
           >
