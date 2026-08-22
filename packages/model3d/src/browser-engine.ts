@@ -547,14 +547,13 @@ export class BrowserModel3dEngine implements ConversionEngine {
       playAnimation: (name) => {
         const clip = animationClips.get(name);
         if (!clip) return;
-        if (currentAnimationName !== name) {
-          currentAction?.stop();
-          currentAction = mixer.clipAction(clip);
-          currentAnimationName = name;
-          currentAction.reset();
-        }
-        currentAction.paused = false;
-        currentAction.play();
+        const existingAction = currentAnimationName === name ? currentAction : undefined;
+        if (!existingAction) currentAction?.stop();
+        const action = existingAction ?? mixer.clipAction(clip).reset();
+        currentAction = action;
+        currentAnimationName = name;
+        action.paused = false;
+        action.play();
       },
       pauseAnimation: () => {
         if (currentAction) currentAction.paused = true;
