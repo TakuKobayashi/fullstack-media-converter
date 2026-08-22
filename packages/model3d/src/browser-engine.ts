@@ -65,27 +65,27 @@ export const MMD_TRANSPARENCY_THRESHOLDS = {
    * Texture alpha values at or below this byte value count as fully transparent.
    * Increase it to absorb very faint pixels into the transparent population.
    */
-  textureTransparentMaxAlphaByte: 16,
+  textureTransparentMaxAlphaByte: 24,
 
   /**
    * Texture alpha values at or above this byte value count as fully opaque.
    * Lower it to treat nearly opaque pixels as opaque instead of intermediate.
    */
-  textureOpaqueMinAlphaByte: 240,
+  textureOpaqueMinAlphaByte: 224,
 
   /**
    * Maximum share of intermediate-alpha pixels allowed for a cutout texture.
    * Increase it to classify more antialiased textures as MASK instead of BLEND.
-   * The value is a ratio from 0 to 1 (0.08 means 8%).
+   * The value is a ratio from 0 to 1 (0.15 means 15%).
    */
-  cutoutMaxIntermediateAlphaRatio: 0.08,
+  cutoutMaxIntermediateAlphaRatio: 0.15,
 
   /**
    * A texture-driven BLEND with at least this share of near-transparent and
    * near-opaque pixels is treated as a layered cutout and writes to the depth
    * buffer. Lower it if layered bangs still lose the transparent render order.
    */
-  blendZWriteMinExtremeAlphaRatio: 0.7,
+  blendZWriteMinExtremeAlphaRatio: 0.6,
 
   /**
    * Minimum alpha cutoff written for MASK materials. Increasing it removes more
