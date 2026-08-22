@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useAtom } from 'jotai';
+import { getDefaultStore, useAtom, useAtomValue } from 'jotai';
+import { RESET } from 'jotai/utils';
 import {
   MODEL3D_AUXILIARY_EXTENSIONS,
   MODEL3D_INPUT_EXTENSIONS,
@@ -21,18 +22,50 @@ import {
   type Model3dOutputFormat,
 } from '@convertmate/shared';
 import { ConversionQueue } from '@convertmate/core';
-import { BrowserModel3dEngine } from '@convertmate/model3d';
-import { model3dOutputFormatAtom } from '@/state/preferences';
+import { BrowserModel3dEngine, MMD_TRANSPARENCY_THRESHOLDS } from '@convertmate/model3d';
+import { model3dOutputFormatAtom, vrmTransparencySettingsAtomFamily } from '@/state/preferences';
+import VrmTransparencyPreviewModal from '@/components/VrmTransparencyPreviewModal';
 import { useBatchDownload } from '@/hooks/useBatchDownload';
 import { useTranslation } from '@/i18n';
 import s from '@/styles/converter.module.css';
 
 const engine = new BrowserModel3dEngine();
+const jotaiStore = getDefaultStore();
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function VrmTransparencySummary({
+  fileName,
+  onPreview,
+  disabled,
+}: {
+  fileName: string;
+  onPreview: () => void;
+  disabled: boolean;
+}) {
+  const { t } = useTranslation();
+  const stored = useAtomValue(vrmTransparencySettingsAtomFamily(fileName));
+  const settings = stored ?? MMD_TRANSPARENCY_THRESHOLDS;
+  return (
+    <div className={s.vrmSettingsSummary}>
+      <span>
+        {t('model3d.currentTransparency', {
+          transparent: settings.textureTransparentMaxAlphaByte,
+          opaque: settings.textureOpaqueMinAlphaByte,
+          cutout: Math.round(settings.cutoutMaxIntermediateAlphaRatio * 100),
+          zwrite: Math.round(settings.blendZWriteMinExtremeAlphaRatio * 100),
+        })}
+      </span>
+      {!stored && <small>{t('model3d.defaultTransparency')}</small>}
+      <button type="button" onClick={onPreview} disabled={disabled}>
+        {t('model3d.previewAdjust')}
+      </button>
+    </div>
+  );
 }
 
 export default function UniversalModel3dConverter() {
@@ -42,6 +75,7 @@ export default function UniversalModel3dConverter() {
   const [auxiliaryFiles, setAuxiliaryFiles] = useState<File[]>([]);
   const [running, setRunning] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [previewJob, setPreviewJob] = useState<ConversionJob>();
   const inputRef = useRef<HTMLInputElement>(null);
   const relatedInputRef = useRef<HTMLInputElement>(null);
   const queueRef = useRef<ConversionQueue | null>(null);
@@ -142,7 +176,16 @@ export default function UniversalModel3dConverter() {
     );
     if (!pending.length) return;
     setRunning(true);
-    const queue = new ConversionQueue(engine, 1, { model3d: { auxiliaryFiles } });
+    const transparencyByFileName = Object.fromEntries(
+      pending.map((job) => [
+        job.file.name,
+        jotaiStore.get(vrmTransparencySettingsAtomFamily(job.file.name)) ??
+          MMD_TRANSPARENCY_THRESHOLDS,
+      ]),
+    );
+    const queue = new ConversionQueue(engine, 1, {
+      model3d: { auxiliaryFiles, transparencyByFileName },
+    });
     queueRef.current = queue;
     queue.addMany(pending);
     const unsubscribe = queue.on(({ type, job }) => {
@@ -150,8 +193,10 @@ export default function UniversalModel3dConverter() {
       const patch: Partial<ConversionJob> = {};
       if (type === 'job:start') Object.assign(patch, { status: 'processing', progress: 0 });
       if (type === 'job:progress') patch.progress = job.progress;
-      if (type === 'job:done')
+      if (type === 'job:done') {
         Object.assign(patch, { status: 'done', progress: 100, resultUrl: job.resultUrl });
+        jotaiStore.set(vrmTransparencySettingsAtomFamily(job.file.name), RESET);
+      }
       if (type === 'job:error')
         Object.assign(patch, { status: 'error', progress: 0, error: job.error });
       setJobs((current) =>
@@ -386,9 +431,25 @@ export default function UniversalModel3dConverter() {
                   )}
                 </div>
                 {job.error && <p className={s.errorDetail}>{job.error}</p>}
+                {job.outputFormat === 'vrm' && job.status === 'pending' && (
+                  <VrmTransparencySummary
+                    fileName={job.file.name}
+                    onPreview={() => setPreviewJob(job)}
+                    disabled={running}
+                  />
+                )}
               </div>
             ))}
           </div>
+        )}
+
+        {previewJob && (
+          <VrmTransparencyPreviewModal
+            key={previewJob.id}
+            job={previewJob}
+            auxiliaryFiles={auxiliaryFiles}
+            onClose={() => setPreviewJob(undefined)}
+          />
         )}
 
         <div className={s.prose}>

@@ -9,6 +9,7 @@ import {
   type VideoOutputFormat,
   type AudioOutputFormat,
   type Model3dOutputFormat,
+  type Model3dTransparencySettings,
 } from '@convertmate/shared';
 
 const MIN_IMAGE_QUALITY = 60;
@@ -115,3 +116,22 @@ export const model3dOutputFormatAtom = atom(
   },
   (_get, set, format: Model3dOutputFormat) => set(storedModel3dOutputFormatAtom, format),
 );
+
+export const vrmTransparencyStorageKey = (fileName: string) =>
+  `fullstack-media-converter:vrm-transparency:${encodeURIComponent(fileName)}`;
+
+const createVrmTransparencySettingsAtom = (fileName: string) =>
+  atomWithStorage<Model3dTransparencySettings | null>(vrmTransparencyStorageKey(fileName), null);
+const vrmTransparencySettingsAtoms = new Map<
+  string,
+  ReturnType<typeof createVrmTransparencySettingsAtom>
+>();
+
+/** Per-file VRM settings. RESET removes the corresponding localStorage entry. */
+export const vrmTransparencySettingsAtomFamily = (fileName: string) => {
+  const cached = vrmTransparencySettingsAtoms.get(fileName);
+  if (cached) return cached;
+  const settingsAtom = createVrmTransparencySettingsAtom(fileName);
+  vrmTransparencySettingsAtoms.set(fileName, settingsAtom);
+  return settingsAtom;
+};

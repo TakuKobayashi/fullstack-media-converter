@@ -42,6 +42,7 @@ import {
   type InputFormat,
   type Model3dFormat,
   type Model3dOutputFormat,
+  type Model3dTransparencySettings,
   type OutputFormat,
 } from '@convertmate/shared';
 
@@ -98,7 +99,7 @@ export const MMD_TRANSPARENCY_THRESHOLDS = {
    * how many source material-order steps are retained for transparent materials.
    */
   mtoonRenderQueueOffsetLimit: 9,
-} as const;
+} as const satisfies Model3dTransparencySettings;
 
 /** Set this to true to print one alpha-analysis record per converted MMD material. */
 export const MMD_TRANSPARENCY_DIAGNOSTICS_ENABLED = false;
@@ -145,7 +146,11 @@ export class BrowserModel3dEngine implements ConversionEngine {
         (job.inputFormat === 'pmx' || job.inputFormat === 'pmd') &&
         (job.outputFormat === 'glb' || job.outputFormat === 'gltf' || job.outputFormat === 'vrm')
       ) {
-        await this.bakeMmdMaterials(root, job.outputFormat === 'vrm');
+        const transparency =
+          options.model3d?.transparencyByFileName?.[job.file.name] ??
+          options.model3d?.transparency ??
+          MMD_TRANSPARENCY_THRESHOLDS;
+        await this.bakeMmdMaterials(root, job.outputFormat === 'vrm', transparency);
       }
       if ((job.inputFormat === 'pmx' || job.inputFormat === 'pmd') && job.outputFormat === 'vrm') {
         this.normalizeMmdVrmScale(root);
@@ -309,7 +314,11 @@ export class BrowserModel3dEngine implements ConversionEngine {
    * Bake MMD's diffuse texture, toon ramp and sphere texture into a portable
    * unlit material. glTF cannot serialize the loader's onBeforeCompile shader.
    */
-  private async bakeMmdMaterials(root: Object3D, useMToon: boolean): Promise<void> {
+  private async bakeMmdMaterials(
+    root: Object3D,
+    useMToon: boolean,
+    transparency: Model3dTransparencySettings,
+  ): Promise<void> {
     const meshes: Mesh[] = [];
     root.traverse((object) => {
       if ((object as Mesh).isMesh) meshes.push(object as Mesh);
@@ -326,7 +335,14 @@ export class BrowserModel3dEngine implements ConversionEngine {
       const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       const bakedMaterials = await Promise.all(
         sourceMaterials.map((material, materialIndex) =>
-          this.bakeMmdMaterial(material, mesh, materialIndex, useMToon, maxMaterialIndex),
+          this.bakeMmdMaterial(
+            material,
+            mesh,
+            materialIndex,
+            useMToon,
+            maxMaterialIndex,
+            transparency,
+          ),
         ),
       );
       mesh.material = Array.isArray(mesh.material) ? bakedMaterials : bakedMaterials[0];
@@ -339,6 +355,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     materialIndex: number,
     useMToon: boolean,
     maxMaterialIndex: number,
+    transparency: Model3dTransparencySettings,
   ): Promise<Material> {
     const toon = source as Material & {
       color?: { r: number; g: number; b: number };
@@ -364,7 +381,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       | undefined;
     if (!metadata) return source;
     if (useMToon) {
-      return this.createMmdMToonFallback(source, metadata, toon, maxMaterialIndex);
+      return this.createMmdMToonFallback(source, metadata, toon, maxMaterialIndex, transparency);
     }
 
     const basePixels = this.readTexturePixels(toon.map ?? undefined);
@@ -495,6 +512,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       side?: number;
     },
     maxMaterialIndex: number,
+    settings: Model3dTransparencySettings,
   ): Material {
     const diffuse = metadata.diffuse ?? [1, 1, 1, toon.opacity ?? 1];
     const ambient = metadata.ambient ?? [0.2, 0.2, 0.2];
@@ -503,6 +521,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       metadata.transparencyMode,
       toon.map ?? undefined,
       diffuse[3],
+      settings,
     );
     const isBlend = transparency.mode === 'alphaBlend';
     const isMask = transparency.mode === 'alphaTest';
@@ -522,9 +541,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       roughness: 1,
       transparent: isBlend,
       opacity: diffuse[3],
-      alphaTest: isMask
-        ? Math.max(MMD_TRANSPARENCY_THRESHOLDS.maskMinAlphaCutoff, toon.alphaTest ?? 0)
-        : 0,
+      alphaTest: isMask ? Math.max(settings.maskMinAlphaCutoff, toon.alphaTest ?? 0) : 0,
       depthWrite: !isBlend || transparency.textureDrivenBlendWithZWrite,
       side: metadata.flags?.doubleSided || toon.side === DoubleSide ? DoubleSide : toon.side,
       emissive: new Color(0, 0, 0),
@@ -542,7 +559,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       transparentWithZWrite: transparency.textureDrivenBlendWithZWrite,
       renderQueueOffsetNumber: isBlend
         ? -Math.min(
-            MMD_TRANSPARENCY_THRESHOLDS.mtoonRenderQueueOffsetLimit,
+            settings.mtoonRenderQueueOffsetLimit,
             Math.max(0, maxMaterialIndex - (metadata.materialIndex ?? 0)),
           )
         : 0,
@@ -570,6 +587,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     declared: MmdTransparencyMode | undefined,
     texture: Texture | undefined,
     materialAlpha: number,
+    settings: Model3dTransparencySettings,
   ): MmdTransparencyAnalysis {
     const pixels = this.readTexturePixels(texture);
     let transparentPixels = 0;
@@ -578,9 +596,9 @@ export class BrowserModel3dEngine implements ConversionEngine {
     if (pixels) {
       for (let offset = 3; offset < pixels.data.length; offset += 4) {
         const alpha = pixels.data[offset];
-        if (alpha <= MMD_TRANSPARENCY_THRESHOLDS.textureTransparentMaxAlphaByte) {
+        if (alpha <= settings.textureTransparentMaxAlphaByte) {
           transparentPixels += 1;
-        } else if (alpha >= MMD_TRANSPARENCY_THRESHOLDS.textureOpaqueMinAlphaByte) {
+        } else if (alpha >= settings.textureOpaqueMinAlphaByte) {
           opaquePixels += 1;
         } else intermediatePixels += 1;
       }
@@ -589,10 +607,9 @@ export class BrowserModel3dEngine implements ConversionEngine {
     const intermediateRatio = total ? intermediatePixels / total : 0;
     const extremeRatio = total ? (transparentPixels + opaquePixels) / total : 0;
     const mostlyCutout =
-      transparentPixels > 0 &&
-      intermediateRatio <= MMD_TRANSPARENCY_THRESHOLDS.cutoutMaxIntermediateAlphaRatio;
+      transparentPixels > 0 && intermediateRatio <= settings.cutoutMaxIntermediateAlphaRatio;
     let mode: MmdTransparencyMode;
-    if (materialAlpha < MMD_TRANSPARENCY_THRESHOLDS.materialOpaqueMinAlpha) {
+    if (materialAlpha < settings.materialOpaqueMinAlpha) {
       mode = 'alphaBlend';
     } else if (!total || (transparentPixels === 0 && intermediatePixels === 0)) {
       mode = declared ?? 'opaque';
@@ -603,10 +620,10 @@ export class BrowserModel3dEngine implements ConversionEngine {
     }
     const textureDrivenBlendWithZWrite =
       mode === 'alphaBlend' &&
-      materialAlpha >= MMD_TRANSPARENCY_THRESHOLDS.materialOpaqueMinAlpha &&
+      materialAlpha >= settings.materialOpaqueMinAlpha &&
       transparentPixels > 0 &&
       opaquePixels > 0 &&
-      extremeRatio >= MMD_TRANSPARENCY_THRESHOLDS.blendZWriteMinExtremeAlphaRatio;
+      extremeRatio >= settings.blendZWriteMinExtremeAlphaRatio;
     return {
       mode,
       materialAlpha,

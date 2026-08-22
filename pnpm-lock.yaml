@@ -99,6 +99,9 @@ importers:
       react-i18next:
         specifier: ^17.0.11
         version: 17.0.11(i18next@26.3.6(typescript@5.9.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@5.9.3)
+      three:
+        specifier: ^0.180.0
+        version: 0.180.0
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -109,6 +112,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.0.0
         version: 19.2.3(@types/react@19.2.17)
+      '@types/three':
+        specifier: ^0.180.0
+        version: 0.180.0
       typescript:
         specifier: ^5.8.0
         version: 5.9.3
