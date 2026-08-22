@@ -12,7 +12,13 @@ export function useBatchDownload(jobs: ConversionJob[], archivePrefix: string) {
     () => jobs.filter((job) => job.status === 'done' && job.resultUrl),
     [jobs],
   );
-  const isAllComplete = jobs.length > 0 && completed.length === jobs.length;
+  const hasUnfinishedJobs = jobs.some(
+    (job) => job.status === 'pending' || job.status === 'processing',
+  );
+  // Failed jobs are terminal and cannot contribute a downloadable result.
+  // Allow users to package every successful conversion instead of blocking the
+  // whole batch because one input failed.
+  const isAllComplete = completed.length > 0 && !hasUnfinishedJobs;
 
   const downloadAll = useCallback(async () => {
     if (!isAllComplete || isPackaging) return;

@@ -114,8 +114,20 @@ export interface AudioConvertOptions {
   sampleRate?: number;
 }
 
+export interface Model3dTransparencySettings {
+  materialOpaqueMinAlpha: number;
+  textureTransparentMaxAlphaByte: number;
+  textureOpaqueMinAlphaByte: number;
+  cutoutMaxIntermediateAlphaRatio: number;
+  blendZWriteMinExtremeAlphaRatio: number;
+  maskMinAlphaCutoff: number;
+  mtoonRenderQueueOffsetLimit: number;
+}
+
 export interface Model3dConvertOptions {
   auxiliaryFiles?: File[];
+  transparency?: Model3dTransparencySettings;
+  transparencyByFileName?: Record<string, Model3dTransparencySettings>;
 }
 
 export interface ConversionOptions {

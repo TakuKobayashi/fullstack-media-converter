@@ -42,13 +42,93 @@ import {
   type InputFormat,
   type Model3dFormat,
   type Model3dOutputFormat,
+  type Model3dTransparencySettings,
   type OutputFormat,
 } from '@convertmate/shared';
 
-const MMD_BAKE_LIGHT = new Vector3(0.5, 1, 1).normalize();
 const MMD_VRM_TARGET_HEIGHT_METERS = 1.7;
+const MMD_BAKE_LIGHT = new Vector3(0.5, 1, 1).normalize();
+
+/**
+ * Tunable thresholds used when converting MMD transparency to glTF/VRM.
+ *
+ * These values are intentionally kept together so models with different alpha
+ * conventions can be tested without changing the conversion algorithm itself.
+ */
+export const MMD_TRANSPARENCY_THRESHOLDS = {
+  /**
+   * A PMX/PMD material alpha below this value is treated as true translucent
+   * BLEND. Lower this value to keep nearly opaque materials out of BLEND.
+   */
+  materialOpaqueMinAlpha: 1,
+
+  /**
+   * Texture alpha values at or below this byte value count as fully transparent.
+   * Increase it to absorb very faint pixels into the transparent population.
+   */
+  textureTransparentMaxAlphaByte: 64,
+
+  /**
+   * Texture alpha values at or above this byte value count as fully opaque.
+   * Lower it to treat nearly opaque pixels as opaque instead of intermediate.
+   */
+  textureOpaqueMinAlphaByte: 224,
+
+  /**
+   * Maximum share of intermediate-alpha pixels allowed for a cutout texture.
+   * Increase it to classify more antialiased textures as MASK instead of BLEND.
+   * The value is a ratio from 0 to 1 (0.15 means 15%).
+   */
+  cutoutMaxIntermediateAlphaRatio: 0.15,
+
+  /**
+   * A texture-driven BLEND with at least this share of near-transparent and
+   * near-opaque pixels is treated as a layered cutout and writes to the depth
+   * buffer. Lower it if layered bangs still lose the transparent render order.
+   */
+  blendZWriteMinExtremeAlphaRatio: 0.6,
+
+  /**
+   * Minimum alpha cutoff written for MASK materials. Increasing it removes more
+   * faint pixels; decreasing it preserves softer edges.
+   */
+  maskMinAlphaCutoff: 0.01,
+
+  /**
+   * VRM MToon permits a render-queue offset in the -9 to +9 range. This controls
+   * how many source material-order steps are retained for transparent materials.
+   */
+  mtoonRenderQueueOffsetLimit: 9,
+} as const satisfies Model3dTransparencySettings;
+
+/** Set this to true to print one alpha-analysis record per converted MMD material. */
+export const MMD_TRANSPARENCY_DIAGNOSTICS_ENABLED = false;
+
+type MmdTransparencyMode = 'opaque' | 'alphaTest' | 'alphaBlend';
+
+interface MmdTransparencyAnalysis {
+  mode: MmdTransparencyMode;
+  materialAlpha: number;
+  transparentPixels: number;
+  intermediatePixels: number;
+  opaquePixels: number;
+  intermediateRatio: number;
+  extremeRatio: number;
+  textureDrivenBlendWithZWrite: boolean;
+}
+
+export interface Model3dPreviewSession {
+  root: Object3D;
+  updateTransparency(settings: Model3dTransparencySettings): void;
+  dispose(): void;
+}
+
+/** @deprecated Use Model3dPreviewSession. */
+export type VrmPreviewSession = Model3dPreviewSession;
 
 export class BrowserModel3dEngine implements ConversionEngine {
+  private readonly textureAlphaHistogramCache = new WeakMap<Texture, Uint32Array>();
+
   canConvert(inputFormat: InputFormat, outputFormat: OutputFormat): boolean {
     return (
       (MODEL3D_INPUT_EXTENSIONS as readonly string[]).includes(`.${inputFormat}`) &&
@@ -77,7 +157,14 @@ export class BrowserModel3dEngine implements ConversionEngine {
         (job.inputFormat === 'pmx' || job.inputFormat === 'pmd') &&
         (job.outputFormat === 'glb' || job.outputFormat === 'gltf' || job.outputFormat === 'vrm')
       ) {
-        await this.bakeMmdMaterials(root, job.outputFormat === 'vrm');
+        const transparency =
+          options.model3d?.transparencyByFileName?.[job.file.name] ??
+          options.model3d?.transparency ??
+          MMD_TRANSPARENCY_THRESHOLDS;
+        if (job.outputFormat === 'glb' || job.outputFormat === 'gltf') {
+          await this.bakeMmdRgbMaterials(root);
+        }
+        this.applyMmdPortableMaterials(root, transparency, job.outputFormat === 'vrm');
       }
       if ((job.inputFormat === 'pmx' || job.inputFormat === 'pmd') && job.outputFormat === 'vrm') {
         this.normalizeMmdVrmScale(root);
@@ -100,6 +187,122 @@ export class BrowserModel3dEngine implements ConversionEngine {
     } finally {
       objectUrls.forEach((url) => URL.revokeObjectURL(url));
     }
+  }
+
+  async validateVrmConversion(
+    job: ConversionJob,
+    auxiliaryFiles: File[],
+    transparency: Model3dTransparencySettings,
+  ): Promise<{ valid: boolean; error?: string }> {
+    const result = await this.convert(
+      { ...job, outputFormat: 'vrm', status: 'pending', progress: 0 },
+      { model3d: { auxiliaryFiles, transparency } },
+    );
+    if (result.resultUrl) URL.revokeObjectURL(result.resultUrl);
+    return result.status === 'done'
+      ? { valid: true }
+      : { valid: false, error: result.error ?? 'VRM conversion is not supported for this model.' };
+  }
+
+  async createModel3dPreviewSession(
+    job: ConversionJob,
+    auxiliaryFiles: File[],
+    initialSettings: Model3dTransparencySettings,
+  ): Promise<Model3dPreviewSession> {
+    const source = job.file.source;
+    if (!(source instanceof File) && !(source instanceof ArrayBuffer)) {
+      throw new Error('Browser model preview requires a File or ArrayBuffer.');
+    }
+    const objectUrls: string[] = [];
+    const manager = this.createLoadingManager(auxiliaryFiles, objectUrls);
+    const root = await this.loadModel(source, job.inputFormat, auxiliaryFiles, manager);
+    const isMmd = job.inputFormat === 'pmx' || job.inputFormat === 'pmd';
+    if (isMmd && (job.outputFormat === 'glb' || job.outputFormat === 'gltf')) {
+      await this.bakeMmdRgbMaterials(root);
+    }
+    const materialSources = new Map<Mesh, Material[]>();
+    const generatedMaterials = new Set<Material>();
+    let maxMaterialIndex = 0;
+    if (isMmd) {
+      root.traverse((object) => {
+        if (!(object as Mesh).isMesh) return;
+        const mesh = object as Mesh;
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        materialSources.set(mesh, materials);
+        for (const material of materials) {
+          maxMaterialIndex = Math.max(
+            maxMaterialIndex,
+            (material.userData.mmdMaterial as { materialIndex?: number } | undefined)
+              ?.materialIndex ?? 0,
+          );
+        }
+      });
+      if (job.outputFormat === 'vrm') this.normalizeMmdVrmScale(root);
+    }
+    const updateTransparency = (settings: Model3dTransparencySettings) => {
+      if (!isMmd) return;
+      for (const material of generatedMaterials) material.dispose();
+      generatedMaterials.clear();
+      for (const [mesh, sources] of materialSources) {
+        const converted = sources.map((source) => {
+          const metadata = source.userData.mmdMaterial as
+            | {
+                diffuse?: [number, number, number, number];
+                ambient?: [number, number, number];
+                specular?: [number, number, number];
+                materialIndex?: number;
+                transparencyMode?: MmdTransparencyMode;
+                sphereMode?: 'none' | 'multiply' | 'add' | 'subTexture';
+                edgeColor?: [number, number, number, number];
+                edgeSize?: number;
+                flags?: { doubleSided?: boolean; edge?: boolean };
+              }
+            | undefined;
+          if (!metadata) return source;
+          const convertedMaterial = this.createMmdPortableMaterial(
+            source,
+            metadata,
+            source as Material & {
+              map?: Texture | null;
+              opacity?: number;
+              alphaTest?: number;
+              transparent?: boolean;
+              side?: number;
+            },
+            maxMaterialIndex,
+            settings,
+            job.outputFormat === 'vrm',
+          );
+          generatedMaterials.add(convertedMaterial);
+          return convertedMaterial;
+        });
+        mesh.material = Array.isArray(mesh.material) ? converted : converted[0];
+      }
+    };
+    updateTransparency(initialSettings);
+    return {
+      root,
+      updateTransparency,
+      dispose: () => {
+        for (const material of generatedMaterials) material.dispose();
+        for (const sources of materialSources.values()) {
+          for (const material of sources) material.dispose();
+        }
+        root.traverse((object) => {
+          if ((object as Mesh).isMesh) (object as Mesh).geometry.dispose();
+        });
+        objectUrls.forEach((url) => URL.revokeObjectURL(url));
+      },
+    };
+  }
+
+  /** @deprecated Use createModel3dPreviewSession. */
+  createVrmPreviewSession(
+    job: ConversionJob,
+    auxiliaryFiles: File[],
+    initialSettings: Model3dTransparencySettings,
+  ): Promise<Model3dPreviewSession> {
+    return this.createModel3dPreviewSession(job, auxiliaryFiles, initialSettings);
   }
 
   private createLoadingManager(files: File[], objectUrls: string[]): LoadingManager {
@@ -238,31 +441,44 @@ export class BrowserModel3dEngine implements ConversionEngine {
   }
 
   /**
-   * Bake MMD's diffuse texture, toon ramp and sphere texture into a portable
-   * unlit material. glTF cannot serialize the loader's onBeforeCompile shader.
+   * Bake PMX/PMD lighting, toon ramp and sphere-map RGB into a glTF-compatible
+   * base-color texture. Alpha is copied from the original base texture and is
+   * never classified here; preview settings remain the single alpha authority.
    */
-  private async bakeMmdMaterials(root: Object3D, useMToon: boolean): Promise<void> {
+  private async bakeMmdRgbMaterials(root: Object3D): Promise<void> {
     const meshes: Mesh[] = [];
     root.traverse((object) => {
       if ((object as Mesh).isMesh) meshes.push(object as Mesh);
     });
     for (const mesh of meshes) {
-      const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      const bakedMaterials = await Promise.all(
-        sourceMaterials.map((material, materialIndex) =>
-          this.bakeMmdMaterial(material, mesh, materialIndex, useMToon),
+      const sources = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const baked = await Promise.all(
+        sources.map((source, materialIndex) =>
+          this.bakeMmdRgbMaterial(source, mesh, materialIndex),
         ),
       );
-      mesh.material = Array.isArray(mesh.material) ? bakedMaterials : bakedMaterials[0];
+      mesh.material = Array.isArray(mesh.material) ? baked : baked[0];
     }
   }
 
-  private async bakeMmdMaterial(
+  private async bakeMmdRgbMaterial(
     source: Material,
     mesh: Mesh,
     materialIndex: number,
-    useMToon: boolean,
   ): Promise<Material> {
+    const metadata = source.userData.mmdMaterial as
+      | {
+          diffuse?: [number, number, number, number];
+          ambient?: [number, number, number];
+          materialIndex?: number;
+          transparencyMode?: MmdTransparencyMode;
+          sphereMode?: 'none' | 'multiply' | 'add' | 'subTexture';
+          edgeColor?: [number, number, number, number];
+          edgeSize?: number;
+          flags?: { doubleSided?: boolean; edge?: boolean };
+        }
+      | undefined;
+    if (!metadata) return source;
     const toon = source as Material & {
       color?: { r: number; g: number; b: number };
       map?: Texture | null;
@@ -272,24 +488,8 @@ export class BrowserModel3dEngine implements ConversionEngine {
       transparent?: boolean;
       side?: number;
     };
-    const metadata = source.userData.mmdMaterial as
-      | {
-          diffuse?: [number, number, number, number];
-          ambient?: [number, number, number];
-          specular?: [number, number, number];
-          sphereMode?: 'none' | 'multiply' | 'add' | 'subTexture';
-          edgeColor?: [number, number, number, number];
-          edgeSize?: number;
-          flags?: { doubleSided?: boolean; edge?: boolean };
-        }
-      | undefined;
-    if (!metadata) return source;
-    if (useMToon) {
-      return this.createMmdMToonFallback(source, metadata, toon);
-    }
-
-    const basePixels = this.readTexturePixels(toon.map ?? undefined);
-    const toonPixels = this.readTexturePixels(toon.gradientMap ?? undefined);
+    const basePixels = this.readTexturePixels(toon.map);
+    const toonPixels = this.readTexturePixels(toon.gradientMap);
     const sphereTexture = source.userData.mmdSphereTexture as Texture | undefined;
     const spherePixels = this.readTexturePixels(sphereTexture);
     const width = Math.min(basePixels?.width ?? 512, 1024);
@@ -298,9 +498,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     canvas.width = width;
     canvas.height = height;
     const context = canvas.getContext('2d');
-    if (!context) return this.createMmdPbrFallback(source, metadata);
-
-    const output = context.createImageData(width, height);
+    if (!context) return source;
     const diffuse = metadata.diffuse ?? [
       toon.color?.r ?? 1,
       toon.color?.g ?? 1,
@@ -313,66 +511,57 @@ export class BrowserModel3dEngine implements ConversionEngine {
       Math.min(1, diffuse[1] * 0.604 + ambient[1]),
       Math.min(1, diffuse[2] * 0.604 + ambient[2]),
     ];
-    const accumulated = new Float32Array(width * height * 4);
+    const output = context.createImageData(width, height);
+    const accumulated = new Float32Array(width * height * 3);
     const samples = new Uint16Array(width * height);
-    this.rasterizeMmdUv(
-      mesh,
-      materialIndex,
-      width,
-      height,
-      toon.map?.flipY ?? false,
-      (x, y, normal) => {
+    this.rasterizeMmdUv(mesh, materialIndex, width, height, toon.map?.flipY ?? false, (x, y, normal) => {
+      const u = width === 1 ? 0 : x / (width - 1);
+      const v = height === 1 ? 0 : y / (height - 1);
+      const base = this.sampleTexture(basePixels, u, v);
+      const toonSample = this.sampleTexture(
+        toonPixels,
+        0,
+        Math.max(0, Math.min(1, normal.dot(MMD_BAKE_LIGHT) * 0.5 + 0.45)),
+      );
+      const sphereSample = this.sampleTexture(
+        spherePixels,
+        normal.x * 0.5 + 0.5,
+        normal.y * 0.5 + 0.5,
+      );
+      const pixel = y * width + x;
+      const offset = pixel * 3;
+      for (let channel = 0; channel < 3; channel += 1) {
+        let value = lit[channel] * base[channel] * toonSample[channel];
+        if (spherePixels && metadata.sphereMode === 'multiply') value *= sphereSample[channel];
+        if (spherePixels && metadata.sphereMode === 'add') value += sphereSample[channel] * 2;
+        if (spherePixels && metadata.sphereMode === 'subTexture') value = sphereSample[channel];
+        accumulated[offset + channel] += Math.max(0, Math.min(1, value));
+      }
+      if (samples[pixel] < 65535) samples[pixel] += 1;
+    });
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const pixel = y * width + x;
+        const target = pixel * 4;
         const base = this.sampleTexture(
           basePixels,
           width === 1 ? 0 : x / (width - 1),
           height === 1 ? 0 : y / (height - 1),
         );
-        const shaded = this.shadeMmdTexel(
-          base,
-          normal,
-          lit,
-          toonPixels,
-          spherePixels,
-          metadata.sphereMode,
-        );
-        const pixel = y * width + x;
-        const target = pixel * 4;
-        for (let channel = 0; channel < 4; channel += 1) {
-          accumulated[target + channel] += shaded[channel];
-        }
-        if (samples[pixel] < 65535) samples[pixel] += 1;
-      },
-    );
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const target = (y * width + x) * 4;
-        const count = samples[y * width + x];
-        if (count > 0) {
-          for (let channel = 0; channel < 4; channel += 1) {
-            output.data[target + channel] = Math.round(
-              Math.max(0, Math.min(1, accumulated[target + channel] / count)) * 255,
-            );
-          }
-          output.data[target + 3] = Math.round(
-            Math.min(1, (accumulated[target + 3] / count) * diffuse[3]) * 255,
+        const count = samples[pixel];
+        for (let channel = 0; channel < 3; channel += 1) {
+          output.data[target + channel] = Math.round(
+            (count ? accumulated[pixel * 3 + channel] / count : base[channel]) * 255,
           );
-        } else {
-          const base = this.sampleTexture(
-            basePixels,
-            width === 1 ? 0 : x / (width - 1),
-            height === 1 ? 0 : y / (height - 1),
-          );
-          for (let channel = 0; channel < 3; channel += 1) {
-            output.data[target + channel] = Math.round(base[channel] * 255);
-          }
-          output.data[target + 3] = Math.round(base[3] * diffuse[3] * 255);
         }
+        // Preserve source alpha bytes exactly. Do not multiply or reclassify.
+        output.data[target + 3] = Math.round(base[3] * 255);
       }
     }
     context.putImageData(output, 0, 0);
     const bakedMap = new CanvasTexture(canvas);
     bakedMap.colorSpace = SRGBColorSpace;
-    bakedMap.name = `${source.name || 'mmd-material'}-baked`;
+    bakedMap.name = `${source.name || 'mmd-material'}-rgb-baked`;
     if (toon.map) {
       bakedMap.flipY = toon.map.flipY;
       bakedMap.wrapS = toon.map.wrapS;
@@ -383,76 +572,15 @@ export class BrowserModel3dEngine implements ConversionEngine {
       bakedMap.rotation = toon.map.rotation;
     }
     bakedMap.needsUpdate = true;
-    return new MeshBasicMaterial({
-      name: source.name,
-      map: bakedMap,
-      transparent: toon.transparent || diffuse[3] < 1,
-      opacity: 1,
-      alphaTest: toon.alphaTest ?? 0,
-      side: metadata.flags?.doubleSided || toon.side === DoubleSide ? DoubleSide : toon.side,
-      vertexColors: (source as { vertexColors?: boolean }).vertexColors ?? false,
-    });
-  }
-
-  private createMmdMToonFallback(
-    source: Material,
-    metadata: {
-      diffuse?: [number, number, number, number];
-      ambient?: [number, number, number];
-      specular?: [number, number, number];
-      sphereMode?: 'none' | 'multiply' | 'add' | 'subTexture';
-      edgeColor?: [number, number, number, number];
-      edgeSize?: number;
-      flags?: { doubleSided?: boolean; edge?: boolean };
-    },
-    toon: Material & {
-      map?: Texture | null;
-      opacity?: number;
-      alphaTest?: number;
-      transparent?: boolean;
-      side?: number;
-    },
-  ): Material {
-    const diffuse = metadata.diffuse ?? [1, 1, 1, toon.opacity ?? 1];
-    const ambient = metadata.ambient ?? [0.2, 0.2, 0.2];
-    const edgeColor = metadata.edgeColor ?? [0, 0, 0, 1];
-    const material = new MeshStandardMaterial({
-      name: source.name,
-      color: new Color(diffuse[0], diffuse[1], diffuse[2]),
-      map: toon.map ?? null,
-      metalness: 0,
-      roughness: 1,
-      transparent: toon.transparent || diffuse[3] < 1,
-      opacity: diffuse[3],
-      alphaTest: toon.alphaTest ?? 0,
-      side: metadata.flags?.doubleSided || toon.side === DoubleSide ? DoubleSide : toon.side,
-      emissive: new Color(0, 0, 0),
-      emissiveMap: null,
-    });
-    const outlineEnabled = Boolean(metadata.flags?.edge && (metadata.edgeSize ?? 0) > 0);
-    material.userData.vrmMToon = {
-      specVersion: '1.0',
-      transparentWithZWrite: material.transparent,
-      shadeColorFactor: ambient.map((value, index) =>
-        Math.max(0, Math.min(1, value + diffuse[index] * 0.25)),
-      ),
-      shadingShiftFactor: -0.05,
-      shadingToonyFactor: 0.95,
-      giEqualizationFactor: 0.9,
-      parametricRimColorFactor: [0, 0, 0],
-      parametricRimFresnelPowerFactor: 5,
-      parametricRimLiftFactor: 0,
-      rimLightingMixFactor: 0,
-      outlineWidthMode: outlineEnabled ? 'worldCoordinates' : 'none',
-      outlineWidthFactor: outlineEnabled
-        ? Math.max(0.0001, Math.min(0.01, (metadata.edgeSize ?? 1) * 0.001))
-        : 0,
-      outlineColorFactor: edgeColor.slice(0, 3),
-      outlineLightingMixFactor: 0,
-      matcapFromEmissive: false,
-      matcapFactor: [0, 0, 0],
+    const bakedSource = source.clone() as Material & { map?: Texture | null; color?: Color };
+    bakedSource.map = bakedMap;
+    bakedSource.color?.setRGB(1, 1, 1);
+    bakedSource.userData = {
+      ...source.userData,
+      mmdMaterial: { ...metadata, diffuse: [1, 1, 1, diffuse[3]] },
+      mmdOriginalAlphaTexture: toon.map ?? undefined,
     };
-    return material;
+    return bakedSource;
   }
 
   private rasterizeMmdUv(
@@ -490,16 +618,10 @@ export class BrowserModel3dEngine implements ConversionEngine {
         const y2 = toY(uv.getY(ic));
         const denominator = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2);
         if (Math.abs(denominator) < 1e-8) continue;
-        const minX = Math.max(0, Math.floor(Math.min(x0, x1, x2)));
-        const maxX = Math.min(width - 1, Math.ceil(Math.max(x0, x1, x2)));
-        const minY = Math.max(0, Math.floor(Math.min(y0, y1, y2)));
-        const maxY = Math.min(height - 1, Math.ceil(Math.max(y0, y1, y2)));
-        for (let y = minY; y <= maxY; y += 1) {
-          for (let x = minX; x <= maxX; x += 1) {
-            const px = x + 0.5;
-            const py = y + 0.5;
-            const a = ((y1 - y2) * (px - x2) + (x2 - x1) * (py - y2)) / denominator;
-            const b = ((y2 - y0) * (px - x2) + (x0 - x2) * (py - y2)) / denominator;
+        for (let y = Math.max(0, Math.floor(Math.min(y0, y1, y2))); y <= Math.min(height - 1, Math.ceil(Math.max(y0, y1, y2))); y += 1) {
+          for (let x = Math.max(0, Math.floor(Math.min(x0, x1, x2))); x <= Math.min(width - 1, Math.ceil(Math.max(x0, x1, x2))); x += 1) {
+            const a = ((y1 - y2) * (x + 0.5 - x2) + (x2 - x1) * (y + 0.5 - y2)) / denominator;
+            const b = ((y2 - y0) * (x + 0.5 - x2) + (x0 - x2) * (y + 0.5 - y2)) / denominator;
             const c = 1 - a - b;
             if (a < -1e-5 || b < -1e-5 || c < -1e-5) continue;
             interpolated.set(0, 0, 0);
@@ -516,54 +638,255 @@ export class BrowserModel3dEngine implements ConversionEngine {
     }
   }
 
-  private shadeMmdTexel(
-    base: [number, number, number, number],
-    normal: Vector3,
-    lit: number[],
-    toonPixels: { data: Uint8ClampedArray; width: number; height: number } | undefined,
-    spherePixels: { data: Uint8ClampedArray; width: number; height: number } | undefined,
-    sphereMode: 'none' | 'multiply' | 'add' | 'subTexture' | undefined,
+  private sampleTexture(
+    pixels: { data: Uint8ClampedArray; width: number; height: number } | undefined,
+    u: number,
+    v: number,
   ): [number, number, number, number] {
-    const toonCoordinate = Math.max(0, Math.min(1, normal.dot(MMD_BAKE_LIGHT) * 0.5 + 0.45));
-    const toonSample = this.sampleTexture(toonPixels, 0, toonCoordinate);
-    const sphereSample = this.sampleTexture(
-      spherePixels,
-      normal.x * 0.5 + 0.5,
-      normal.y * 0.5 + 0.5,
-    );
-    const result: [number, number, number, number] = [0, 0, 0, base[3]];
-    for (let channel = 0; channel < 3; channel += 1) {
-      let value = lit[channel] * base[channel] * toonSample[channel];
-      if (spherePixels && sphereMode === 'multiply') value *= sphereSample[channel];
-      if (spherePixels && sphereMode === 'add') value += sphereSample[channel] * 2;
-      if (spherePixels && sphereMode === 'subTexture') value = sphereSample[channel];
-      result[channel] = Math.max(0, Math.min(1, value));
-    }
-    return result;
+    if (!pixels) return [1, 1, 1, 1];
+    const x = Math.max(0, Math.min(pixels.width - 1, Math.round(u * (pixels.width - 1))));
+    const y = Math.max(0, Math.min(pixels.height - 1, Math.round(v * (pixels.height - 1))));
+    const offset = (y * pixels.width + x) * 4;
+    return [
+      (pixels.data[offset] ?? 255) / 255,
+      (pixels.data[offset + 1] ?? 255) / 255,
+      (pixels.data[offset + 2] ?? 255) / 255,
+      (pixels.data[offset + 3] ?? 255) / 255,
+    ];
   }
 
-  private createMmdPbrFallback(
+  /**
+   * Apply the same portable material used by the real-time preview. GLB, glTF
+   * and VRM deliberately share this path; VRM metadata is the only variant.
+   */
+  private applyMmdPortableMaterials(
+    root: Object3D,
+    transparency: Model3dTransparencySettings,
+    includeVrmMetadata: boolean,
+  ): void {
+    const meshes: Mesh[] = [];
+    root.traverse((object) => {
+      if ((object as Mesh).isMesh) meshes.push(object as Mesh);
+    });
+    const materialIndices = meshes.flatMap((mesh) =>
+      (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).map(
+        (material) =>
+          (material.userData.mmdMaterial as { materialIndex?: number } | undefined)
+            ?.materialIndex ?? 0,
+      ),
+    );
+    const maxMaterialIndex = Math.max(0, ...materialIndices);
+    for (const mesh of meshes) {
+      const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const portableMaterials = sourceMaterials.map((source) => {
+        const metadata = source.userData.mmdMaterial as
+          | {
+              diffuse?: [number, number, number, number];
+              ambient?: [number, number, number];
+              specular?: [number, number, number];
+              materialIndex?: number;
+              transparencyMode?: 'opaque' | 'alphaTest' | 'alphaBlend';
+              sphereMode?: 'none' | 'multiply' | 'add' | 'subTexture';
+              edgeColor?: [number, number, number, number];
+              edgeSize?: number;
+              flags?: { doubleSided?: boolean; edge?: boolean };
+            }
+          | undefined;
+        if (!metadata) return source;
+        const material = this.createMmdPortableMaterial(
+          source,
+          metadata,
+          source as Material & {
+            map?: Texture | null;
+            opacity?: number;
+            alphaTest?: number;
+            transparent?: boolean;
+            side?: number;
+          },
+          maxMaterialIndex,
+          transparency,
+          includeVrmMetadata,
+        );
+        return material;
+      });
+      mesh.material = Array.isArray(mesh.material) ? portableMaterials : portableMaterials[0];
+    }
+  }
+
+  private createMmdPortableMaterial(
     source: Material,
-    metadata: { diffuse?: [number, number, number, number]; flags?: { doubleSided?: boolean } },
-  ): Material {
-    const toon = source as Material & {
+    metadata: {
+      diffuse?: [number, number, number, number];
+      ambient?: [number, number, number];
+      specular?: [number, number, number];
+      materialIndex?: number;
+      transparencyMode?: 'opaque' | 'alphaTest' | 'alphaBlend';
+      sphereMode?: 'none' | 'multiply' | 'add' | 'subTexture';
+      edgeColor?: [number, number, number, number];
+      edgeSize?: number;
+      flags?: { doubleSided?: boolean; edge?: boolean };
+    },
+    toon: Material & {
       map?: Texture | null;
-      transparent?: boolean;
+      opacity?: number;
       alphaTest?: number;
+      transparent?: boolean;
       side?: number;
-    };
-    const diffuse = metadata.diffuse ?? [1, 1, 1, 1];
-    return new MeshStandardMaterial({
+    },
+    maxMaterialIndex: number,
+    settings: Model3dTransparencySettings,
+    includeVrmMetadata: boolean,
+  ): Material {
+    const diffuse = metadata.diffuse ?? [1, 1, 1, toon.opacity ?? 1];
+    const ambient = metadata.ambient ?? [0.2, 0.2, 0.2];
+    const edgeColor = metadata.edgeColor ?? [0, 0, 0, 1];
+    const alphaTexture =
+      (source.userData.mmdOriginalAlphaTexture as Texture | undefined) ?? toon.map ?? undefined;
+    const transparency = this.resolveMmdTransparencyMode(
+      metadata.transparencyMode,
+      alphaTexture,
+      diffuse[3],
+      settings,
+    );
+    const isBlend = transparency.mode === 'alphaBlend';
+    const isMask = transparency.mode === 'alphaTest';
+    if (MMD_TRANSPARENCY_DIAGNOSTICS_ENABLED) {
+      console.debug('[MMD transparency]', {
+        material: source.name,
+        materialIndex: metadata.materialIndex,
+        declaredMode: metadata.transparencyMode,
+        ...transparency,
+      });
+    }
+    const commonMaterialOptions = {
       name: source.name,
       color: new Color(diffuse[0], diffuse[1], diffuse[2]),
       map: toon.map ?? null,
-      metalness: 0,
-      roughness: 0.8,
-      transparent: toon.transparent || diffuse[3] < 1,
+      transparent: isBlend,
       opacity: diffuse[3],
-      alphaTest: toon.alphaTest ?? 0,
+      alphaTest: isMask ? Math.max(settings.maskMinAlphaCutoff, toon.alphaTest ?? 0) : 0,
       side: metadata.flags?.doubleSided || toon.side === DoubleSide ? DoubleSide : toon.side,
-    });
+    };
+    const material = includeVrmMetadata
+      ? new MeshStandardMaterial({
+          ...commonMaterialOptions,
+          metalness: 0,
+          roughness: 1,
+          depthWrite: !isBlend || transparency.textureDrivenBlendWithZWrite,
+          emissive: new Color(0, 0, 0),
+          emissiveMap: null,
+        })
+      : new MeshBasicMaterial({
+          ...commonMaterialOptions,
+          // GLTFExporter serializes this as KHR_materials_unlit, so the baked
+          // RGB is not lit a second time by the destination viewer.
+          depthWrite: !isBlend,
+        });
+    const outlineEnabled = Boolean(
+      !isBlend && metadata.flags?.edge && (metadata.edgeSize ?? 0) > 0,
+    );
+    const shadeStrength = Math.max(
+      0.55,
+      Math.min(0.82, (ambient[0] + ambient[1] + ambient[2]) / 3 + 0.2),
+    );
+    if (includeVrmMetadata) {
+      material.userData.vrmMToon = {
+        specVersion: '1.0',
+        transparentWithZWrite: transparency.textureDrivenBlendWithZWrite,
+        renderQueueOffsetNumber: isBlend
+          ? -Math.min(
+              settings.mtoonRenderQueueOffsetLimit,
+              Math.max(0, maxMaterialIndex - (metadata.materialIndex ?? 0)),
+            )
+          : 0,
+        shadeColorFactor: [shadeStrength, shadeStrength, shadeStrength],
+        shadingShiftFactor: -0.05,
+        shadingToonyFactor: 0.95,
+        giEqualizationFactor: 0.9,
+        parametricRimColorFactor: [0, 0, 0],
+        parametricRimFresnelPowerFactor: 5,
+        parametricRimLiftFactor: 0,
+        rimLightingMixFactor: 0,
+        outlineWidthMode: outlineEnabled ? 'worldCoordinates' : 'none',
+        outlineWidthFactor: outlineEnabled
+          ? Math.max(0.0001, Math.min(0.01, (metadata.edgeSize ?? 1) * 0.001))
+          : 0,
+        outlineColorFactor: edgeColor.slice(0, 3),
+        outlineLightingMixFactor: 0,
+        matcapFromEmissive: false,
+        matcapFactor: [0, 0, 0],
+      };
+    }
+    return material;
+  }
+
+  private resolveMmdTransparencyMode(
+    declared: MmdTransparencyMode | undefined,
+    texture: Texture | undefined,
+    materialAlpha: number,
+    settings: Model3dTransparencySettings,
+  ): MmdTransparencyAnalysis {
+    const histogram = this.readTextureAlphaHistogram(texture);
+    let transparentPixels = 0;
+    let intermediatePixels = 0;
+    let opaquePixels = 0;
+    if (histogram) {
+      for (let alpha = 0; alpha < histogram.length; alpha += 1) {
+        const count = histogram[alpha];
+        if (alpha <= settings.textureTransparentMaxAlphaByte) {
+          transparentPixels += count;
+        } else if (alpha >= settings.textureOpaqueMinAlphaByte) {
+          opaquePixels += count;
+        } else {
+          intermediatePixels += count;
+        }
+      }
+    }
+    const total = transparentPixels + intermediatePixels + opaquePixels;
+    const intermediateRatio = total ? intermediatePixels / total : 0;
+    const extremeRatio = total ? (transparentPixels + opaquePixels) / total : 0;
+    const mostlyCutout =
+      transparentPixels > 0 && intermediateRatio <= settings.cutoutMaxIntermediateAlphaRatio;
+    let mode: MmdTransparencyMode;
+    if (materialAlpha < settings.materialOpaqueMinAlpha) {
+      mode = 'alphaBlend';
+    } else if (!total || (transparentPixels === 0 && intermediatePixels === 0)) {
+      mode = declared ?? 'opaque';
+    } else if (declared === 'alphaTest' || intermediatePixels === 0 || mostlyCutout) {
+      mode = 'alphaTest';
+    } else {
+      mode = 'alphaBlend';
+    }
+    const textureDrivenBlendWithZWrite =
+      mode === 'alphaBlend' &&
+      materialAlpha >= settings.materialOpaqueMinAlpha &&
+      transparentPixels > 0 &&
+      opaquePixels > 0 &&
+      extremeRatio >= settings.blendZWriteMinExtremeAlphaRatio;
+    return {
+      mode,
+      materialAlpha,
+      transparentPixels,
+      intermediatePixels,
+      opaquePixels,
+      intermediateRatio,
+      extremeRatio,
+      textureDrivenBlendWithZWrite,
+    };
+  }
+
+  private readTextureAlphaHistogram(texture?: Texture): Uint32Array | undefined {
+    if (!texture) return undefined;
+    const cached = this.textureAlphaHistogramCache.get(texture);
+    if (cached) return cached;
+    const pixels = this.readTexturePixels(texture);
+    if (!pixels) return undefined;
+    const histogram = new Uint32Array(256);
+    for (let offset = 3; offset < pixels.data.length; offset += 4) {
+      histogram[pixels.data[offset]] += 1;
+    }
+    this.textureAlphaHistogramCache.set(texture, histogram);
+    return histogram;
   }
 
   private readTexturePixels(
@@ -592,23 +915,6 @@ export class BrowserModel3dEngine implements ConversionEngine {
     } catch {
       return undefined;
     }
-  }
-
-  private sampleTexture(
-    pixels: { data: Uint8ClampedArray; width: number; height: number } | undefined,
-    u: number,
-    v: number,
-  ): [number, number, number, number] {
-    if (!pixels) return [1, 1, 1, 1];
-    const x = Math.max(0, Math.min(pixels.width - 1, Math.round(u * (pixels.width - 1))));
-    const y = Math.max(0, Math.min(pixels.height - 1, Math.round(v * (pixels.height - 1))));
-    const offset = (y * pixels.width + x) * 4;
-    return [
-      (pixels.data[offset] ?? 255) / 255,
-      (pixels.data[offset + 1] ?? 255) / 255,
-      (pixels.data[offset + 2] ?? 255) / 255,
-      (pixels.data[offset + 3] ?? 255) / 255,
-    ];
   }
 
   /** Bake the current skinned pose into ordinary mesh vertices, then remove bones. */

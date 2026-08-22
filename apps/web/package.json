@@ -22,12 +22,14 @@
     "next": "^15.3.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-i18next": "^17.0.11"
+    "react-i18next": "^17.0.11",
+    "three": "^0.180.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/three": "^0.180.0",
     "typescript": "^5.8.0",
     "wrangler": "4.124.0"
   }
