@@ -175,6 +175,35 @@ export default function UniversalModel3dConverter() {
   const completedBatchDownloadCount = batchDownloadJobs
     .filter((job) => job.status === 'done')
     .reduce((count, job) => count + (job.outputs?.length ?? (job.resultUrl ? 1 : 0)), 0);
+  const animationDownloadJobs = useMemo<ConversionJob[]>(
+    () => animationItems.map((item) => ({
+      id: item.id,
+      file: {
+        id: item.id,
+        name: item.file.name,
+        size: item.file.size,
+        source: item.file,
+      },
+      inputFormat: item.format,
+      outputFormat: 'glb',
+      status: item.status,
+      progress: item.progress,
+      error: item.error,
+      outputs: item.outputs,
+      resultUrl: item.outputs?.[0]?.url,
+    })),
+    [animationItems],
+  );
+  const {
+    downloadAll: downloadAllAnimations,
+    isAllComplete: areAllAnimationsComplete,
+    isPackaging: isPackagingAnimations,
+    packageProgress: animationPackageProgress,
+    packageError: animationPackageError,
+  } = useBatchDownload(animationDownloadJobs, 'FullstackMediaConverter-animations');
+  const completedAnimationDownloadCount = animationItems
+    .filter((item) => item.status === 'done')
+    .reduce((count, item) => count + (item.outputs?.length ?? 0), 0);
   const relatedFilesByJobId = useMemo(
     () =>
       Object.fromEntries(
@@ -468,13 +497,11 @@ export default function UniversalModel3dConverter() {
     setRunning(false);
   }, [animationItems, animationTargetFormat, auxiliaryFiles]);
 
-  const clear = () => {
+  const clearModels = () => {
     if (running) queueRef.current?.abort();
     jobs.forEach(revokeJobOutputs);
-    animationItems.forEach((item) => item.outputs?.forEach((output) => URL.revokeObjectURL(output.url)));
     setJobs([]);
-    setAnimationItems([]);
-    setAuxiliaryFiles([]);
+    if (!animationItems.length) setAuxiliaryFiles([]);
     setPreviewFailures({});
     setAppliedTransparencySettings({});
     setVrmValidations({});
@@ -482,6 +509,13 @@ export default function UniversalModel3dConverter() {
     vrmValidationsRef.current = {};
     setPreviewJob(undefined);
     setRunning(false);
+  };
+
+  const clearAnimations = () => {
+    animationItems.forEach((item) => item.outputs?.forEach((output) => URL.revokeObjectURL(output.url)));
+    setAnimationItems([]);
+    if (!jobs.length) setAuxiliaryFiles([]);
+    setPreviewJob(undefined);
   };
 
   const pending = jobs.filter(
@@ -492,6 +526,8 @@ export default function UniversalModel3dConverter() {
   ).length;
   const done = jobs.filter((job) => job.status === 'done').length;
   const errors = jobs.filter((job) => job.status === 'error').length;
+  const animationDone = animationItems.filter((item) => item.status === 'done').length;
+  const animationErrors = animationItems.filter((item) => item.status === 'error').length;
 
   return (
     <div className={s.main}>
@@ -550,106 +586,108 @@ export default function UniversalModel3dConverter() {
           />
         </div>
 
-        {jobs.length > 0 && <div className={s.formatBar}>
-          <span className={s.formatBarLabel}>{t('model3d.to')}</span>
-          <span className={s.formatArrowIcon}>→</span>
-          <select
-            className={s.formatSelect}
-            value={targetFormat}
-            onChange={(event) => changeTarget(event.target.value as Model3dOutputFormat)}
-            disabled={running}
-          >
-            {MODEL3D_OUTPUT_FORMATS.map((format) => (
-              <option key={format} value={format}>
-                {format.toUpperCase()}
-              </option>
-            ))}
-          </select>
-        </div>}
-        {animationItems.length > 0 && <div className={`${s.formatBar} ${s.animationFormatBar}`}>
-          <span className={s.formatBarLabel}>{t('model3d.animationTo')}</span>
-          <span className={s.formatArrowIcon}>→</span>
-          <select
-            className={s.formatSelect}
-            value={animationTargetFormat}
-            onChange={(event) => {
-              const next = event.target.value as Model3dAnimationOutputFormat;
-              setAnimationItems((current) => current.filter((item) => {
-                if (item.status === 'pending') return true;
-                item.outputs?.forEach((output) => URL.revokeObjectURL(output.url));
-                return false;
-              }));
-              setAnimationTargetFormat(next);
-            }}
-            disabled={running}
-          >
-            {ANIMATION_OUTPUT_FORMATS.map((format) => (
-              <option key={format} value={format}>{format === 'three-json' ? 'three.js JSON' : format.toUpperCase()}</option>
-            ))}
-          </select>
-        </div>}
         {inspectingFiles && <p className={s.mixedHint}>{t('model3d.inspectingFiles')}</p>}
-        {incompatible > 0 && (
-          <p className={s.mixedHint}>
-            ⚠{' '}
-            {t('model3d.incompatible', { count: incompatible, format: targetFormat.toUpperCase() })}
-          </p>
-        )}
-        {bonesWillBeRemoved && (
-          <p className={s.boneWarning}>⚠ {t('model3d.bonesRemovedWarning')}</p>
-        )}
-        {expressionsWillBeRemoved && (
-          <p className={s.boneWarning}>⚠ {t('model3d.expressionsRemovedWarning')}</p>
-        )}
-
         {jobs.length > 0 && (
-          <div className={s.controls}>
-            <button className={s.convertBtn} onClick={convert} disabled={running || pending === 0}>
-              {running ? t('common.converting') : t('common.convertCount', { count: pending })}
-            </button>
-            <button
-              className={s.downloadAllBtn}
-              onClick={downloadAll}
-              disabled={!isAllComplete || isPackaging}
-            >
-              {isPackaging
-                ? t('common.zipProgress', { progress: packageProgress })
-                : t(completedBatchDownloadCount > 1 ? 'common.downloadZip' : 'common.download')}
-            </button>
-            <button
-              onClick={clear}
-              disabled={isPackaging}
-              style={{ marginLeft: 'auto', background: 'none', color: 'var(--muted)' }}
-            >
-              {t('common.clear')}
-            </button>
-          </div>
-        )}
-        {animationItems.length > 0 && (
-          <div className={s.controls}>
-            <button
-              className={s.convertBtn}
-              onClick={convertAnimations}
-              disabled={running || !animationItems.some((item) => item.status === 'pending')}
-            >
-              {running ? t('common.converting') : t('model3d.convertAnimations', {
-                count: animationItems.filter((item) => item.status === 'pending').length,
-              })}
-            </button>
-            {jobs.length === 0 && (
-              <button
-                type="button"
-                onClick={clear}
+          <section className={s.conversionField}>
+            <div className={s.formatBar}>
+              <span className={s.formatBarLabel}>{t('model3d.to')}</span>
+              <span className={s.formatArrowIcon}>→</span>
+              <select
+                className={s.formatSelect}
+                value={targetFormat}
+                onChange={(event) => changeTarget(event.target.value as Model3dOutputFormat)}
                 disabled={running}
+              >
+                {MODEL3D_OUTPUT_FORMATS.map((format) => (
+                  <option key={format} value={format}>{format.toUpperCase()}</option>
+                ))}
+              </select>
+            </div>
+            {incompatible > 0 && (
+              <p className={s.mixedHint}>
+                ⚠ {t('model3d.incompatible', { count: incompatible, format: targetFormat.toUpperCase() })}
+              </p>
+            )}
+            {bonesWillBeRemoved && <p className={s.boneWarning}>⚠ {t('model3d.bonesRemovedWarning')}</p>}
+            {expressionsWillBeRemoved && <p className={s.boneWarning}>⚠ {t('model3d.expressionsRemovedWarning')}</p>}
+            <div className={s.controls}>
+              <button className={s.convertBtn} onClick={convert} disabled={running || pending === 0}>
+                {running ? t('common.converting') : t('model3d.convertModels', { count: pending })}
+              </button>
+              <button
+                className={s.downloadAllBtn}
+                onClick={downloadAll}
+                disabled={!isAllComplete || isPackaging}
+              >
+                {isPackaging
+                  ? t('common.zipProgress', { progress: packageProgress })
+                  : t(completedBatchDownloadCount > 1 ? 'common.downloadZip' : 'common.download')}
+              </button>
+              <button
+                onClick={clearModels}
+                disabled={running || isPackaging}
                 style={{ marginLeft: 'auto', background: 'none', color: 'var(--muted)' }}
               >
-                {t('common.clear')}
+                {t('model3d.clearAllModels')}
               </button>
-            )}
-          </div>
+            </div>
+            {packageError && <p className={s.errorDetail}>{t('common.zipError', { error: packageError })}</p>}
+          </section>
         )}
-        {packageError && (
-          <p className={s.errorDetail}>{t('common.zipError', { error: packageError })}</p>
+        {animationItems.length > 0 && (
+          <section className={`${s.conversionField} ${s.animationConversionField}`}>
+            <div className={`${s.formatBar} ${s.animationFormatBar}`}>
+              <span className={s.formatBarLabel}>{t('model3d.animationTo')}</span>
+              <span className={s.formatArrowIcon}>→</span>
+              <select
+                className={s.formatSelect}
+                value={animationTargetFormat}
+                onChange={(event) => {
+                  const next = event.target.value as Model3dAnimationOutputFormat;
+                  setAnimationItems((current) => current.filter((item) => {
+                    if (item.status === 'pending') return true;
+                    item.outputs?.forEach((output) => URL.revokeObjectURL(output.url));
+                    return false;
+                  }));
+                  setAnimationTargetFormat(next);
+                }}
+                disabled={running}
+              >
+                {ANIMATION_OUTPUT_FORMATS.map((format) => (
+                  <option key={format} value={format}>{format === 'three-json' ? 'three.js JSON' : format.toUpperCase()}</option>
+                ))}
+              </select>
+            </div>
+            <div className={s.controls}>
+              <button
+                className={s.convertBtn}
+                onClick={convertAnimations}
+                disabled={running || !animationItems.some((item) => item.status === 'pending')}
+              >
+                {running ? t('common.converting') : t('model3d.convertAnimations', {
+                  count: animationItems.filter((item) => item.status === 'pending').length,
+                })}
+              </button>
+              <button
+                className={s.downloadAllBtn}
+                onClick={downloadAllAnimations}
+                disabled={!areAllAnimationsComplete || isPackagingAnimations}
+              >
+                {isPackagingAnimations
+                  ? t('common.zipProgress', { progress: animationPackageProgress })
+                  : t(completedAnimationDownloadCount > 1 ? 'common.downloadZip' : 'common.download')}
+              </button>
+              <button
+                type="button"
+                onClick={clearAnimations}
+                disabled={running || isPackagingAnimations}
+                style={{ marginLeft: 'auto', background: 'none', color: 'var(--muted)' }}
+              >
+                {t('model3d.clearAllAnimations')}
+              </button>
+            </div>
+            {animationPackageError && <p className={s.errorDetail}>{t('common.zipError', { error: animationPackageError })}</p>}
+          </section>
         )}
 
         {jobs.length > 0 && (
@@ -827,6 +865,29 @@ export default function UniversalModel3dConverter() {
                   )}
               </div>
             ))}
+          </div>
+        )}
+
+        {animationItems.length > 0 && (
+          <div className={`${s.summary} ${s.animationSummary}`}>
+            <div>
+              <div className={s.summaryNum}>{animationItems.length}</div>
+              <div className={s.summaryLabel}>{t('common.total')}</div>
+            </div>
+            <div>
+              <div className={s.summaryNum} style={{ color: '#22c55e' }}>
+                {animationDone}
+              </div>
+              <div className={s.summaryLabel}>{t('common.done')}</div>
+            </div>
+            {animationErrors > 0 && (
+              <div>
+                <div className={s.summaryNum} style={{ color: 'var(--coral)' }}>
+                  {animationErrors}
+                </div>
+                <div className={s.summaryLabel}>{t('common.errors')}</div>
+              </div>
+            )}
           </div>
         )}
 

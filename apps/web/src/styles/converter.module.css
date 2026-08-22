@@ -258,6 +258,10 @@
   border-radius: var(--radius-md);
   background: rgba(59, 20, 91, 0.22);
 }
+.summary.animationSummary {
+  border-color: rgba(168, 85, 247, 0.45);
+  background: rgba(59, 20, 91, 0.22);
+}
 .animationSection h2 {
   color: #d8b4fe;
   font-size: 1rem;
@@ -716,6 +720,29 @@
 }
 
 /* ─── Universal converter — output format selector ───────────────── */
+.conversionField {
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--navy-2);
+}
+.conversionField .formatBar {
+  margin-top: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.conversionField .controls {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.animationConversionField {
+  border-color: rgba(168, 85, 247, 0.5);
+  background: rgba(59, 20, 91, 0.22);
+}
 .formatBar {
   display: flex;
   align-items: center;
