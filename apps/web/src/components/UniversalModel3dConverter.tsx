@@ -161,9 +161,14 @@ export default function UniversalModel3dConverter() {
   const changeTarget = (format: Model3dOutputFormat) => {
     setPreviewJob(undefined);
     setTargetFormat(format);
-    setJobs((current) =>
-      current.map((job) => (job.status === 'pending' ? { ...job, outputFormat: format } : job)),
-    );
+    setJobs((current) => {
+      current.forEach((job) => {
+        if (job.status !== 'pending' && job.resultUrl) URL.revokeObjectURL(job.resultUrl);
+      });
+      return current
+        .filter((job) => job.status === 'pending')
+        .map((job) => ({ ...job, outputFormat: format }));
+    });
   };
 
   const incompatible = useMemo(
