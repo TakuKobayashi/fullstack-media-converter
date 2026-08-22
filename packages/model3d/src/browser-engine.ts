@@ -48,6 +48,51 @@ import {
 const MMD_BAKE_LIGHT = new Vector3(0.5, 1, 1).normalize();
 const MMD_VRM_TARGET_HEIGHT_METERS = 1.7;
 
+/**
+ * Tunable thresholds used when converting MMD transparency to glTF/VRM.
+ *
+ * These values are intentionally kept together so models with different alpha
+ * conventions can be tested without changing the conversion algorithm itself.
+ */
+export const MMD_TRANSPARENCY_THRESHOLDS = {
+  /**
+   * A PMX/PMD material alpha below this value is treated as true translucent
+   * BLEND. Lower this value to keep nearly opaque materials out of BLEND.
+   */
+  materialOpaqueMinAlpha: 1,
+
+  /**
+   * Texture alpha values at or below this byte value count as fully transparent.
+   * Increase it to absorb very faint pixels into the transparent population.
+   */
+  textureTransparentMaxAlphaByte: 0,
+
+  /**
+   * Texture alpha values at or above this byte value count as fully opaque.
+   * Lower it to treat nearly opaque pixels as opaque instead of intermediate.
+   */
+  textureOpaqueMinAlphaByte: 255,
+
+  /**
+   * Maximum share of intermediate-alpha pixels allowed for a cutout texture.
+   * Increase it to classify more antialiased textures as MASK instead of BLEND.
+   * The value is a ratio from 0 to 1 (0.08 means 8%).
+   */
+  cutoutMaxIntermediateAlphaRatio: 0.08,
+
+  /**
+   * Minimum alpha cutoff written for MASK materials. Increasing it removes more
+   * faint pixels; decreasing it preserves softer edges.
+   */
+  maskMinAlphaCutoff: 0.01,
+
+  /**
+   * VRM MToon permits a render-queue offset in the -9 to +9 range. This controls
+   * how many source material-order steps are retained for transparent materials.
+   */
+  mtoonRenderQueueOffsetLimit: 9,
+} as const;
+
 export class BrowserModel3dEngine implements ConversionEngine {
   canConvert(inputFormat: InputFormat, outputFormat: OutputFormat): boolean {
     return (
@@ -397,7 +442,8 @@ export class BrowserModel3dEngine implements ConversionEngine {
     return new MeshBasicMaterial({
       name: source.name,
       map: bakedMap,
-      transparent: toon.transparent || diffuse[3] < 1,
+      transparent:
+        toon.transparent || diffuse[3] < MMD_TRANSPARENCY_THRESHOLDS.materialOpaqueMinAlpha,
       opacity: 1,
       alphaTest: toon.alphaTest ?? 0,
       side: metadata.flags?.doubleSided || toon.side === DoubleSide ? DoubleSide : toon.side,
@@ -445,7 +491,9 @@ export class BrowserModel3dEngine implements ConversionEngine {
       roughness: 1,
       transparent: isBlend,
       opacity: diffuse[3],
-      alphaTest: isMask ? Math.max(0.01, toon.alphaTest ?? 0) : 0,
+      alphaTest: isMask
+        ? Math.max(MMD_TRANSPARENCY_THRESHOLDS.maskMinAlphaCutoff, toon.alphaTest ?? 0)
+        : 0,
       depthWrite: !isBlend,
       side: metadata.flags?.doubleSided || toon.side === DoubleSide ? DoubleSide : toon.side,
       emissive: new Color(0, 0, 0),
@@ -462,7 +510,10 @@ export class BrowserModel3dEngine implements ConversionEngine {
       specVersion: '1.0',
       transparentWithZWrite: false,
       renderQueueOffsetNumber: isBlend
-        ? -Math.min(9, Math.max(0, maxMaterialIndex - (metadata.materialIndex ?? 0)))
+        ? -Math.min(
+            MMD_TRANSPARENCY_THRESHOLDS.mtoonRenderQueueOffsetLimit,
+            Math.max(0, maxMaterialIndex - (metadata.materialIndex ?? 0)),
+          )
         : 0,
       shadeColorFactor: [shadeStrength, shadeStrength, shadeStrength],
       shadingShiftFactor: -0.05,
@@ -489,7 +540,9 @@ export class BrowserModel3dEngine implements ConversionEngine {
     texture: Texture | undefined,
     materialAlpha: number,
   ): 'opaque' | 'alphaTest' | 'alphaBlend' {
-    if (materialAlpha < 1) return 'alphaBlend';
+    if (materialAlpha < MMD_TRANSPARENCY_THRESHOLDS.materialOpaqueMinAlpha) {
+      return 'alphaBlend';
+    }
     const pixels = this.readTexturePixels(texture);
     if (!pixels) return declared ?? 'opaque';
     let transparentPixels = 0;
@@ -497,16 +550,20 @@ export class BrowserModel3dEngine implements ConversionEngine {
     let opaquePixels = 0;
     for (let offset = 3; offset < pixels.data.length; offset += 4) {
       const alpha = pixels.data[offset];
-      if (alpha === 0) transparentPixels += 1;
-      else if (alpha === 255) opaquePixels += 1;
-      else intermediatePixels += 1;
+      if (alpha <= MMD_TRANSPARENCY_THRESHOLDS.textureTransparentMaxAlphaByte) {
+        transparentPixels += 1;
+      } else if (alpha >= MMD_TRANSPARENCY_THRESHOLDS.textureOpaqueMinAlphaByte) {
+        opaquePixels += 1;
+      } else intermediatePixels += 1;
     }
     const total = transparentPixels + intermediatePixels + opaquePixels;
     if (!total || (transparentPixels === 0 && intermediatePixels === 0)) {
       return declared ?? 'opaque';
     }
     const intermediateRatio = intermediatePixels / total;
-    const mostlyCutout = transparentPixels > 0 && intermediateRatio <= 0.08;
+    const mostlyCutout =
+      transparentPixels > 0 &&
+      intermediateRatio <= MMD_TRANSPARENCY_THRESHOLDS.cutoutMaxIntermediateAlphaRatio;
     if (declared === 'alphaTest' || intermediatePixels === 0 || mostlyCutout) {
       return 'alphaTest';
     }
@@ -617,7 +674,8 @@ export class BrowserModel3dEngine implements ConversionEngine {
       map: toon.map ?? null,
       metalness: 0,
       roughness: 0.8,
-      transparent: toon.transparent || diffuse[3] < 1,
+      transparent:
+        toon.transparent || diffuse[3] < MMD_TRANSPARENCY_THRESHOLDS.materialOpaqueMinAlpha,
       opacity: diffuse[3],
       alphaTest: toon.alphaTest ?? 0,
       side: metadata.flags?.doubleSided || toon.side === DoubleSide ? DoubleSide : toon.side,
