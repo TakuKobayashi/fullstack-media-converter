@@ -413,7 +413,7 @@
 }
 .previewInspectionTabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   margin-bottom: 12px;
 }
@@ -427,7 +427,8 @@
   background: var(--navy-3);
 }
 .previewInspectionTabs .previewInspectionTabActive,
-.previewExpressionList .previewExpressionActive {
+.previewExpressionList .previewExpressionActive,
+.previewBoneList .previewBoneActive {
   border-color: var(--indigo-2);
   background: var(--indigo);
   color: white;
@@ -451,13 +452,17 @@
   gap: 7px;
   margin-top: 9px;
 }
-.previewExpressionList {
+.previewExpressionList,
+.previewBoneList {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
   max-height: 220px;
   margin-bottom: 10px;
   overflow: auto;
+}
+.previewBoneList {
+  max-height: 320px;
 }
 .previewControl {
   display: block;

@@ -66,9 +66,11 @@ export default function VrmTransparencyPreviewModal({
   const [previewError, setPreviewError] = useState<string>();
   const [animations, setAnimations] = useState<string[]>([]);
   const [expressions, setExpressions] = useState<string[]>([]);
+  const [bones, setBones] = useState<string[]>([]);
   const [selectedAnimation, setSelectedAnimation] = useState('');
   const [selectedExpression, setSelectedExpression] = useState('');
-  const [openList, setOpenList] = useState<'animations' | 'expressions'>('animations');
+  const [selectedBone, setSelectedBone] = useState('');
+  const [openList, setOpenList] = useState<'animations' | 'expressions' | 'bones'>('animations');
   const canvasHostRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<Model3dPreviewSession | undefined>(undefined);
   const draftRef = useRef(draft);
@@ -109,9 +111,11 @@ export default function VrmTransparencyPreviewModal({
         sessionRef.current = session;
         setAnimations(session.animations);
         setExpressions(session.expressions);
+        setBones(session.bones);
         setSelectedAnimation(session.animations[0] ?? '');
         session.updateTransparency(draftRef.current);
         scene.add(session.root);
+        scene.add(session.boneOverlay);
         const bounds = new Box3().setFromObject(session.root);
         const size = bounds.getSize(new Vector3());
         const center = bounds.getCenter(new Vector3());
@@ -156,6 +160,10 @@ export default function VrmTransparencyPreviewModal({
   useEffect(() => {
     sessionRef.current?.updateTransparency(draft);
   }, [draft]);
+
+  useEffect(() => {
+    sessionRef.current?.showBones(openList === 'bones');
+  }, [openList]);
 
   const update = (key: SettingKey, value: number) =>
     setDraft((current) => ({ ...current, [key]: value }));
@@ -209,6 +217,16 @@ export default function VrmTransparencyPreviewModal({
               >
                 {t('model3d.expressionList')} ({expressions.length})
               </button>
+              <button
+                type="button"
+                className={openList === 'bones' ? s.previewInspectionTabActive : ''}
+                onClick={() => {
+                  setOpenList('bones');
+                  sessionRef.current?.showBones(true);
+                }}
+              >
+                {t('model3d.boneList')} ({bones.length})
+              </button>
             </div>
             {openList === 'animations' && (
               <div className={s.previewInspectionPanel}>
@@ -257,6 +275,27 @@ export default function VrmTransparencyPreviewModal({
                     sessionRef.current?.resetExpressions();
                   }}
                 >{t('model3d.resetExpression')}</button>
+              </div>
+            )}
+            {openList === 'bones' && (
+              <div className={s.previewInspectionPanel}>
+                {bones.length ? (
+                  <div className={s.previewBoneList}>
+                    {bones.map((name) => (
+                      <button
+                        type="button"
+                        key={name}
+                        className={selectedBone === name ? s.previewBoneActive : ''}
+                        aria-pressed={selectedBone === name}
+                        onClick={() => {
+                          setSelectedBone(name);
+                          sessionRef.current?.showBones(true);
+                          sessionRef.current?.selectBone(name);
+                        }}
+                      >{name}</button>
+                    ))}
+                  </div>
+                ) : <p>{t('model3d.noBones')}</p>}
               </div>
             )}
             {isMmd && controls

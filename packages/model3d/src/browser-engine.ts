@@ -2,6 +2,7 @@ import {
   type AnimationAction,
   AnimationClip,
   AnimationMixer,
+  ArrowHelper,
   Bone,
   Box3,
   BufferAttribute,
@@ -18,6 +19,8 @@ import {
   PropertyBinding,
   Quaternion,
   QuaternionKeyframeTrack,
+  SkeletonHelper,
+  SphereGeometry,
   SkinnedMesh,
   SRGBColorSpace,
   Texture,
@@ -133,13 +136,17 @@ interface MmdTransparencyAnalysis {
 
 export interface Model3dPreviewSession {
   root: Object3D;
+  boneOverlay: Object3D;
   animations: string[];
   expressions: string[];
+  bones: string[];
   playAnimation(name: string): void;
   pauseAnimation(): void;
   stopAnimation(): void;
   selectExpression(name: string): void;
   resetExpressions(): void;
+  showBones(visible: boolean): void;
+  selectBone(name: string): void;
   update(deltaSeconds: number): void;
   updateTransparency(settings: Model3dTransparencySettings): void;
   dispose(): void;
@@ -390,12 +397,120 @@ export class BrowserModel3dEngine implements ConversionEngine {
     const outputFormat = job.outputFormat as Model3dOutputFormat;
     const previewAnimations = model3dOutputSupportsAnimations(outputFormat);
     const previewExpressions = model3dOutputSupportsExpressions(outputFormat);
+    const previewBones = model3dOutputSupportsBones(outputFormat);
+    const boneOverlay = new Group();
+    boneOverlay.name = 'PreviewBoneOverlay';
+    boneOverlay.visible = false;
+    const skeletonHelper = new SkeletonHelper(root);
+    skeletonHelper.material.transparent = true;
+    skeletonHelper.material.opacity = 0.28;
+    skeletonHelper.material.depthTest = false;
+    boneOverlay.add(skeletonHelper);
+    const boneObjects = new Map<string, Bone>();
+    root.updateMatrixWorld(true);
+    const previewBounds = new Box3().setFromObject(root);
+    const previewSize = previewBounds.getSize(new Vector3());
+    const markerRadius = Math.max(previewSize.length() * 0.012, 0.006);
+    const bones: Bone[] = [];
+    const directionalBoneArrows: Array<{ bone: Bone; child: Bone; arrow: ArrowHelper }> = [];
+    root.traverse((object) => {
+      if ((object as Bone).isBone) bones.push(object as Bone);
+    });
+    bones.forEach((bone, index) => {
+      const baseName = bone.name.trim() || `Bone ${index + 1}`;
+      let name = baseName;
+      let suffix = 2;
+      while (boneObjects.has(name)) name = `${baseName} (${suffix++})`;
+      boneObjects.set(name, bone);
+      const childBone = bone.children.find((child) => (child as Bone).isBone) as Bone | undefined;
+      if (!childBone) return;
+      const from = bone.getWorldPosition(new Vector3());
+      const to = childBone.getWorldPosition(new Vector3());
+      const length = from.distanceTo(to);
+      if (length <= 0) return;
+      const arrow = new ArrowHelper(
+        to.clone().sub(from).normalize(),
+        from,
+        length,
+        0x93a4c7,
+        Math.min(length * 0.2, markerRadius * 2),
+        Math.min(length * 0.12, markerRadius),
+      );
+      arrow.line.material.transparent = true;
+      arrow.line.material.opacity = 0.2;
+      arrow.cone.material.transparent = true;
+      arrow.cone.material.opacity = 0.2;
+      arrow.line.material.depthTest = false;
+      arrow.cone.material.depthTest = false;
+      boneOverlay.add(arrow);
+      directionalBoneArrows.push({ bone, child: childBone, arrow });
+    });
+    const selectedBoneMarker = new Mesh(
+      new SphereGeometry(markerRadius, 16, 12),
+      new MeshBasicMaterial({ color: 0xffd24d, depthTest: false, depthWrite: false }),
+    );
+    const selectedBoneArrow = new ArrowHelper(
+      new Vector3(0, 1, 0),
+      new Vector3(),
+      markerRadius * 8,
+      0xff7a45,
+      markerRadius * 2.5,
+      markerRadius * 1.4,
+    );
+    selectedBoneMarker.visible = false;
+    selectedBoneArrow.visible = false;
+    selectedBoneMarker.renderOrder = 1000;
+    selectedBoneArrow.line.renderOrder = 1000;
+    selectedBoneArrow.cone.renderOrder = 1000;
+    selectedBoneArrow.line.material.depthWrite = false;
+    selectedBoneArrow.cone.material.depthWrite = false;
+    boneOverlay.add(selectedBoneMarker, selectedBoneArrow);
+    let selectedBoneObject: Bone | undefined;
+    const updateBoneOverlay = () => {
+      if (!boneOverlay.visible) return;
+      root.updateMatrixWorld(true);
+      directionalBoneArrows.forEach(({ bone, child, arrow }) => {
+        const from = bone.getWorldPosition(new Vector3());
+        const to = child.getWorldPosition(new Vector3());
+        const length = from.distanceTo(to);
+        if (length <= 0) return;
+        arrow.position.copy(from);
+        arrow.setDirection(to.sub(from).normalize());
+        arrow.setLength(
+          length,
+          Math.min(length * 0.2, markerRadius * 2),
+          Math.min(length * 0.12, markerRadius),
+        );
+      });
+      if (!selectedBoneObject) return;
+      const position = selectedBoneObject.getWorldPosition(new Vector3());
+      const childBone = selectedBoneObject.children.find((child) => (child as Bone).isBone) as
+        | Bone
+        | undefined;
+      const childPosition = childBone?.getWorldPosition(new Vector3());
+      const direction = childPosition
+        ? childPosition.clone().sub(position).normalize()
+        : new Vector3(0, 1, 0)
+            .applyQuaternion(selectedBoneObject.getWorldQuaternion(new Quaternion()))
+            .normalize();
+      const childLength = childPosition ? position.distanceTo(childPosition) : markerRadius * 8;
+      selectedBoneMarker.position.copy(position);
+      selectedBoneArrow.position.copy(position);
+      selectedBoneArrow.setDirection(direction);
+      selectedBoneArrow.setLength(
+        Math.max(childLength, markerRadius * 5),
+        markerRadius * 2.5,
+        markerRadius * 1.4,
+      );
+    };
     return {
       root,
+      boneOverlay,
       animations: previewAnimations ? [...animationClips.keys()] : [],
       expressions: previewExpressions
         ? [...new Set([...expressionTargets.keys(), ...expressionNodes.keys()])]
         : [],
+      bones: previewBones ? [...boneObjects.keys()] : [],
       playAnimation: (name) => {
         const clip = animationClips.get(name);
         if (!clip) return;
@@ -425,11 +540,44 @@ export class BrowserModel3dEngine implements ConversionEngine {
         for (const node of expressionNodes.get(name) ?? []) node.position.x = 1;
       },
       resetExpressions,
-      update: (deltaSeconds) => mixer.update(deltaSeconds),
+      showBones: (visible) => {
+        boneOverlay.visible = visible && previewBones;
+      },
+      selectBone: (name) => {
+        if (!previewBones) return;
+        const bone = boneObjects.get(name);
+        selectedBoneObject = bone;
+        if (!bone) {
+          selectedBoneMarker.visible = false;
+          selectedBoneArrow.visible = false;
+          return;
+        }
+        selectedBoneMarker.visible = true;
+        selectedBoneArrow.visible = true;
+        updateBoneOverlay();
+      },
+      update: (deltaSeconds) => {
+        mixer.update(deltaSeconds);
+        updateBoneOverlay();
+      },
       updateTransparency,
       dispose: () => {
         mixer.stopAllAction();
         mixer.uncacheRoot(root);
+        skeletonHelper.dispose();
+        directionalBoneArrows.forEach(({ arrow }) => {
+          arrow.line.geometry.dispose();
+          arrow.line.material.dispose();
+          arrow.cone.geometry.dispose();
+          arrow.cone.material.dispose();
+        });
+        selectedBoneMarker.geometry.dispose();
+        selectedBoneMarker.material.dispose();
+        selectedBoneArrow.line.geometry.dispose();
+        selectedBoneArrow.line.material.dispose();
+        selectedBoneArrow.cone.geometry.dispose();
+        selectedBoneArrow.cone.material.dispose();
+        boneOverlay.clear();
         for (const material of generatedMaterials) material.dispose();
         for (const sources of materialSources.values()) {
           for (const material of sources) material.dispose();
