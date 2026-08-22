@@ -80,7 +80,8 @@ export default function VrmTransparencyPreviewModal({
     host.replaceChildren(renderer.domElement);
     scene.add(new AmbientLight(0xffffff, 1.8));
     const light = new DirectionalLight(0xffffff, 2.2);
-    const previewFrontZ = job.outputFormat === 'vrm' ? -1 : 1;
+    // ThreeMmdLoader has already converted MMD into the glTF/VRM-facing basis.
+    const previewFrontZ = 1;
     light.position.set(2, 3, 4 * previewFrontZ);
     scene.add(light);
     const controls3d = new OrbitControls(camera, renderer.domElement);

@@ -337,7 +337,11 @@ export class BrowserModel3dEngine implements ConversionEngine {
       throw new Error('Could not calculate a valid VRM scale for the MMD model.');
     }
     root.scale.multiplyScalar(scale);
-    root.rotateY(Math.PI);
+    // ThreeMmdLoader already converts PMX/PMD positions, morphs and bones from
+    // MMD's left-handed coordinates into Three.js/glTF coordinates by reversing
+    // Z. Do not add another 180-degree root rotation here: three-vrm derives
+    // its normalized humanoid axes from the exported world rest rotations, so
+    // an extra root rotation mirrors VRMA motion during retargeting.
     root.updateMatrixWorld(true);
   }
 
