@@ -167,6 +167,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
         this.applyMmdPortableMaterials(root, transparency, job.outputFormat === 'vrm');
       }
       if ((job.inputFormat === 'pmx' || job.inputFormat === 'pmd') && job.outputFormat === 'vrm') {
+        this.prepareMmdVrmHumanoidHierarchy(root);
         this.normalizeMmdVrmScale(root);
       }
       options.onProgress?.(65);
@@ -174,6 +175,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
         root,
         job.outputFormat as Model3dOutputFormat,
         job.file.name,
+        job.inputFormat,
       );
       if (!blob.size) throw new Error('Conversion produced an empty model file.');
       options.onProgress?.(95);
@@ -237,7 +239,10 @@ export class BrowserModel3dEngine implements ConversionEngine {
           );
         }
       });
-      if (job.outputFormat === 'vrm') this.normalizeMmdVrmScale(root);
+      if (job.outputFormat === 'vrm') {
+        this.prepareMmdVrmHumanoidHierarchy(root);
+        this.normalizeMmdVrmScale(root);
+      }
     }
     const updateTransparency = (settings: Model3dTransparencySettings) => {
       if (!isMmd) return;
@@ -333,6 +338,57 @@ export class BrowserModel3dEngine implements ConversionEngine {
     }
     root.scale.multiplyScalar(scale);
     root.rotateY(Math.PI);
+    root.updateMatrixWorld(true);
+  }
+
+  /**
+   * Standard MMD rigs place upper-body and lower-body bones as siblings below
+   * the center bone. VRM requires spine and both legs to descend from a hips
+   * node located at the pelvis. Insert that semantic node without changing the
+   * current world-space rest pose or any existing skin weights.
+   */
+  private prepareMmdVrmHumanoidHierarchy(root: Object3D): void {
+    if (root.getObjectByName('VRM_Hips')) return;
+    const normalize = (name: string) =>
+      name
+        .normalize('NFKC')
+        .toLowerCase()
+        .replace(/[^a-z0-9\u3040-\u30ff\u3400-\u9fff]/g, '');
+    const objects: Object3D[] = [];
+    root.traverse((object) => objects.push(object));
+    const find = (...aliases: string[]) => {
+      const names = aliases.map(normalize);
+      return objects.find((object) => names.includes(normalize(object.name)));
+    };
+    const center = find('センター', 'center');
+    const lowerBody = find('下半身', 'lowerbody', 'pelvis');
+    const upperBody = find('上半身', 'upperbody', 'spine');
+    if (!center || !lowerBody || !upperBody || lowerBody === upperBody) return;
+
+    const isDescendantOf = (object: Object3D, ancestor: Object3D) => {
+      let current = object.parent;
+      while (current) {
+        if (current === ancestor) return true;
+        current = current.parent;
+      }
+      return false;
+    };
+    // Some rigs already have the required anatomical hierarchy.
+    if (isDescendantOf(upperBody, lowerBody)) return;
+
+    root.updateMatrixWorld(true);
+    const pelvisWorldPosition = lowerBody.getWorldPosition(new Vector3());
+    const hips = new Bone();
+    hips.name = 'VRM_Hips';
+    center.add(hips);
+    hips.position.copy(center.worldToLocal(pelvisWorldPosition.clone()));
+    hips.quaternion.identity();
+    hips.scale.set(1, 1, 1);
+    hips.updateMatrixWorld(true);
+    // attach() retains the children's current world transforms, so the rest
+    // mesh and the inverse-bind relationship remain visually unchanged.
+    hips.attach(lowerBody);
+    hips.attach(upperBody);
     root.updateMatrixWorld(true);
   }
 
@@ -960,6 +1016,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     root: Object3D,
     format: Model3dOutputFormat,
     sourceName: string,
+    sourceFormat: InputFormat,
   ): Promise<Blob> {
     if (format === 'obj') {
       return new Blob([new OBJExporter().parse(root)], { type: getMimeType(format) });
@@ -976,13 +1033,20 @@ export class BrowserModel3dEngine implements ConversionEngine {
       trs: false,
     });
     if (exported instanceof ArrayBuffer) {
-      const output = format === 'vrm' ? this.addVrmExtension(exported, sourceName) : exported;
+      const output =
+        format === 'vrm'
+          ? this.addVrmExtension(exported, sourceName, sourceFormat)
+          : exported;
       return new Blob([output], { type: getMimeType(format) });
     }
     return new Blob([JSON.stringify(exported)], { type: getMimeType(format) });
   }
 
-  private addVrmExtension(glb: ArrayBuffer, sourceName: string): ArrayBuffer {
+  private addVrmExtension(
+    glb: ArrayBuffer,
+    sourceName: string,
+    sourceFormat: InputFormat,
+  ): ArrayBuffer {
     const view = new DataView(glb);
     if (view.getUint32(0, true) !== 0x46546c67 || view.getUint32(4, true) !== 2) {
       throw new Error('VRM export requires a valid glTF 2.0 binary.');
@@ -994,7 +1058,14 @@ export class BrowserModel3dEngine implements ConversionEngine {
     const json = JSON.parse(
       new TextDecoder().decode(new Uint8Array(glb, 20, jsonLength)).trim(),
     ) as {
-      nodes?: Array<{ name?: string; children?: number[] }>;
+      nodes?: Array<{
+        name?: string;
+        children?: number[];
+        translation?: number[];
+        rotation?: number[];
+        scale?: number[];
+        matrix?: number[];
+      }>;
       materials?: Array<{
         pbrMetallicRoughness?: {
           baseColorTexture?: { index: number; texCoord?: number };
@@ -1030,6 +1101,9 @@ export class BrowserModel3dEngine implements ConversionEngine {
     if (missing.length) {
       throw new Error(`Required VRM humanoid bones were not identified: ${missing.join(', ')}`);
     }
+    if (sourceFormat === 'pmx' || sourceFormat === 'pmd') {
+      this.validateVrmHumanoidHierarchy(json.nodes ?? [], humanBones);
+    }
     json.extensionsUsed = [...new Set([...(json.extensionsUsed ?? []), 'VRMC_vrm'])];
     json.extensionsRequired = [...new Set([...(json.extensionsRequired ?? []), 'VRMC_vrm'])];
     json.extensions = {
@@ -1061,6 +1135,84 @@ export class BrowserModel3dEngine implements ConversionEngine {
     outputBytes.fill(0x20, 20 + encodedJson.length, 20 + paddedLength);
     outputBytes.set(remainingChunks, 20 + paddedLength);
     return output;
+  }
+
+  private validateVrmHumanoidHierarchy(
+    nodes: Array<{
+      name?: string;
+      children?: number[];
+      translation?: number[];
+      rotation?: number[];
+      scale?: number[];
+      matrix?: number[];
+    }>,
+    humanBones: Record<string, { node: number }>,
+  ): void {
+    const parents = new Map<number, number>();
+    nodes.forEach((node, parentIndex) => {
+      node.children?.forEach((childIndex) => parents.set(childIndex, parentIndex));
+    });
+    const isDescendantOf = (nodeIndex: number, ancestorIndex: number) => {
+      const visited = new Set<number>();
+      let current = parents.get(nodeIndex);
+      while (current !== undefined && !visited.has(current)) {
+        if (current === ancestorIndex) return true;
+        visited.add(current);
+        current = parents.get(current);
+      }
+      return false;
+    };
+    const requiredRelationships: Array<[string, string]> = [
+      ['spine', 'hips'],
+      ['head', 'spine'],
+      ['leftUpperLeg', 'hips'],
+      ['leftLowerLeg', 'leftUpperLeg'],
+      ['leftFoot', 'leftLowerLeg'],
+      ['rightUpperLeg', 'hips'],
+      ['rightLowerLeg', 'rightUpperLeg'],
+      ['rightFoot', 'rightLowerLeg'],
+      ['leftUpperArm', 'spine'],
+      ['leftLowerArm', 'leftUpperArm'],
+      ['leftHand', 'leftLowerArm'],
+      ['rightUpperArm', 'spine'],
+      ['rightLowerArm', 'rightUpperArm'],
+      ['rightHand', 'rightLowerArm'],
+    ];
+    const invalidRelationships = requiredRelationships.filter(([childName, parentName]) => {
+      const child = humanBones[childName]?.node;
+      const parent = humanBones[parentName]?.node;
+      return child === undefined || parent === undefined || !isDescendantOf(child, parent);
+    });
+    if (invalidRelationships.length) {
+      throw new Error(
+        `Invalid VRM humanoid hierarchy: ${invalidRelationships
+          .map(([child, parent]) => `${child} must descend from ${parent}`)
+          .join(', ')}`,
+      );
+    }
+
+    for (const [boneName, { node: nodeIndex }] of Object.entries(humanBones)) {
+      const node = nodes[nodeIndex];
+      if (!node) throw new Error(`VRM humanoid bone ${boneName} references a missing node.`);
+      for (const values of [node.translation, node.rotation, node.scale, node.matrix]) {
+        if (values?.some((value) => !Number.isFinite(value))) {
+          throw new Error(`VRM humanoid bone ${boneName} contains a non-finite transform.`);
+        }
+      }
+      if (node.scale) {
+        const [x = 1, y = 1, z = 1] = node.scale;
+        const tolerance = Math.max(x, y, z) * 1e-4;
+        if (x <= 0 || y <= 0 || z <= 0 || Math.abs(x - y) > tolerance || Math.abs(y - z) > tolerance) {
+          throw new Error(`VRM humanoid bone ${boneName} must have a positive uniform scale.`);
+        }
+      }
+      if (node.rotation) {
+        const length = Math.hypot(...node.rotation);
+        if (length < 1e-6 || Math.abs(length - 1) > 1e-3) {
+          throw new Error(`VRM humanoid bone ${boneName} has an invalid rest rotation.`);
+        }
+      }
+    }
   }
 
   private applyMToonExtensions(json: {
@@ -1107,7 +1259,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     nodes: Array<{ name?: string; children?: number[] }>,
   ): Record<string, { node: number }> {
     const aliases: Record<string, string[]> = {
-      hips: ['hips', 'pelvis', 'mixamorighips', 'センター', '腰', '下半身'],
+      hips: ['vrmhips', 'hips', 'pelvis', 'mixamorighips', '腰', '下半身', 'センター'],
       spine: ['spine', 'mixamorigspine', '上半身'],
       chest: ['chest', 'spine1', 'mixamorigspine1', '上半身2'],
       upperChest: ['upperchest', 'spine2', 'mixamorigspine2', '上半身3'],
