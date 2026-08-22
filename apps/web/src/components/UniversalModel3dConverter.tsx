@@ -76,6 +76,7 @@ export default function UniversalModel3dConverter() {
   const [running, setRunning] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [previewJob, setPreviewJob] = useState<ConversionJob>();
+  const [vrmPreviewFailures, setVrmPreviewFailures] = useState<Record<string, string>>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const relatedInputRef = useRef<HTMLInputElement>(null);
   const queueRef = useRef<ConversionQueue | null>(null);
@@ -172,9 +173,13 @@ export default function UniversalModel3dConverter() {
 
   const convert = useCallback(async () => {
     const pending = jobs.filter(
-      (job) => job.status === 'pending' && canConvert(job.inputFormat, targetFormat),
+      (job) =>
+        job.status === 'pending' &&
+        canConvert(job.inputFormat, targetFormat) &&
+        (targetFormat !== 'vrm' || !vrmPreviewFailures[job.id]),
     );
     if (!pending.length) return;
+    setPreviewJob(undefined);
     setRunning(true);
     const transparencyByFileName = Object.fromEntries(
       pending.map((job) => [
@@ -206,17 +211,21 @@ export default function UniversalModel3dConverter() {
     await queue.run();
     unsubscribe();
     setRunning(false);
-  }, [auxiliaryFiles, jobs, targetFormat]);
+  }, [auxiliaryFiles, jobs, targetFormat, vrmPreviewFailures]);
 
   const clear = () => {
     if (running) queueRef.current?.abort();
     jobs.forEach((job) => job.resultUrl && URL.revokeObjectURL(job.resultUrl));
     setJobs([]);
     setAuxiliaryFiles([]);
+    setVrmPreviewFailures({});
+    setPreviewJob(undefined);
     setRunning(false);
   };
 
-  const pending = jobs.filter((job) => job.status === 'pending').length;
+  const pending = jobs.filter(
+    (job) => job.status === 'pending' && (targetFormat !== 'vrm' || !vrmPreviewFailures[job.id]),
+  ).length;
   const done = jobs.filter((job) => job.status === 'done').length;
   const errors = jobs.filter((job) => job.status === 'error').length;
 
@@ -431,13 +440,21 @@ export default function UniversalModel3dConverter() {
                   )}
                 </div>
                 {job.error && <p className={s.errorDetail}>{job.error}</p>}
-                {job.outputFormat === 'vrm' && job.status === 'pending' && (
-                  <VrmTransparencySummary
-                    fileName={job.file.name}
-                    onPreview={() => setPreviewJob(job)}
-                    disabled={running}
-                  />
+                {job.outputFormat === 'vrm' && vrmPreviewFailures[job.id] && (
+                  <p className={s.errorDetail}>
+                    {t('model3d.vrmPreviewIncompatible', { error: vrmPreviewFailures[job.id] })}
+                  </p>
                 )}
+                {job.outputFormat === 'vrm' &&
+                  job.status === 'pending' &&
+                  !running &&
+                  !vrmPreviewFailures[job.id] && (
+                    <VrmTransparencySummary
+                      fileName={job.file.name}
+                      onPreview={() => setPreviewJob(job)}
+                      disabled={running}
+                    />
+                  )}
               </div>
             ))}
           </div>
@@ -449,6 +466,10 @@ export default function UniversalModel3dConverter() {
             job={previewJob}
             auxiliaryFiles={auxiliaryFiles}
             onClose={() => setPreviewJob(undefined)}
+            onLoadFailure={(error) => {
+              setVrmPreviewFailures((current) => ({ ...current, [previewJob.id]: error }));
+              setPreviewJob(undefined);
+            }}
           />
         )}
 

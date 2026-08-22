@@ -40,12 +40,14 @@ export interface VrmTransparencyPreviewModalProps {
   job: ConversionJob;
   auxiliaryFiles: File[];
   onClose: () => void;
+  onLoadFailure: (error: string) => void;
 }
 
 export default function VrmTransparencyPreviewModal({
   job,
   auxiliaryFiles,
   onClose,
+  onLoadFailure,
 }: VrmTransparencyPreviewModalProps) {
   const { t } = useTranslation();
   const [stored, setStored] = useAtom(vrmTransparencySettingsAtomFamily(job.file.name));
@@ -103,8 +105,11 @@ export default function VrmTransparencyPreviewModal({
         setPreviewing(false);
       })
       .catch((error) => {
-        setPreviewError(error instanceof Error ? error.message : String(error));
+        if (disposed) return;
+        const message = error instanceof Error ? error.message : String(error);
+        setPreviewError(message);
         setPreviewing(false);
+        onLoadFailure(message);
       });
     const observer = new ResizeObserver(resize);
     observer.observe(host);
