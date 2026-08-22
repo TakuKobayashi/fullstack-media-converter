@@ -64,6 +64,11 @@ export default function VrmTransparencyPreviewModal({
   }));
   const [previewing, setPreviewing] = useState(true);
   const [previewError, setPreviewError] = useState<string>();
+  const [animations, setAnimations] = useState<string[]>([]);
+  const [expressions, setExpressions] = useState<string[]>([]);
+  const [selectedAnimation, setSelectedAnimation] = useState('');
+  const [selectedExpression, setSelectedExpression] = useState('');
+  const [openList, setOpenList] = useState<'animations' | 'expressions'>('animations');
   const canvasHostRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<Model3dPreviewSession | undefined>(undefined);
   const draftRef = useRef(draft);
@@ -102,6 +107,9 @@ export default function VrmTransparencyPreviewModal({
           return;
         }
         sessionRef.current = session;
+        setAnimations(session.animations);
+        setExpressions(session.expressions);
+        setSelectedAnimation(session.animations[0] ?? '');
         session.updateTransparency(draftRef.current);
         scene.add(session.root);
         const bounds = new Box3().setFromObject(session.root);
@@ -123,7 +131,11 @@ export default function VrmTransparencyPreviewModal({
     const observer = new ResizeObserver(resize);
     observer.observe(host);
     resize();
-    renderer.setAnimationLoop(() => {
+    let previousTime = performance.now();
+    renderer.setAnimationLoop((time) => {
+      const deltaSeconds = Math.min(Math.max((time - previousTime) / 1000, 0), 0.1);
+      previousTime = time;
+      sessionRef.current?.update(deltaSeconds);
       controls3d.update();
       renderer.render(scene, camera);
     });
@@ -147,6 +159,7 @@ export default function VrmTransparencyPreviewModal({
 
   const update = (key: SettingKey, value: number) =>
     setDraft((current) => ({ ...current, [key]: value }));
+  const isMmd = job.inputFormat === 'pmx' || job.inputFormat === 'pmd';
 
   return (
     <div className={s.previewBackdrop} role="presentation" onMouseDown={onClose}>
@@ -181,7 +194,72 @@ export default function VrmTransparencyPreviewModal({
             {previewError && <span className={s.previewError}>{previewError}</span>}
           </div>
           <div className={s.previewSettings}>
-            {controls
+            <div className={s.previewInspectionTabs}>
+              <button
+                type="button"
+                className={openList === 'animations' ? s.previewInspectionTabActive : ''}
+                onClick={() => setOpenList('animations')}
+              >
+                {t('model3d.animationList')} ({animations.length})
+              </button>
+              <button
+                type="button"
+                className={openList === 'expressions' ? s.previewInspectionTabActive : ''}
+                onClick={() => setOpenList('expressions')}
+              >
+                {t('model3d.expressionList')} ({expressions.length})
+              </button>
+            </div>
+            {openList === 'animations' && (
+              <div className={s.previewInspectionPanel}>
+                {animations.length ? (
+                  <>
+                    <select
+                      value={selectedAnimation}
+                      onChange={(event) => {
+                        sessionRef.current?.stopAnimation();
+                        setSelectedAnimation(event.target.value);
+                      }}
+                    >
+                      {animations.map((name) => <option key={name}>{name}</option>)}
+                    </select>
+                    <div className={s.previewPlaybackControls}>
+                      <button type="button" onClick={() => sessionRef.current?.playAnimation(selectedAnimation)}>Play</button>
+                      <button type="button" onClick={() => sessionRef.current?.pauseAnimation()}>Pause</button>
+                      <button type="button" onClick={() => sessionRef.current?.stopAnimation()}>Stop</button>
+                    </div>
+                  </>
+                ) : <p>{t('model3d.noAnimations')}</p>}
+              </div>
+            )}
+            {openList === 'expressions' && (
+              <div className={s.previewInspectionPanel}>
+                {expressions.length ? (
+                  <div className={s.previewExpressionList}>
+                    {expressions.map((name) => (
+                      <button
+                        type="button"
+                        key={name}
+                        className={selectedExpression === name ? s.previewExpressionActive : ''}
+                        onClick={() => {
+                          sessionRef.current?.stopAnimation();
+                          setSelectedExpression(name);
+                          sessionRef.current?.selectExpression(name);
+                        }}
+                      >{name}</button>
+                    ))}
+                  </div>
+                ) : <p>{t('model3d.noExpressions')}</p>}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedExpression('');
+                    sessionRef.current?.resetExpressions();
+                  }}
+                >{t('model3d.resetExpression')}</button>
+              </div>
+            )}
+            {isMmd && controls
               .filter(({ key }) => job.outputFormat === 'vrm' || !VRM_ONLY_SETTING_KEYS.has(key))
               .map(({ key, min, max, step }) => (
                 <label className={s.previewControl} key={key}>
@@ -209,13 +287,13 @@ export default function VrmTransparencyPreviewModal({
           </div>
         </div>
         <footer className={s.previewFooter}>
-          <button type="button" onClick={() => setDraft({ ...MMD_TRANSPARENCY_THRESHOLDS })}>
+          {isMmd && <button type="button" onClick={() => setDraft({ ...MMD_TRANSPARENCY_THRESHOLDS })}>
             {t('model3d.resetTransparency')}
-          </button>
+          </button>}
           <button type="button" onClick={onClose}>
-            {t('model3d.cancelPreview')}
+            {isMmd ? t('model3d.cancelPreview') : t('model3d.closePreview')}
           </button>
-          <button
+          {isMmd && <button
             type="button"
             className={s.previewApply}
             onClick={() => {
@@ -225,7 +303,7 @@ export default function VrmTransparencyPreviewModal({
             }}
           >
             {t('model3d.applyTransparency')}
-          </button>
+          </button>}
         </footer>
       </section>
     </div>

@@ -15,8 +15,10 @@ import {
   isModel3dOutputCandidate,
   model3dFormatMayContainAnimations,
   model3dFormatMayContainBones,
+  model3dFormatMayContainExpressions,
   model3dOutputSupportsAnimations,
   model3dOutputSupportsBones,
+  model3dOutputSupportsExpressions,
   type ConversionFile,
   type ConversionJob,
   type InputFormat,
@@ -275,6 +277,13 @@ export default function UniversalModel3dConverter() {
       ) && !model3dOutputSupportsAnimations(targetFormat),
     [jobs, targetFormat],
   );
+  const expressionsWillBeRemoved = useMemo(
+    () =>
+      jobs.some((job) =>
+        model3dFormatMayContainExpressions(job.inputFormat as Model3dFormat),
+      ) && !model3dOutputSupportsExpressions(targetFormat),
+    [jobs, targetFormat],
+  );
   useEffect(() => {
     if (targetFormat !== 'vrm') return;
     let cancelled = false;
@@ -500,6 +509,9 @@ export default function UniversalModel3dConverter() {
         {animationsWillBeRemoved && (
           <p className={s.boneWarning}>⚠ {t('model3d.animationsRemovedWarning')}</p>
         )}
+        {expressionsWillBeRemoved && (
+          <p className={s.boneWarning}>⚠ {t('model3d.expressionsRemovedWarning')}</p>
+        )}
 
         {jobs.length > 0 && (
           <div className={s.controls}>
@@ -678,6 +690,15 @@ export default function UniversalModel3dConverter() {
                       onPreview={() => setPreviewJob(job)}
                       disabled={running}
                     />
+                  )}
+                {((job.inputFormat !== 'pmx' && job.inputFormat !== 'pmd') ||
+                  !TRANSPARENCY_PREVIEW_OUTPUTS.has(job.outputFormat as Model3dOutputFormat)) &&
+                  job.status === 'pending' &&
+                  !running &&
+                  !previewFailures[`${job.id}:${job.outputFormat}`] && (
+                    <button type="button" onClick={() => setPreviewJob(job)}>
+                      {t('model3d.previewAdjust')}
+                    </button>
                   )}
               </div>
             ))}

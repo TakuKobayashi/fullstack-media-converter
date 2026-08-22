@@ -182,8 +182,13 @@ export const messages = {
       to: 'Convert every model to',
       incompatible: "{{count}} model(s) can't convert to {{format}}.",
       previewAdjust: 'Preview & adjust',
-      previewTitle: '{{format}} transparency preview — {{file}}',
-      previewHelp: 'Drag to rotate and scroll to zoom. Setting changes are applied immediately.',
+      previewTitle: '{{format}} model preview — {{file}}',
+      previewHelp: 'Inspect animations and expressions that will be included after conversion. Preview playback does not change the conversion result.',
+      animationList: 'Animations',
+      expressionList: 'Expressions',
+      noAnimations: 'No animation clips were found.',
+      noExpressions: 'No morph expressions were found.',
+      resetExpression: 'Reset expression',
       updatingPreview: 'Loading the preview model…',
       previewFailed: 'Could not generate the model preview.',
       checkingVrmCompatibility: 'Checking whether this model can be converted to VRM…',
@@ -209,9 +214,11 @@ export const messages = {
         'The selected input format may contain bones, but this output format cannot store them. Bones and skinning will be removed and the current pose will be baked into a static mesh.',
       animationsRemovedWarning:
         'The selected input may contain animation, but this output format cannot store it. Animation clips will be ignored during conversion.',
+      expressionsRemovedWarning:
+        'The selected input may contain facial expressions, but this output format cannot store them. Expression morphs and expression animation will be ignored during conversion.',
       proseTitle: 'Private static 3D model conversion',
       prose:
-        'Models are loaded and exported with Three.js in your browser. Bones, skinning, and animation clips are preserved in glTF or GLB. VRM exports animation clips as separate VRMA files. OBJ and STL bake the current pose into a static mesh and ignore animation. Format-specific data such as physics, cameras, lights, constraints, and some metadata may still be omitted.',
+        'Models are loaded and exported with Three.js in your browser. Bones, skinning, morph expressions, and animation clips are preserved in glTF or GLB. VRM stores morph expressions in the model and exports animation clips as separate VRMA files. OBJ and STL bake the current pose into a static mesh and ignore expressions and animation. Format-specific data such as physics, cameras, lights, constraints, and some metadata may still be omitted.',
       bullets: [
         'Supports {{inputs}} input',
         'Exports {{outputs}}',
@@ -424,8 +431,13 @@ export const messages = {
       to: 'すべての3Dモデルを次の形式へ変換',
       incompatible: '{{count}}件のモデルは{{format}}へ変換できません。',
       previewAdjust: 'プレビュー・調整',
-      previewTitle: '{{format}}透過プレビュー — {{file}}',
-      previewHelp: 'ドラッグで回転、スクロールで拡大できます。設定変更はすぐに反映されます。',
+      previewTitle: '{{format}}モデルプレビュー — {{file}}',
+      previewHelp: '変換後に含まれる予定のアニメーションと表情を確認できます。プレビュー上の再生・表情変更は変換結果に影響しません。',
+      animationList: 'アニメーション一覧',
+      expressionList: '表情一覧',
+      noAnimations: 'アニメーションは見つかりませんでした。',
+      noExpressions: '表情モーフは見つかりませんでした。',
+      resetExpression: '表情を初期化',
       updatingPreview: 'プレビューモデルを読み込み中…',
       previewFailed: '3Dモデルのプレビューを生成できませんでした。',
       checkingVrmCompatibility: 'このモデルをVRMに変換できるか確認しています…',
@@ -450,9 +462,11 @@ export const messages = {
         '選択した入力形式にはボーン情報が含まれる可能性がありますが、この出力形式には引き継げません。ボーンとスキニングを削除し、現在の姿勢を静的メッシュへ焼き込みます。',
       animationsRemovedWarning:
         '選択した入力にはアニメーション情報が含まれる可能性がありますが、この出力形式には保存できないため、アニメーションを無視して変換します。',
+      expressionsRemovedWarning:
+        '選択した入力には表情情報が含まれる可能性がありますが、この出力形式には保存できないため、表情モーフと表情アニメーションを無視して変換します。',
       proseTitle: 'アップロード不要の静的3Dモデル変換',
       prose:
-        'Three.jsを使ってブラウザ内で読み込み・書き出します。glTFとGLBではボーン、スキニング、アニメーションクリップを保持し、VRMでは各アニメーションを個別のVRMAとして出力します。OBJとSTLでは現在の姿勢を静的メッシュへ焼き込み、アニメーションを無視します。物理設定、カメラ、ライト、コンストレイント、一部のメタデータなどは失われる場合があります。',
+        'Three.jsを使ってブラウザ内で読み込み・書き出します。glTFとGLBではボーン、スキニング、モーフ表情、アニメーションクリップを保持します。VRMではモーフ表情をモデル内へ保存し、各アニメーションを個別のVRMAとして出力します。OBJとSTLでは現在の姿勢を静的メッシュへ焼き込み、表情とアニメーションを無視します。物理設定、カメラ、ライト、コンストレイント、一部のメタデータなどは失われる場合があります。',
       bullets: [
         '{{inputs}}入力に対応',
         '{{outputs}}で出力可能',

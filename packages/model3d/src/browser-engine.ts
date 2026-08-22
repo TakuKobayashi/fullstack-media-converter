@@ -1,5 +1,7 @@
 import {
+  type AnimationAction,
   AnimationClip,
+  AnimationMixer,
   Bone,
   Box3,
   BufferAttribute,
@@ -45,7 +47,9 @@ import {
   canConvert,
   getMimeType,
   model3dFormatMayContainBones,
+  model3dOutputSupportsAnimations,
   model3dOutputSupportsBones,
+  model3dOutputSupportsExpressions,
   type ConversionEngine,
   type ConversionJob,
   type ConversionOptions,
@@ -129,6 +133,14 @@ interface MmdTransparencyAnalysis {
 
 export interface Model3dPreviewSession {
   root: Object3D;
+  animations: string[];
+  expressions: string[];
+  playAnimation(name: string): void;
+  pauseAnimation(): void;
+  stopAnimation(): void;
+  selectExpression(name: string): void;
+  resetExpressions(): void;
+  update(deltaSeconds: number): void;
   updateTransparency(settings: Model3dTransparencySettings): void;
   dispose(): void;
 }
@@ -331,10 +343,93 @@ export class BrowserModel3dEngine implements ConversionEngine {
       }
     };
     updateTransparency(initialSettings);
+    const animationClips = new Map<string, AnimationClip>();
+    root.animations.forEach((clip, index) => {
+      const baseName = clip.name.trim() || `Animation ${index + 1}`;
+      let name = baseName;
+      let suffix = 2;
+      while (animationClips.has(name)) name = `${baseName} (${suffix++})`;
+      animationClips.set(name, clip);
+    });
+    const mixer = new AnimationMixer(root);
+    let currentAction: AnimationAction | undefined;
+    let currentAnimationName: string | undefined;
+    const expressionTargets = new Map<string, Array<{ mesh: Mesh; index: number }>>();
+    const expressionNodes = new Map<string, Object3D[]>();
+    const initialMorphWeights = new Map<Mesh, number[]>();
+    const initialExpressionNodeX = new Map<Object3D, number>();
+    root.traverse((object) => {
+      const expressionMatch = object.name.match(/^VRMAExpression(?:Preset|Custom)__(.+)$/);
+      if (expressionMatch?.[1]) {
+        const targets = expressionNodes.get(expressionMatch[1]) ?? [];
+        targets.push(object);
+        expressionNodes.set(expressionMatch[1], targets);
+        initialExpressionNodeX.set(object, object.position.x);
+      }
+      if (!(object as Mesh).isMesh) return;
+      const mesh = object as Mesh;
+      if (!mesh.morphTargetDictionary || !mesh.morphTargetInfluences) return;
+      initialMorphWeights.set(mesh, [...mesh.morphTargetInfluences]);
+      Object.entries(mesh.morphTargetDictionary).forEach(([name, index]) => {
+        const targets = expressionTargets.get(name) ?? [];
+        targets.push({ mesh, index });
+        expressionTargets.set(name, targets);
+      });
+    });
+    const resetExpressions = () => {
+      initialMorphWeights.forEach((weights, mesh) => {
+        if (!mesh.morphTargetInfluences) return;
+        weights.forEach((weight, index) => {
+          mesh.morphTargetInfluences![index] = weight;
+        });
+      });
+      initialExpressionNodeX.forEach((weight, node) => {
+        node.position.x = weight;
+      });
+    };
+    const outputFormat = job.outputFormat as Model3dOutputFormat;
+    const previewAnimations = model3dOutputSupportsAnimations(outputFormat);
+    const previewExpressions = model3dOutputSupportsExpressions(outputFormat);
     return {
       root,
+      animations: previewAnimations ? [...animationClips.keys()] : [],
+      expressions: previewExpressions
+        ? [...new Set([...expressionTargets.keys(), ...expressionNodes.keys()])]
+        : [],
+      playAnimation: (name) => {
+        const clip = animationClips.get(name);
+        if (!clip) return;
+        if (currentAnimationName !== name) {
+          currentAction?.stop();
+          currentAction = mixer.clipAction(clip);
+          currentAnimationName = name;
+          currentAction.reset();
+        }
+        currentAction.paused = false;
+        currentAction.play();
+      },
+      pauseAnimation: () => {
+        if (currentAction) currentAction.paused = true;
+      },
+      stopAnimation: () => {
+        mixer.stopAllAction();
+        currentAction = undefined;
+        currentAnimationName = undefined;
+        mixer.update(0);
+      },
+      selectExpression: (name) => {
+        resetExpressions();
+        for (const { mesh, index } of expressionTargets.get(name) ?? []) {
+          if (mesh.morphTargetInfluences) mesh.morphTargetInfluences[index] = 1;
+        }
+        for (const node of expressionNodes.get(name) ?? []) node.position.x = 1;
+      },
+      resetExpressions,
+      update: (deltaSeconds) => mixer.update(deltaSeconds),
       updateTransparency,
       dispose: () => {
+        mixer.stopAllAction();
+        mixer.uncacheRoot(root);
         for (const material of generatedMaterials) material.dispose();
         for (const sources of materialSources.values()) {
           for (const material of sources) material.dispose();
@@ -511,7 +606,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
         }).loadModel(source, {
           outline: false,
           materialRenderOrder: false,
-          morphAttributes: false,
+          morphAttributes: true,
           morphSplit: false,
         });
         return mmdModel3d.root;
@@ -608,8 +703,11 @@ export class BrowserModel3dEngine implements ConversionEngine {
     };
     Object.entries(animation.morphTracks).forEach(([morphName, morphTrack]) => {
       if (!morphTrack.frames.length) return;
-      const expressionName = presetExpressions[morphName] ?? this.safeOutputName(morphName);
-      const expressionType = presetExpressions[morphName] ? 'Preset' : 'Custom';
+      const mapped: { preset?: string; custom?: string } = presetExpressions[morphName]
+        ? { preset: presetExpressions[morphName] }
+        : this.vrmExpressionName(morphName);
+      const expressionName = mapped.preset ?? mapped.custom ?? this.safeOutputName(morphName);
+      const expressionType = mapped.preset ? 'Preset' : 'Custom';
       const node = new Object3D();
       node.name = `VRMAExpression${expressionType}__${expressionName}`;
       root.add(node);
@@ -1340,27 +1438,73 @@ export class BrowserModel3dEngine implements ConversionEngine {
     return name.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '-').replace(/^-+|-+$/g, '') || 'animation';
   }
 
-  private vrmaExpressionNodeName(sourceName: string): string {
-    const normalized = sourceName.normalize('NFKC').toLowerCase().replace(/[^a-z0-9]/g, '');
+  private vrmExpressionName(sourceName: string): { preset?: string; custom?: string } {
+    const compact = sourceName.normalize('NFKC').toLowerCase().replace(/[\s_.-]/g, '');
+    const normalized = compact.replace(/[^a-z0-9]/g, '');
     const presets: Record<string, string> = {
       aa: 'aa',
+      a: 'aa',
       ih: 'ih',
+      i: 'ih',
       ou: 'ou',
+      u: 'ou',
       ee: 'ee',
+      e: 'ee',
       oh: 'oh',
+      o: 'oh',
       blink: 'blink',
       blinkleft: 'blinkLeft',
       blinkright: 'blinkRight',
+      wink: 'blinkLeft',
+      winkleft: 'blinkLeft',
+      winkright: 'blinkRight',
       happy: 'happy',
+      joy: 'happy',
       angry: 'angry',
       sad: 'sad',
+      sorrow: 'sad',
       relaxed: 'relaxed',
       surprised: 'surprised',
+      surprise: 'surprised',
+      lookup: 'lookUp',
+      lookdown: 'lookDown',
+      lookleft: 'lookLeft',
+      lookright: 'lookRight',
+      neutral: 'neutral',
     };
-    const preset = presets[normalized];
-    return preset
-      ? `VRMAExpressionPreset__${preset}`
-      : `VRMAExpressionCustom__${this.safeOutputName(sourceName)}`;
+    const japanesePresets: Record<string, string> = {
+      あ: 'aa',
+      い: 'ih',
+      う: 'ou',
+      え: 'ee',
+      お: 'oh',
+      まばたき: 'blink',
+      瞬き: 'blink',
+      ウィンク: 'blinkLeft',
+      ウインク: 'blinkLeft',
+      ウィンク左: 'blinkLeft',
+      ウインク左: 'blinkLeft',
+      ウィンク右: 'blinkRight',
+      ウインク右: 'blinkRight',
+      笑い: 'happy',
+      笑顔: 'happy',
+      怒り: 'angry',
+      悲しい: 'sad',
+      困る: 'sad',
+      びっくり: 'surprised',
+      驚き: 'surprised',
+      真面目: 'neutral',
+    };
+    const preset = japanesePresets[compact] ?? presets[normalized];
+    if (preset) return { preset };
+    return { custom: this.safeOutputName(sourceName) };
+  }
+
+  private vrmaExpressionNodeName(sourceName: string): string {
+    const expression = this.vrmExpressionName(sourceName);
+    return expression.preset
+      ? `VRMAExpressionPreset__${expression.preset}`
+      : `VRMAExpressionCustom__${expression.custom}`;
   }
 
   private async exportVrma(root: Object3D, clip: AnimationClip): Promise<Blob> {
@@ -1601,10 +1745,16 @@ export class BrowserModel3dEngine implements ConversionEngine {
       nodes?: Array<{
         name?: string;
         children?: number[];
+        mesh?: number;
         translation?: number[];
         rotation?: number[];
         scale?: number[];
         matrix?: number[];
+      }>;
+      meshes?: Array<{
+        weights?: number[];
+        extras?: { targetNames?: string[] };
+        primitives?: Array<{ targets?: Array<Record<string, number>> }>;
       }>;
       materials?: Array<{
         pbrMetallicRoughness?: {
@@ -1644,6 +1794,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     if (sourceFormat === 'pmx' || sourceFormat === 'pmd') {
       this.validateVrmHumanoidHierarchy(json.nodes ?? [], humanBones);
     }
+    const expressions = this.collectVrmExpressions(json.nodes ?? [], json.meshes ?? []);
     json.extensionsUsed = [...new Set([...(json.extensionsUsed ?? []), 'VRMC_vrm'])];
     json.extensionsRequired = [...new Set([...(json.extensionsRequired ?? []), 'VRMC_vrm'])];
     json.extensions = {
@@ -1656,6 +1807,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
           licenseUrl: 'https://vrm.dev/licenses/1.0/',
         },
         humanoid: { humanBones },
+        ...(expressions ? { expressions } : {}),
       },
     };
     this.applyMToonExtensions(json);
@@ -1675,6 +1827,54 @@ export class BrowserModel3dEngine implements ConversionEngine {
     outputBytes.fill(0x20, 20 + encodedJson.length, 20 + paddedLength);
     outputBytes.set(remainingChunks, 20 + paddedLength);
     return output;
+  }
+
+  private collectVrmExpressions(
+    nodes: Array<{ mesh?: number }>,
+    meshes: Array<{
+      weights?: number[];
+      extras?: { targetNames?: string[] };
+      primitives?: Array<{ targets?: Array<Record<string, number>> }>;
+    }>,
+  ):
+    | {
+        preset: Record<
+          string,
+          { isBinary: boolean; morphTargetBinds: Array<{ node: number; index: number; weight: number }> }
+        >;
+        custom: Record<
+          string,
+          { isBinary: boolean; morphTargetBinds: Array<{ node: number; index: number; weight: number }> }
+        >;
+      }
+    | undefined {
+    type Expression = {
+      isBinary: boolean;
+      morphTargetBinds: Array<{ node: number; index: number; weight: number }>;
+    };
+    const preset: Record<string, Expression> = {};
+    const custom: Record<string, Expression> = {};
+    nodes.forEach((node, nodeIndex) => {
+      if (node.mesh === undefined) return;
+      const mesh = meshes[node.mesh];
+      if (!mesh) return;
+      const targetNames = mesh.extras?.targetNames ?? [];
+      const targetCount = Math.max(
+        targetNames.length,
+        mesh.weights?.length ?? 0,
+        ...((mesh.primitives ?? []).map((primitive) => primitive.targets?.length ?? 0)),
+      );
+      for (let targetIndex = 0; targetIndex < targetCount; targetIndex += 1) {
+        const sourceName = targetNames[targetIndex]?.trim() || `morph-${targetIndex + 1}`;
+        const mapped = this.vrmExpressionName(sourceName);
+        const collection = mapped.preset ? preset : custom;
+        const name = mapped.preset ?? mapped.custom ?? sourceName;
+        const expression = collection[name] ?? { isBinary: false, morphTargetBinds: [] };
+        expression.morphTargetBinds.push({ node: nodeIndex, index: targetIndex, weight: 1 });
+        collection[name] = expression;
+      }
+    });
+    return Object.keys(preset).length || Object.keys(custom).length ? { preset, custom } : undefined;
   }
 
   private validateVrmHumanoidHierarchy(

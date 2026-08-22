@@ -411,6 +411,54 @@
   overflow: auto;
   border-left: 1px solid var(--border);
 }
+.previewInspectionTabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.previewInspectionTabs button,
+.previewInspectionPanel button,
+.previewInspectionPanel select {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--cream);
+  background: var(--navy-3);
+}
+.previewInspectionTabs .previewInspectionTabActive,
+.previewExpressionList .previewExpressionActive {
+  border-color: var(--indigo-2);
+  background: var(--indigo);
+  color: white;
+}
+.previewInspectionPanel {
+  margin-bottom: 20px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.previewInspectionPanel > p {
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.previewInspectionPanel select {
+  width: 100%;
+}
+.previewPlaybackControls {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin-top: 9px;
+}
+.previewExpressionList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  max-height: 220px;
+  margin-bottom: 10px;
+  overflow: auto;
+}
 .previewControl {
   display: block;
   margin-bottom: 17px;

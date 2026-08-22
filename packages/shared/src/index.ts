@@ -470,6 +470,17 @@ export const MODEL3D_BONE_OUTPUT_FORMATS = [
 ] as const satisfies readonly Model3dOutputFormat[];
 export const MODEL3D_ANIMATION_INPUT_FORMATS = ['fbx', 'gltf', 'glb', 'dae', 'vmd'] as const;
 export const MODEL3D_ANIMATION_OUTPUT_FORMATS = ['glb', 'gltf', 'vrm'] as const;
+export const MODEL3D_EXPRESSION_INPUT_FORMATS = [
+  'fbx',
+  'gltf',
+  'glb',
+  'vrm',
+  'dae',
+  'pmx',
+  'pmd',
+  'vmd',
+] as const;
+export const MODEL3D_EXPRESSION_OUTPUT_FORMATS = ['glb', 'gltf', 'vrm'] as const;
 
 export function model3dFormatMayContainAnimations(format: Model3dFormat): boolean {
   return (MODEL3D_ANIMATION_INPUT_FORMATS as readonly Model3dFormat[]).includes(format);
@@ -477,6 +488,14 @@ export function model3dFormatMayContainAnimations(format: Model3dFormat): boolea
 
 export function model3dOutputSupportsAnimations(format: Model3dOutputFormat): boolean {
   return (MODEL3D_ANIMATION_OUTPUT_FORMATS as readonly Model3dOutputFormat[]).includes(format);
+}
+
+export function model3dFormatMayContainExpressions(format: Model3dFormat): boolean {
+  return (MODEL3D_EXPRESSION_INPUT_FORMATS as readonly Model3dFormat[]).includes(format);
+}
+
+export function model3dOutputSupportsExpressions(format: Model3dOutputFormat): boolean {
+  return (MODEL3D_EXPRESSION_OUTPUT_FORMATS as readonly Model3dOutputFormat[]).includes(format);
 }
 
 export function model3dFormatMayContainBones(format: Model3dFormat): boolean {
