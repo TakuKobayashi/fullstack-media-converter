@@ -2,15 +2,18 @@ import {
   Bone,
   Box3,
   BufferAttribute,
+  CanvasTexture,
   Color,
   DoubleSide,
   Group,
   LoadingManager,
   Material,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
   SkinnedMesh,
+  SRGBColorSpace,
   Texture,
   Vector3,
 } from 'three';
@@ -44,6 +47,7 @@ import {
 } from '@convertmate/shared';
 
 const MMD_VRM_TARGET_HEIGHT_METERS = 1.7;
+const MMD_BAKE_LIGHT = new Vector3(0.5, 1, 1).normalize();
 
 /**
  * Tunable thresholds used when converting MMD transparency to glTF/VRM.
@@ -157,10 +161,9 @@ export class BrowserModel3dEngine implements ConversionEngine {
           options.model3d?.transparencyByFileName?.[job.file.name] ??
           options.model3d?.transparency ??
           MMD_TRANSPARENCY_THRESHOLDS;
-        // GLB/glTF must export the exact material state shown by the real-time
-        // preview. Baking into a new atlas changes its alpha distribution and
-        // can produce a different MASK/BLEND result even with identical slider
-        // values, so all preview-capable targets use the shared material path.
+        if (job.outputFormat === 'glb' || job.outputFormat === 'gltf') {
+          await this.bakeMmdRgbMaterials(root);
+        }
         this.applyMmdPortableMaterials(root, transparency, job.outputFormat === 'vrm');
       }
       if ((job.inputFormat === 'pmx' || job.inputFormat === 'pmd') && job.outputFormat === 'vrm') {
@@ -214,6 +217,9 @@ export class BrowserModel3dEngine implements ConversionEngine {
     const manager = this.createLoadingManager(auxiliaryFiles, objectUrls);
     const root = await this.loadModel(source, job.inputFormat, auxiliaryFiles, manager);
     const isMmd = job.inputFormat === 'pmx' || job.inputFormat === 'pmd';
+    if (isMmd && (job.outputFormat === 'glb' || job.outputFormat === 'gltf')) {
+      await this.bakeMmdRgbMaterials(root);
+    }
     const materialSources = new Map<Mesh, Material[]>();
     const generatedMaterials = new Set<Material>();
     let maxMaterialIndex = 0;
@@ -435,6 +441,221 @@ export class BrowserModel3dEngine implements ConversionEngine {
   }
 
   /**
+   * Bake PMX/PMD lighting, toon ramp and sphere-map RGB into a glTF-compatible
+   * base-color texture. Alpha is copied from the original base texture and is
+   * never classified here; preview settings remain the single alpha authority.
+   */
+  private async bakeMmdRgbMaterials(root: Object3D): Promise<void> {
+    const meshes: Mesh[] = [];
+    root.traverse((object) => {
+      if ((object as Mesh).isMesh) meshes.push(object as Mesh);
+    });
+    for (const mesh of meshes) {
+      const sources = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const baked = await Promise.all(
+        sources.map((source, materialIndex) =>
+          this.bakeMmdRgbMaterial(source, mesh, materialIndex),
+        ),
+      );
+      mesh.material = Array.isArray(mesh.material) ? baked : baked[0];
+    }
+  }
+
+  private async bakeMmdRgbMaterial(
+    source: Material,
+    mesh: Mesh,
+    materialIndex: number,
+  ): Promise<Material> {
+    const metadata = source.userData.mmdMaterial as
+      | {
+          diffuse?: [number, number, number, number];
+          ambient?: [number, number, number];
+          materialIndex?: number;
+          transparencyMode?: MmdTransparencyMode;
+          sphereMode?: 'none' | 'multiply' | 'add' | 'subTexture';
+          edgeColor?: [number, number, number, number];
+          edgeSize?: number;
+          flags?: { doubleSided?: boolean; edge?: boolean };
+        }
+      | undefined;
+    if (!metadata) return source;
+    const toon = source as Material & {
+      color?: { r: number; g: number; b: number };
+      map?: Texture | null;
+      gradientMap?: Texture | null;
+      opacity?: number;
+      alphaTest?: number;
+      transparent?: boolean;
+      side?: number;
+    };
+    const basePixels = this.readTexturePixels(toon.map);
+    const toonPixels = this.readTexturePixels(toon.gradientMap);
+    const sphereTexture = source.userData.mmdSphereTexture as Texture | undefined;
+    const spherePixels = this.readTexturePixels(sphereTexture);
+    const width = Math.min(basePixels?.width ?? 512, 1024);
+    const height = Math.min(basePixels?.height ?? 512, 1024);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) return source;
+    const diffuse = metadata.diffuse ?? [
+      toon.color?.r ?? 1,
+      toon.color?.g ?? 1,
+      toon.color?.b ?? 1,
+      toon.opacity ?? 1,
+    ];
+    const ambient = metadata.ambient ?? [0, 0, 0];
+    const lit = [
+      Math.min(1, diffuse[0] * 0.604 + ambient[0]),
+      Math.min(1, diffuse[1] * 0.604 + ambient[1]),
+      Math.min(1, diffuse[2] * 0.604 + ambient[2]),
+    ];
+    const output = context.createImageData(width, height);
+    const accumulated = new Float32Array(width * height * 3);
+    const samples = new Uint16Array(width * height);
+    this.rasterizeMmdUv(mesh, materialIndex, width, height, toon.map?.flipY ?? false, (x, y, normal) => {
+      const u = width === 1 ? 0 : x / (width - 1);
+      const v = height === 1 ? 0 : y / (height - 1);
+      const base = this.sampleTexture(basePixels, u, v);
+      const toonSample = this.sampleTexture(
+        toonPixels,
+        0,
+        Math.max(0, Math.min(1, normal.dot(MMD_BAKE_LIGHT) * 0.5 + 0.45)),
+      );
+      const sphereSample = this.sampleTexture(
+        spherePixels,
+        normal.x * 0.5 + 0.5,
+        normal.y * 0.5 + 0.5,
+      );
+      const pixel = y * width + x;
+      const offset = pixel * 3;
+      for (let channel = 0; channel < 3; channel += 1) {
+        let value = lit[channel] * base[channel] * toonSample[channel];
+        if (spherePixels && metadata.sphereMode === 'multiply') value *= sphereSample[channel];
+        if (spherePixels && metadata.sphereMode === 'add') value += sphereSample[channel] * 2;
+        if (spherePixels && metadata.sphereMode === 'subTexture') value = sphereSample[channel];
+        accumulated[offset + channel] += Math.max(0, Math.min(1, value));
+      }
+      if (samples[pixel] < 65535) samples[pixel] += 1;
+    });
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const pixel = y * width + x;
+        const target = pixel * 4;
+        const base = this.sampleTexture(
+          basePixels,
+          width === 1 ? 0 : x / (width - 1),
+          height === 1 ? 0 : y / (height - 1),
+        );
+        const count = samples[pixel];
+        for (let channel = 0; channel < 3; channel += 1) {
+          output.data[target + channel] = Math.round(
+            (count ? accumulated[pixel * 3 + channel] / count : base[channel]) * 255,
+          );
+        }
+        // Preserve source alpha bytes exactly. Do not multiply or reclassify.
+        output.data[target + 3] = Math.round(base[3] * 255);
+      }
+    }
+    context.putImageData(output, 0, 0);
+    const bakedMap = new CanvasTexture(canvas);
+    bakedMap.colorSpace = SRGBColorSpace;
+    bakedMap.name = `${source.name || 'mmd-material'}-rgb-baked`;
+    if (toon.map) {
+      bakedMap.flipY = toon.map.flipY;
+      bakedMap.wrapS = toon.map.wrapS;
+      bakedMap.wrapT = toon.map.wrapT;
+      bakedMap.offset.copy(toon.map.offset);
+      bakedMap.repeat.copy(toon.map.repeat);
+      bakedMap.center.copy(toon.map.center);
+      bakedMap.rotation = toon.map.rotation;
+    }
+    bakedMap.needsUpdate = true;
+    const bakedSource = source.clone() as Material & { map?: Texture | null; color?: Color };
+    bakedSource.map = bakedMap;
+    bakedSource.color?.setRGB(1, 1, 1);
+    bakedSource.userData = {
+      ...source.userData,
+      mmdMaterial: { ...metadata, diffuse: [1, 1, 1, diffuse[3]] },
+      mmdOriginalAlphaTexture: toon.map ?? undefined,
+    };
+    return bakedSource;
+  }
+
+  private rasterizeMmdUv(
+    mesh: Mesh,
+    materialIndex: number,
+    width: number,
+    height: number,
+    flipY: boolean,
+    visit: (x: number, y: number, normal: Vector3) => void,
+  ): void {
+    const geometry = mesh.geometry;
+    const uv = geometry.getAttribute('uv');
+    const normal = geometry.getAttribute('normal');
+    if (!uv || !normal) return;
+    const indices = geometry.getIndex();
+    const groups = geometry.groups.filter((group) => (group.materialIndex ?? 0) === materialIndex);
+    const ranges = groups.length
+      ? groups.map(({ start, count }) => ({ start, count }))
+      : materialIndex === 0
+        ? [{ start: 0, count: indices?.count ?? uv.count }]
+        : [];
+    const vertexNormal = new Vector3();
+    const interpolated = new Vector3();
+    for (const range of ranges) {
+      for (let offset = range.start; offset + 2 < range.start + range.count; offset += 3) {
+        const ia = indices ? indices.getX(offset) : offset;
+        const ib = indices ? indices.getX(offset + 1) : offset + 1;
+        const ic = indices ? indices.getX(offset + 2) : offset + 2;
+        const x0 = uv.getX(ia) * (width - 1);
+        const x1 = uv.getX(ib) * (width - 1);
+        const x2 = uv.getX(ic) * (width - 1);
+        const toY = (value: number) => (flipY ? 1 - value : value) * (height - 1);
+        const y0 = toY(uv.getY(ia));
+        const y1 = toY(uv.getY(ib));
+        const y2 = toY(uv.getY(ic));
+        const denominator = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2);
+        if (Math.abs(denominator) < 1e-8) continue;
+        for (let y = Math.max(0, Math.floor(Math.min(y0, y1, y2))); y <= Math.min(height - 1, Math.ceil(Math.max(y0, y1, y2))); y += 1) {
+          for (let x = Math.max(0, Math.floor(Math.min(x0, x1, x2))); x <= Math.min(width - 1, Math.ceil(Math.max(x0, x1, x2))); x += 1) {
+            const a = ((y1 - y2) * (x + 0.5 - x2) + (x2 - x1) * (y + 0.5 - y2)) / denominator;
+            const b = ((y2 - y0) * (x + 0.5 - x2) + (x0 - x2) * (y + 0.5 - y2)) / denominator;
+            const c = 1 - a - b;
+            if (a < -1e-5 || b < -1e-5 || c < -1e-5) continue;
+            interpolated.set(0, 0, 0);
+            vertexNormal.fromBufferAttribute(normal, ia);
+            interpolated.addScaledVector(vertexNormal, a);
+            vertexNormal.fromBufferAttribute(normal, ib);
+            interpolated.addScaledVector(vertexNormal, b);
+            vertexNormal.fromBufferAttribute(normal, ic);
+            interpolated.addScaledVector(vertexNormal, c).normalize();
+            visit(x, y, interpolated);
+          }
+        }
+      }
+    }
+  }
+
+  private sampleTexture(
+    pixels: { data: Uint8ClampedArray; width: number; height: number } | undefined,
+    u: number,
+    v: number,
+  ): [number, number, number, number] {
+    if (!pixels) return [1, 1, 1, 1];
+    const x = Math.max(0, Math.min(pixels.width - 1, Math.round(u * (pixels.width - 1))));
+    const y = Math.max(0, Math.min(pixels.height - 1, Math.round(v * (pixels.height - 1))));
+    const offset = (y * pixels.width + x) * 4;
+    return [
+      (pixels.data[offset] ?? 255) / 255,
+      (pixels.data[offset + 1] ?? 255) / 255,
+      (pixels.data[offset + 2] ?? 255) / 255,
+      (pixels.data[offset + 3] ?? 255) / 255,
+    ];
+  }
+
+  /**
    * Apply the same portable material used by the real-time preview. GLB, glTF
    * and VRM deliberately share this path; VRM metadata is the only variant.
    */
@@ -519,9 +740,11 @@ export class BrowserModel3dEngine implements ConversionEngine {
     const diffuse = metadata.diffuse ?? [1, 1, 1, toon.opacity ?? 1];
     const ambient = metadata.ambient ?? [0.2, 0.2, 0.2];
     const edgeColor = metadata.edgeColor ?? [0, 0, 0, 1];
+    const alphaTexture =
+      (source.userData.mmdOriginalAlphaTexture as Texture | undefined) ?? toon.map ?? undefined;
     const transparency = this.resolveMmdTransparencyMode(
       metadata.transparencyMode,
-      toon.map ?? undefined,
+      alphaTexture,
       diffuse[3],
       settings,
     );
@@ -535,24 +758,30 @@ export class BrowserModel3dEngine implements ConversionEngine {
         ...transparency,
       });
     }
-    const material = new MeshStandardMaterial({
+    const commonMaterialOptions = {
       name: source.name,
       color: new Color(diffuse[0], diffuse[1], diffuse[2]),
       map: toon.map ?? null,
-      metalness: 0,
-      roughness: 1,
       transparent: isBlend,
       opacity: diffuse[3],
       alphaTest: isMask ? Math.max(settings.maskMinAlphaCutoff, toon.alphaTest ?? 0) : 0,
-      // Generic glTF has no transparent-with-Z-write material property. Match
-      // the exported GLB/glTF behavior in preview; VRM can preserve this via
-      // VRMC_materials_mtoon.
-      depthWrite:
-        !isBlend || (includeVrmMetadata && transparency.textureDrivenBlendWithZWrite),
       side: metadata.flags?.doubleSided || toon.side === DoubleSide ? DoubleSide : toon.side,
-      emissive: new Color(0, 0, 0),
-      emissiveMap: null,
-    });
+    };
+    const material = includeVrmMetadata
+      ? new MeshStandardMaterial({
+          ...commonMaterialOptions,
+          metalness: 0,
+          roughness: 1,
+          depthWrite: !isBlend || transparency.textureDrivenBlendWithZWrite,
+          emissive: new Color(0, 0, 0),
+          emissiveMap: null,
+        })
+      : new MeshBasicMaterial({
+          ...commonMaterialOptions,
+          // GLTFExporter serializes this as KHR_materials_unlit, so the baked
+          // RGB is not lit a second time by the destination viewer.
+          depthWrite: !isBlend,
+        });
     const outlineEnabled = Boolean(
       !isBlend && metadata.flags?.edge && (metadata.edgeSize ?? 0) > 0,
     );
