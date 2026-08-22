@@ -284,7 +284,9 @@ export class BrowserModel3dEngine implements ConversionEngine {
         }
       | undefined;
     if (!metadata) return source;
-    if (useMToon) return this.createMmdMToonFallback(source, metadata, toon);
+    if (useMToon) {
+      return this.createMmdMToonFallback(source, metadata, toon);
+    }
 
     const basePixels = this.readTexturePixels(toon.map ?? undefined);
     const toonPixels = this.readTexturePixels(toon.gradientMap ?? undefined);
@@ -414,8 +416,6 @@ export class BrowserModel3dEngine implements ConversionEngine {
     const diffuse = metadata.diffuse ?? [1, 1, 1, toon.opacity ?? 1];
     const ambient = metadata.ambient ?? [0.2, 0.2, 0.2];
     const edgeColor = metadata.edgeColor ?? [0, 0, 0, 1];
-    const sphereTexture = source.userData.mmdSphereTexture as Texture | undefined;
-    const useMatcap = metadata.sphereMode === 'add' && Boolean(sphereTexture);
     const material = new MeshStandardMaterial({
       name: source.name,
       color: new Color(diffuse[0], diffuse[1], diffuse[2]),
@@ -426,8 +426,8 @@ export class BrowserModel3dEngine implements ConversionEngine {
       opacity: diffuse[3],
       alphaTest: toon.alphaTest ?? 0,
       side: metadata.flags?.doubleSided || toon.side === DoubleSide ? DoubleSide : toon.side,
-      emissive: useMatcap ? new Color(1, 1, 1) : new Color(0, 0, 0),
-      emissiveMap: useMatcap ? sphereTexture : null,
+      emissive: new Color(0, 0, 0),
+      emissiveMap: null,
     });
     const outlineEnabled = Boolean(metadata.flags?.edge && (metadata.edgeSize ?? 0) > 0);
     material.userData.vrmMToon = {
@@ -439,7 +439,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       shadingShiftFactor: -0.05,
       shadingToonyFactor: 0.95,
       giEqualizationFactor: 0.9,
-      parametricRimColorFactor: metadata.specular ?? [0, 0, 0],
+      parametricRimColorFactor: [0, 0, 0],
       parametricRimFresnelPowerFactor: 5,
       parametricRimLiftFactor: 0,
       rimLightingMixFactor: 0,
@@ -449,8 +449,8 @@ export class BrowserModel3dEngine implements ConversionEngine {
         : 0,
       outlineColorFactor: edgeColor.slice(0, 3),
       outlineLightingMixFactor: 0,
-      matcapFromEmissive: useMatcap,
-      matcapFactor: [1, 1, 1],
+      matcapFromEmissive: false,
+      matcapFactor: [0, 0, 0],
     };
     return material;
   }
