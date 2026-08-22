@@ -105,8 +105,21 @@ export default function UniversalModel3dConverter() {
   const outputFormats = MODEL3D_OUTPUT_FORMATS.map((format) => format.toUpperCase()).join(
     locale === 'ja' ? '・' : ' · ',
   );
+  const batchDownloadJobs = useMemo(
+    () =>
+      jobs.filter(
+        (job) =>
+          !(
+            job.outputFormat === 'vrm' && vrmValidations[job.id]?.status === 'invalid'
+          ),
+      ),
+    [jobs, vrmValidations],
+  );
   const { downloadAll, isAllComplete, isPackaging, packageProgress, packageError } =
-    useBatchDownload(jobs, 'FullstackMediaConverter-model3d');
+    useBatchDownload(batchDownloadJobs, 'FullstackMediaConverter-model3d');
+  const completedBatchDownloadCount = batchDownloadJobs.filter(
+    (job) => job.status === 'done' && job.resultUrl,
+  ).length;
 
   const addFiles = useCallback(
     (list: FileList | File[]) => {
@@ -441,7 +454,7 @@ export default function UniversalModel3dConverter() {
             >
               {isPackaging
                 ? t('common.zipProgress', { progress: packageProgress })
-                : t(jobs.length > 1 ? 'common.downloadZip' : 'common.download')}
+                : t(completedBatchDownloadCount > 1 ? 'common.downloadZip' : 'common.download')}
             </button>
             <button
               onClick={clear}
