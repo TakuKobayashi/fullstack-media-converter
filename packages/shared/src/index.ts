@@ -126,6 +126,7 @@ export interface Model3dTransparencySettings {
 
 export interface Model3dConvertOptions {
   auxiliaryFiles?: File[];
+  auxiliaryFilesByJobId?: Record<string, File[]>;
   transparency?: Model3dTransparencySettings;
   transparencyByFileName?: Record<string, Model3dTransparencySettings>;
 }

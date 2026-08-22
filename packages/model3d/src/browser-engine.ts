@@ -28,7 +28,7 @@ import { TDSLoader } from 'three/examples/jsm/loaders/TDSLoader.js';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
-import { ThreeMmdLoader } from '@yohawing/three-mmd-loader';
+import { FallbackCore, ThreeMmdLoader } from '@yohawing/three-mmd-loader';
 import {
   MODEL3D_INPUT_EXTENSIONS,
   MODEL3D_OUTPUT_FORMATS,
@@ -145,7 +145,8 @@ export class BrowserModel3dEngine implements ConversionEngine {
       if (!(source instanceof File) && !(source instanceof ArrayBuffer)) {
         throw new Error('Browser model conversion requires a File or ArrayBuffer.');
       }
-      const auxiliaryFiles = options.model3d?.auxiliaryFiles ?? [];
+      const auxiliaryFiles =
+        options.model3d?.auxiliaryFilesByJobId?.[job.id] ?? options.model3d?.auxiliaryFiles ?? [];
       const manager = this.createLoadingManager(auxiliaryFiles, objectUrls);
       const root = await this.loadModel(source, job.inputFormat, auxiliaryFiles, manager);
       options.onProgress?.(45);
@@ -467,6 +468,89 @@ export class BrowserModel3dEngine implements ConversionEngine {
       default:
         throw new Error(`Unsupported model input: ${format}`);
     }
+  }
+
+  async getReferencedRelatedPaths(
+    source: File | ArrayBuffer,
+    format: InputFormat,
+    auxiliaryFiles: File[] = [],
+  ): Promise<string[]> {
+    const buffer = source instanceof File ? await source.arrayBuffer() : source;
+    if (format === 'pmx' || format === 'pmd') {
+      const model = new FallbackCore().loadModel(buffer, { format });
+      try {
+        return [
+          ...new Set(
+            model
+              .materials()
+              .flatMap((material) => [
+                material.texturePath,
+                material.sphereTexturePath,
+                material.toonTexturePath,
+              ])
+              .filter((path): path is string => Boolean(path)),
+          ),
+        ];
+      } finally {
+        model.dispose?.();
+      }
+    }
+
+    const text = new TextDecoder().decode(buffer);
+    const references: string[] = [];
+    if (format === 'gltf') {
+      const json = JSON.parse(text) as {
+        buffers?: Array<{ uri?: string }>;
+        images?: Array<{ uri?: string }>;
+      };
+      references.push(
+        ...[...(json.buffers ?? []), ...(json.images ?? [])]
+          .map(({ uri }) => uri)
+          .filter((uri): uri is string => typeof uri === 'string' && !uri.startsWith('data:')),
+      );
+    } else if (format === 'obj') {
+      for (const match of text.matchAll(/^\s*mtllib\s+(.+?)\s*$/gim)) references.push(match[1]);
+      const indexed = this.indexRelatedFiles(auxiliaryFiles);
+      for (const mtlPath of references.slice()) {
+        const mtl = this.resolveRelatedFile(mtlPath, indexed);
+        if (!mtl) continue;
+        const mtlText = await mtl.text();
+        for (const match of mtlText.matchAll(
+          /^\s*(?:map_[a-z0-9_]+|bump|disp|decal|refl)\s+(.+?)\s*$/gim,
+        )) {
+          const value = match[1].replace(/^"|"$/g, '');
+          references.push(value.split(/\s+/).pop() ?? value);
+        }
+        for (const file of auxiliaryFiles) {
+          if (mtlText.toLowerCase().includes(file.name.toLowerCase())) {
+            references.push(file.webkitRelativePath || file.name);
+          }
+        }
+      }
+    } else if (format === 'dae') {
+      for (const match of text.matchAll(/<init_from>\s*([^<]+?)\s*<\/init_from>/gi)) {
+        references.push(match[1]);
+      }
+    } else if (format === 'fbx') {
+      for (const match of text.matchAll(/(?:RelativeFilename|FileName):\s*"([^"]+)"/gi)) {
+        references.push(match[1]);
+      }
+    }
+
+    if (format === '3ds' || format === 'fbx') {
+      const extensionPattern = 'png|jpe?g|webp|bmp|tga|dds|ktx2';
+      for (const match of text.matchAll(
+        new RegExp(`([^\\0\\r\\n"']+?\\.(?:${extensionPattern}))(?=[\\0\\r\\n"']|$)`, 'gi'),
+      )) {
+        references.push(match[1]);
+      }
+    }
+    for (const file of auxiliaryFiles) {
+      if (text.toLowerCase().includes(file.name.toLowerCase())) {
+        references.push(file.webkitRelativePath || file.name);
+      }
+    }
+    return [...new Set(references.map((path) => path.trim()).filter(Boolean))];
   }
 
   private indexRelatedFiles(files: File[]): Map<string, File> {

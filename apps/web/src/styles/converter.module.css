@@ -218,6 +218,80 @@
   border: 1px solid var(--border);
   animation: fadeUp 0.2s ease both;
 }
+
+.modelFileGroup {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--navy-2);
+}
+
+.modelFileGroup .fileRow {
+  border: 0;
+  border-radius: 0;
+}
+
+.relatedFilesPanel {
+  padding: 0 16px 16px;
+}
+
+.relatedFilesHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.relatedFilesList {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.relatedFilesList li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.8rem;
+}
+
+.relatedFilesList small {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.relatedDropZone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.relatedDropZone:hover,
+.relatedDropZoneActive {
+  border-color: var(--indigo);
+  background: rgba(110, 64, 201, 0.07);
+}
+
+.relatedDropZone .browseBtn {
+  flex-shrink: 0;
+  padding: 7px 12px;
+}
 .fileIcon {
   font-size: 1.2rem;
   flex-shrink: 0;

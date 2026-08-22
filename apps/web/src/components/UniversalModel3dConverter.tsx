@@ -39,6 +39,31 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function normalizeRelatedPath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
+}
+
+function relatedBasename(path: string): string {
+  return path.split('/').pop() ?? path;
+}
+
+function matchReferencedFiles(referencedPaths: string[], files: File[]): File[] {
+  const references = new Set(referencedPaths.map(normalizeRelatedPath));
+  const basenames = new Set([...references].map(relatedBasename));
+  return files.filter((file) => {
+    const path = normalizeRelatedPath(file.webkitRelativePath || file.name);
+    return references.has(path) || basenames.has(relatedBasename(path));
+  });
+}
+
+function relatedExtensionsFor(format: InputFormat): readonly string[] {
+  return (
+    MODEL3D_RELATED_FILE_EXTENSIONS[
+      format as keyof typeof MODEL3D_RELATED_FILE_EXTENSIONS
+    ] ?? []
+  );
+}
+
 const TRANSPARENCY_PREVIEW_OUTPUTS = new Set<Model3dOutputFormat>(['glb', 'gltf', 'vrm']);
 
 type VrmValidation = {
@@ -93,13 +118,14 @@ export default function UniversalModel3dConverter() {
   const [dragging, setDragging] = useState(false);
   const [previewJob, setPreviewJob] = useState<ConversionJob>();
   const [previewFailures, setPreviewFailures] = useState<Record<string, string>>({});
+  const [textureReferences, setTextureReferences] = useState<Record<string, string[]>>({});
+  const [relatedDraggingJobId, setRelatedDraggingJobId] = useState<string>();
   const [appliedTransparencySettings, setAppliedTransparencySettings] = useState<
     Record<string, Model3dTransparencySettings>
   >({});
   const [vrmValidations, setVrmValidations] = useState<Record<string, VrmValidation>>({});
   const vrmValidationsRef = useRef<Record<string, VrmValidation>>({});
   const inputRef = useRef<HTMLInputElement>(null);
-  const relatedInputRef = useRef<HTMLInputElement>(null);
   const queueRef = useRef<ConversionQueue | null>(null);
   const inputFormats = MODEL3D_INPUT_FORMAT_LABELS.join(locale === 'ja' ? '・' : ' · ');
   const outputFormats = MODEL3D_OUTPUT_FORMATS.map((format) => format.toUpperCase()).join(
@@ -120,6 +146,31 @@ export default function UniversalModel3dConverter() {
   const completedBatchDownloadCount = batchDownloadJobs.filter(
     (job) => job.status === 'done' && job.resultUrl,
   ).length;
+  const relatedFilesByJobId = useMemo(
+    () =>
+      Object.fromEntries(
+        jobs.map((job) => [
+          job.id,
+          relatedExtensionsFor(job.inputFormat).length > 0
+            ? matchReferencedFiles(textureReferences[job.id] ?? [], auxiliaryFiles)
+            : [],
+        ]),
+      ) as Record<string, File[]>,
+    [auxiliaryFiles, jobs, textureReferences],
+  );
+
+  const addRelatedFiles = useCallback((list: FileList | File[]) => {
+    const related = Array.from(list).filter((file) => {
+      const extension = `.${file.name.split('.').pop()?.toLowerCase() ?? ''}`;
+      return (MODEL3D_AUXILIARY_EXTENSIONS as readonly string[]).includes(extension);
+    });
+    setAuxiliaryFiles((current) => {
+      const merged = new Map(
+        [...current, ...related].map((file) => [file.webkitRelativePath || file.name, file]),
+      );
+      return [...merged.values()];
+    });
+  }, []);
 
   const addFiles = useCallback(
     (list: FileList | File[]) => {
@@ -132,12 +183,7 @@ export default function UniversalModel3dConverter() {
         const extension = `.${file.name.split('.').pop()?.toLowerCase() ?? ''}`;
         return (MODEL3D_AUXILIARY_EXTENSIONS as readonly string[]).includes(extension);
       });
-      setAuxiliaryFiles((current) => {
-        const merged = new Map(
-          [...current, ...auxiliary].map((file) => [file.webkitRelativePath || file.name, file]),
-        );
-        return [...merged.values()];
-      });
+      addRelatedFiles(auxiliary);
       setJobs((current) => [
         ...current,
         ...primary.map((file) => ({
@@ -155,8 +201,36 @@ export default function UniversalModel3dConverter() {
         })),
       ]);
     },
-    [targetFormat],
+    [addRelatedFiles, targetFormat],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const candidates = jobs.filter(
+      (job) => relatedExtensionsFor(job.inputFormat).length > 0,
+    );
+    if (!candidates.length) return;
+    void Promise.all(
+      candidates.map(async (job) => {
+        try {
+          if (typeof job.file.source === 'string') return [job.id, []] as const;
+          const paths = await engine.getReferencedRelatedPaths(
+            job.file.source,
+            job.inputFormat,
+            auxiliaryFiles,
+          );
+          return [job.id, paths] as const;
+        } catch {
+          return [job.id, []] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (!cancelled) setTextureReferences((current) => ({ ...current, ...Object.fromEntries(entries) }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [auxiliaryFiles, jobs]);
 
   const changeTarget = (format: Model3dOutputFormat) => {
     setPreviewJob(undefined);
@@ -186,35 +260,22 @@ export default function UniversalModel3dConverter() {
       !model3dOutputSupportsBones(targetFormat),
     [jobs, targetFormat],
   );
-  const relatedFileHints = useMemo(
-    () =>
-      [...new Set(jobs.map((job) => job.inputFormat))].flatMap((format) => {
-        const extensions =
-          MODEL3D_RELATED_FILE_EXTENSIONS[format as keyof typeof MODEL3D_RELATED_FILE_EXTENSIONS];
-        return extensions ? [{ format, extensions }] : [];
-      }),
-    [jobs],
-  );
-  const acceptedRelatedExtensions = useMemo(
-    () => [...new Set(relatedFileHints.flatMap(({ extensions }) => extensions))],
-    [relatedFileHints],
-  );
-
   useEffect(() => {
     if (targetFormat !== 'vrm') return;
     let cancelled = false;
-    const auxiliarySignature = auxiliaryFiles
-      .map((file) => `${file.webkitRelativePath || file.name}:${file.size}:${file.lastModified}`)
-      .sort()
-      .join('|');
     const candidates = jobs.filter((job) => job.status === 'pending');
     const pendingChecks = candidates.flatMap((job) => {
+      const jobAuxiliaryFiles = relatedFilesByJobId[job.id] ?? [];
+      const auxiliarySignature = jobAuxiliaryFiles
+        .map((file) => `${file.webkitRelativePath || file.name}:${file.size}:${file.lastModified}`)
+        .sort()
+        .join('|');
       const source = job.file.source;
       const sourceVersion =
         source instanceof File ? `${source.size}:${source.lastModified}` : job.file.size;
       const signature = `${job.id}:${sourceVersion}:${auxiliarySignature}`;
       if (vrmValidationsRef.current[job.id]?.signature === signature) return [];
-      return [{ job, signature }];
+      return [{ job, signature, jobAuxiliaryFiles }];
     });
     if (!pendingChecks.length) return;
     setVrmValidations((current) => {
@@ -228,13 +289,13 @@ export default function UniversalModel3dConverter() {
       return next;
     });
     void (async () => {
-      for (const { job, signature } of pendingChecks) {
+      for (const { job, signature, jobAuxiliaryFiles } of pendingChecks) {
         if (cancelled || !isModel3dOutputCandidate(job.inputFormat as Model3dFormat, 'vrm')) continue;
         const settings =
           appliedTransparencySettings[job.id] ??
           jotaiStore.get(vrmTransparencySettingsAtomFamily(job.file.name)) ??
           MMD_TRANSPARENCY_THRESHOLDS;
-        const result = await engine.validateVrmConversion(job, auxiliaryFiles, settings);
+        const result = await engine.validateVrmConversion(job, jobAuxiliaryFiles, settings);
         if (cancelled) return;
         setVrmValidations((current) => {
           const next = {
@@ -261,7 +322,7 @@ export default function UniversalModel3dConverter() {
         }
       }
     };
-  }, [appliedTransparencySettings, auxiliaryFiles, jobs, targetFormat]);
+  }, [appliedTransparencySettings, jobs, relatedFilesByJobId, targetFormat]);
 
   const convert = useCallback(async () => {
     const pending = jobs.filter(
@@ -282,7 +343,7 @@ export default function UniversalModel3dConverter() {
       ]),
     );
     const queue = new ConversionQueue(engine, 1, {
-      model3d: { auxiliaryFiles, transparencyByFileName },
+      model3d: { auxiliaryFiles, auxiliaryFilesByJobId: relatedFilesByJobId, transparencyByFileName },
     });
     queueRef.current = queue;
     queue.addMany(pending);
@@ -309,7 +370,7 @@ export default function UniversalModel3dConverter() {
     await queue.run();
     unsubscribe();
     setRunning(false);
-  }, [appliedTransparencySettings, auxiliaryFiles, jobs, targetFormat, vrmValidations]);
+  }, [appliedTransparencySettings, auxiliaryFiles, jobs, relatedFilesByJobId, targetFormat, vrmValidations]);
 
   const clear = () => {
     if (running) queueRef.current?.abort();
@@ -319,6 +380,7 @@ export default function UniversalModel3dConverter() {
     setPreviewFailures({});
     setAppliedTransparencySettings({});
     setVrmValidations({});
+    setTextureReferences({});
     vrmValidationsRef.current = {};
     setPreviewJob(undefined);
     setRunning(false);
@@ -389,37 +451,6 @@ export default function UniversalModel3dConverter() {
             onChange={(event) => event.target.files && addFiles(event.target.files)}
           />
         </div>
-
-        {auxiliaryFiles.length > 0 && (
-          <p className={s.mixedHint}>{t('model3d.auxiliary', { count: auxiliaryFiles.length })}</p>
-        )}
-        {relatedFileHints.length > 0 && (
-          <div className={s.mixedHint}>
-            <strong>{t('model3d.relatedTitle')}</strong>
-            {relatedFileHints.map(({ format, extensions }) => (
-              <span key={format}>
-                {' '}
-                {format.toUpperCase()}: {extensions.join(', ')}
-              </span>
-            ))}
-            <button
-              type="button"
-              className={s.browseBtn}
-              onClick={() => relatedInputRef.current?.click()}
-              disabled={running}
-            >
-              {t('model3d.addRelated')}
-            </button>
-            <input
-              ref={relatedInputRef}
-              type="file"
-              multiple
-              accept={acceptedRelatedExtensions.join(',')}
-              hidden
-              onChange={(event) => event.target.files && addFiles(event.target.files)}
-            />
-          </div>
-        )}
 
         <div className={s.formatBar}>
           <span className={s.formatBarLabel}>{t('model3d.to')}</span>
@@ -500,7 +531,7 @@ export default function UniversalModel3dConverter() {
         {jobs.length > 0 && (
           <div className={s.fileList}>
             {jobs.map((job) => (
-              <div key={job.id}>
+              <div key={job.id} className={s.modelFileGroup}>
                 <div className={s.fileRow}>
                   <span className={s.fileIcon}>◇</span>
                   <span className={s.fileName}>{job.file.name}</span>
@@ -534,6 +565,57 @@ export default function UniversalModel3dConverter() {
                     </button>
                   )}
                 </div>
+                {relatedExtensionsFor(job.inputFormat).length > 0 && (
+                  <div className={s.relatedFilesPanel}>
+                    <div className={s.relatedFilesHeader}>
+                      <strong>{t('model3d.linkedTextures')}</strong>
+                      <span>
+                        {t('model3d.linkedTextureCount', {
+                          count: relatedFilesByJobId[job.id]?.length ?? 0,
+                        })}
+                      </span>
+                    </div>
+                    {(relatedFilesByJobId[job.id]?.length ?? 0) > 0 && (
+                      <ul className={s.relatedFilesList}>
+                        {relatedFilesByJobId[job.id].map((file) => (
+                          <li key={file.webkitRelativePath || file.name}>
+                            <span>{file.webkitRelativePath || file.name}</span>
+                            <small>{formatBytes(file.size)}</small>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <label
+                      className={`${s.relatedDropZone} ${
+                        relatedDraggingJobId === job.id ? s.relatedDropZoneActive : ''
+                      }`}
+                      onDragOver={(event) => {
+                        event.preventDefault();
+                        setRelatedDraggingJobId(job.id);
+                      }}
+                      onDragLeave={() => setRelatedDraggingJobId(undefined)}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        setRelatedDraggingJobId(undefined);
+                        addRelatedFiles(event.dataTransfer.files);
+                      }}
+                    >
+                      <span>{t('model3d.dropRelatedForModel')}</span>
+                      <span className={s.browseBtn}>{t('model3d.addRelated')}</span>
+                      <input
+                        type="file"
+                        multiple
+                        accept={relatedExtensionsFor(job.inputFormat).join(',')}
+                        hidden
+                        disabled={running}
+                        onChange={(event) => {
+                          if (event.target.files) addRelatedFiles(event.target.files);
+                          event.target.value = '';
+                        }}
+                      />
+                    </label>
+                  </div>
+                )}
                 {job.error && <p className={s.errorDetail}>{job.error}</p>}
                 {job.outputFormat === 'vrm' && vrmValidations[job.id]?.status === 'checking' && (
                   <p className={s.mixedHint}>{t('model3d.checkingVrmCompatibility')}</p>
@@ -573,7 +655,7 @@ export default function UniversalModel3dConverter() {
           <VrmTransparencyPreviewModal
             key={previewJob.id}
             job={previewJob}
-            auxiliaryFiles={auxiliaryFiles}
+            auxiliaryFiles={relatedFilesByJobId[previewJob.id] ?? []}
             onClose={() => setPreviewJob(undefined)}
             onApply={(settings) => {
               setAppliedTransparencySettings((current) => ({
