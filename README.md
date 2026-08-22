@@ -1,83 +1,129 @@
 # Fullstack Media Converter
 
-**Repository:** `fullstack-media-converter`
+画像、動画、音声、3Dモデルの一括変換とEXIF情報の抽出を、ブラウザ内で実行するメディア変換ツールです。通常の変換処理ではファイルをサーバーへアップロードしません。
 
-Batch file conversion platform. Images, videos, documents — all processed in the browser. No uploads.
+## 公開サイト
 
-## Architecture
+**https://fullstack-media-converter.taptappun.workers.dev/**
 
-```
-fullstack-media-converter/
-├── apps/
-│   ├── web/        Next.js 15 SSG → Cloudflare Workers Assets
-│   └── cli/        Node.js CLI (spiritual successor to image-processing-utility-cli)
-└── packages/
-    ├── shared/     Types, interfaces, conversion route map
-    ├── core/       ConversionQueue (platform-agnostic)
-    ├── image/      BrowserImageEngine (Canvas + heic2any)
-    ├── video/      BrowserVideoEngine (ffmpeg.wasm)
-    └── exif/       EXIF reader (exifreader)
-```
+英語版と日本語版を提供しています。日本語版は `/ja/` 以下から利用できます。
 
-## Video conversion (ffmpeg.wasm)
+## 主な機能
 
-Video conversion runs FFmpeg compiled to WebAssembly, entirely in the browser
-— no upload, no server. It loads the single-thread `@ffmpeg/core` build from
-a CDN (jsDelivr) at runtime. The single-thread build doesn't need
-`SharedArrayBuffer`, so it works with zero special hosting requirements —
-no COOP/COEP headers, no self-hosting the wasm binary. This matches how the
-site is deployed: a plain static export served as-is via Cloudflare Workers
-Assets, with no control over (or need for) custom response headers.
+- 複数ファイルのドラッグ＆ドロップ、一括変換、個別ダウンロード、ZIPダウンロード
+- 画像、動画、音声、3Dモデルの形式変換
+- JPG、PNGなどからのEXIF情報抽出
+- 3Dモデルの関連ファイル（テクスチャー、MTL、BINなど）の自動照合とモデル単位の追加
+- 3Dモデルとアニメーションを分けた変換・管理
+- 3Dプレビューでのアニメーション再生、表情切り替え、ボーン表示・選択
+- 英語・日本語表示と、各機能用の静的SEOページ
 
-The tradeoff is that the engine downloads (~25MB) on first use each session,
-so the first conversion takes a few seconds longer while it loads. That's
-expected and fine — see `packages/video/src/browser-engine.ts`.
+変換は原則としてブラウザ内で完結します。動画・音声変換用のFFmpeg Wasm本体は、初回利用時にCDNから読み込まれます。
 
-If video conversion fails, check the browser console for `[ffmpeg]` logs
-and confirm the CDN request to `cdn.jsdelivr.net` isn't being blocked (ad blockers,
-corporate proxies, or offline use can prevent it from loading).
+## 対応形式
 
-## Quick Start
+### 画像
+
+- 入力: JPG/JPEG、PNG、WebP、HEIC、AVIF、GIF、BMP、SVG、ICO、TIFF、PSD
+- 出力: JPG、PNG、WebP、GIF、AVIF、SVG
+
+JPG/JPEG、PNG、WebP、GIF、AVIF、SVGは相互変換に対応しています。HEIC、BMP、ICO、TIFF、PSDは入力専用です。
+
+### 動画
+
+- 入力: MP4、MOV、WebM、MKV、AVI、FLV、MPEG/MPG、M4V、3GP、TS/MTS/M2TS、OGV/OGG、WMV
+- 出力: MP4、MOV、WebM、MKV、AVI、GIF
+
+### 音声
+
+- 入力: MP3、WAV、AAC、M4A、FLAC、OGG、OPUS、WMA、AIFF
+- 出力: MP3、WAV、AAC、M4A、FLAC、OGG、OPUS
+
+### 3Dモデル・アニメーション（ベータ）
+
+- 入力: FBX、OBJ/MTL、glTF、GLB、VRM、VRMA、STL、PLY、DAE、3DS、PMX、PMD、VMD
+- 3Dモデル出力: GLB、glTF、OBJ、STL、VRM
+- アニメーション出力: GLB、glTF、VRMA、three.js JSON
+
+FBX、glTF、GLBなどに複数のアニメーションクリップが含まれる場合は、モデルと各アニメーションを分離して一覧に表示し、個別に変換します。VRMAとVMDのようなアニメーション専用ファイルは、3Dモデルを生成せずアニメーションとして扱います。追加したアニメーションは全モデルの関連アニメーションとしてプレビューできますが、モデル変換とアニメーション変換は独立しています。
+
+ボーン、アニメーション、表情を保持できない出力形式を選んだ場合、該当情報は警告を表示したうえで変換対象から除外されます。形式間の仕様差により、すべてのリグ、マテリアル、表情、物理演算を完全に再現できるとは限りません。
+
+OBJのMTL、glTFのBIN、および各形式が参照するテクスチャーは、モデルと一緒にドロップするか、各モデルの「関連ファイルを追加」領域へ追加してください。実際に参照され、読み込まれているファイルがモデルごとの一覧に表示されます。
+
+PMX・PMDからGLB・glTFへ変換する際は、MMDの基本テクスチャー、トゥーン、スフィアマップなどの見た目をテクスチャーへベイクします。ただし、視点依存の反射、アウトライン、セルフシャドウなどは変換先で完全には再現されません。
+
+### ドキュメント・メタデータ
+
+- JPG/JPEG/PNG → PDF
+- PDF → JPG
+- EXIF → JSON
+
+## 開発環境
+
+- Node.js 24（CIと同じバージョンを推奨）
+- pnpm 9
 
 ```bash
-# Web
 pnpm install
 pnpm dev
-
-# CLI
-cd apps/cli
-pnpm dev convert -i photo.webp -f jpg
-pnpm dev bulk-convert -i ./photos --if webp -f jpg -o ./out -z --concurrency 6
-
-# Deploy (static site via Cloudflare Workers Assets)
-pnpm build
-cd apps/web && wrangler deploy
 ```
 
-## CLI Commands
+Webアプリは既定でNext.js開発サーバーとして起動します。
 
-| Command                                        | Description               |
-| ---------------------------------------------- | ------------------------- |
-| `cm convert -i file.webp -f jpg`               | Single file conversion    |
-| `cm bulk-convert -i ./dir --if webp -f jpg -z` | Batch + ZIP output        |
-| `cm export-exif -i photo.jpg`                  | EXIF to stdout            |
-| `cm bulk-export-exif -i ./dir --if jpg -z`     | Bulk EXIF + ZIP           |
-| `cm list`                                      | All supported conversions |
+```bash
+pnpm build
+pnpm format:check
+```
 
-## Supported Conversions
+## CLI
 
-**Images:** WebP↔JPG, WebP↔PNG, HEIC→JPG/PNG, AVIF→JPG/PNG, PNG↔JPG  
-**Video:** MOV↔MP4, MP4→GIF  
-**Documents:** JPG/PNG→PDF, PDF→JPG  
-**Metadata:** EXIF export (JSON)
+CLIは画像変換とEXIF操作を提供します。
 
-## SEO Routes
+```bash
+pnpm --filter @convertmate/cli dev -- convert -i photo.webp -f jpg
+pnpm --filter @convertmate/cli dev -- bulk-convert -i ./photos --if webp -f jpg -o ./out -z --concurrency 6
+pnpm --filter @convertmate/cli dev -- export-exif -i photo.jpg
+pnpm --filter @convertmate/cli dev -- bulk-export-exif -i ./photos --if jpg -z
+pnpm --filter @convertmate/cli dev -- list
+```
 
-Each conversion has a dedicated SSG route optimised for search:
-`/webp-to-jpg` `/heic-to-jpg` `/mov-to-mp4` `/export-exif` etc.
+## 構成
 
-## Platform Expansion
+```text
+fullstack-media-converter/
+├── apps/
+│   ├── web/        Next.js 15の静的Webアプリ
+│   └── cli/        Node.js CLI
+└── packages/
+    ├── shared/     共通型、対応形式、変換ルート
+    ├── core/       プラットフォーム非依存の変換キュー
+    ├── image/      ブラウザ画像変換
+    ├── video/      FFmpeg Wasmによる動画・音声変換
+    ├── model3d/    Three.jsベースの3Dモデル・アニメーション変換
+    └── exif/       EXIF読み取り
+```
 
-- **Android/iOS:** Replace `BrowserImageEngine` with a React Native engine using `react-native-image-manipulator`
-- **Electron:** CLI engine runs directly (Node.js sharp already works)
-- **Ad slots:** `<div class="adSlot">` placeholders exist on every tool page, ready for AdSense script injection
+WebアプリはNext.jsの静的エクスポートとして生成し、Cloudflare Workers Static Assetsで配信します。
+
+## ビルドとデプロイ
+
+```bash
+pnpm --filter @convertmate/web build
+pnpm --dir apps/web deploy
+```
+
+`main`ブランチへのpush時はGitHub Actionsがビルドし、Cloudflare Workersへ自動デプロイします。デプロイにはリポジトリのSecretsとして`CLOUDFLARE_API_TOKEN`と`CLOUDFLARE_ACCOUNT_ID`が必要です。
+
+## Webルート
+
+| 機能 | 英語 | 日本語 |
+| --- | --- | --- |
+| トップ | `/` | `/ja/` |
+| 画像変換 | `/image-converter/` | `/ja/image-converter/` |
+| 動画変換 | `/video-converter/` | `/ja/video-converter/` |
+| 音声変換 | `/audio-converter/` | `/ja/audio-converter/` |
+| 3Dモデル変換 | `/model3d-converter/` | `/ja/model3d-converter/` |
+| EXIF抽出 | `/export-exif/` | `/ja/export-exif/` |
+
+canonical、`hreflang`、Open Graph、FAQ構造化データ、`robots.txt`、`sitemap.xml`を生成します。公開URLを変更する場合は、ビルド時に`NEXT_PUBLIC_SITE_URL`を指定してください。
