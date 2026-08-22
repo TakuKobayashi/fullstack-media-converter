@@ -117,7 +117,15 @@ interface MmdTransparencyAnalysis {
   textureDrivenBlendWithZWrite: boolean;
 }
 
+export interface VrmPreviewSession {
+  root: Object3D;
+  updateTransparency(settings: Model3dTransparencySettings): void;
+  dispose(): void;
+}
+
 export class BrowserModel3dEngine implements ConversionEngine {
+  private readonly textureAlphaHistogramCache = new WeakMap<Texture, Uint32Array>();
+
   canConvert(inputFormat: InputFormat, outputFormat: OutputFormat): boolean {
     return (
       (MODEL3D_INPUT_EXTENSIONS as readonly string[]).includes(`.${inputFormat}`) &&
@@ -173,6 +181,94 @@ export class BrowserModel3dEngine implements ConversionEngine {
     } finally {
       objectUrls.forEach((url) => URL.revokeObjectURL(url));
     }
+  }
+
+  async createVrmPreviewSession(
+    job: ConversionJob,
+    auxiliaryFiles: File[],
+    initialSettings: Model3dTransparencySettings,
+  ): Promise<VrmPreviewSession> {
+    const source = job.file.source;
+    if (!(source instanceof File) && !(source instanceof ArrayBuffer)) {
+      throw new Error('Browser model preview requires a File or ArrayBuffer.');
+    }
+    const objectUrls: string[] = [];
+    const manager = this.createLoadingManager(auxiliaryFiles, objectUrls);
+    const root = await this.loadModel(source, job.inputFormat, auxiliaryFiles, manager);
+    const isMmd = job.inputFormat === 'pmx' || job.inputFormat === 'pmd';
+    const materialSources = new Map<Mesh, Material[]>();
+    const generatedMaterials = new Set<Material>();
+    let maxMaterialIndex = 0;
+    if (isMmd) {
+      root.traverse((object) => {
+        if (!(object as Mesh).isMesh) return;
+        const mesh = object as Mesh;
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        materialSources.set(mesh, materials);
+        for (const material of materials) {
+          maxMaterialIndex = Math.max(
+            maxMaterialIndex,
+            (material.userData.mmdMaterial as { materialIndex?: number } | undefined)
+              ?.materialIndex ?? 0,
+          );
+        }
+      });
+      this.normalizeMmdVrmScale(root);
+    }
+    const updateTransparency = (settings: Model3dTransparencySettings) => {
+      if (!isMmd) return;
+      for (const material of generatedMaterials) material.dispose();
+      generatedMaterials.clear();
+      for (const [mesh, sources] of materialSources) {
+        const converted = sources.map((source) => {
+          const metadata = source.userData.mmdMaterial as
+            | {
+                diffuse?: [number, number, number, number];
+                ambient?: [number, number, number];
+                specular?: [number, number, number];
+                materialIndex?: number;
+                transparencyMode?: MmdTransparencyMode;
+                sphereMode?: 'none' | 'multiply' | 'add' | 'subTexture';
+                edgeColor?: [number, number, number, number];
+                edgeSize?: number;
+                flags?: { doubleSided?: boolean; edge?: boolean };
+              }
+            | undefined;
+          if (!metadata) return source;
+          const convertedMaterial = this.createMmdMToonFallback(
+            source,
+            metadata,
+            source as Material & {
+              map?: Texture | null;
+              opacity?: number;
+              alphaTest?: number;
+              transparent?: boolean;
+              side?: number;
+            },
+            maxMaterialIndex,
+            settings,
+          );
+          generatedMaterials.add(convertedMaterial);
+          return convertedMaterial;
+        });
+        mesh.material = Array.isArray(mesh.material) ? converted : converted[0];
+      }
+    };
+    updateTransparency(initialSettings);
+    return {
+      root,
+      updateTransparency,
+      dispose: () => {
+        for (const material of generatedMaterials) material.dispose();
+        for (const sources of materialSources.values()) {
+          for (const material of sources) material.dispose();
+        }
+        root.traverse((object) => {
+          if ((object as Mesh).isMesh) (object as Mesh).geometry.dispose();
+        });
+        objectUrls.forEach((url) => URL.revokeObjectURL(url));
+      },
+    };
   }
 
   private createLoadingManager(files: File[], objectUrls: string[]): LoadingManager {
@@ -589,18 +685,20 @@ export class BrowserModel3dEngine implements ConversionEngine {
     materialAlpha: number,
     settings: Model3dTransparencySettings,
   ): MmdTransparencyAnalysis {
-    const pixels = this.readTexturePixels(texture);
+    const histogram = this.readTextureAlphaHistogram(texture);
     let transparentPixels = 0;
     let intermediatePixels = 0;
     let opaquePixels = 0;
-    if (pixels) {
-      for (let offset = 3; offset < pixels.data.length; offset += 4) {
-        const alpha = pixels.data[offset];
+    if (histogram) {
+      for (let alpha = 0; alpha < histogram.length; alpha += 1) {
+        const count = histogram[alpha];
         if (alpha <= settings.textureTransparentMaxAlphaByte) {
-          transparentPixels += 1;
+          transparentPixels += count;
         } else if (alpha >= settings.textureOpaqueMinAlphaByte) {
-          opaquePixels += 1;
-        } else intermediatePixels += 1;
+          opaquePixels += count;
+        } else {
+          intermediatePixels += count;
+        }
       }
     }
     const total = transparentPixels + intermediatePixels + opaquePixels;
@@ -634,6 +732,20 @@ export class BrowserModel3dEngine implements ConversionEngine {
       extremeRatio,
       textureDrivenBlendWithZWrite,
     };
+  }
+
+  private readTextureAlphaHistogram(texture?: Texture): Uint32Array | undefined {
+    if (!texture) return undefined;
+    const cached = this.textureAlphaHistogramCache.get(texture);
+    if (cached) return cached;
+    const pixels = this.readTexturePixels(texture);
+    if (!pixels) return undefined;
+    const histogram = new Uint32Array(256);
+    for (let offset = 3; offset < pixels.data.length; offset += 4) {
+      histogram[pixels.data[offset]] += 1;
+    }
+    this.textureAlphaHistogramCache.set(texture, histogram);
+    return histogram;
   }
 
   private rasterizeMmdUv(

@@ -7,16 +7,18 @@ import {
   Box3,
   Color,
   DirectionalLight,
-  Object3D,
   PerspectiveCamera,
   Scene,
   Vector3,
   WebGLRenderer,
 } from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { ConversionJob, Model3dTransparencySettings } from '@convertmate/shared';
-import { BrowserModel3dEngine, MMD_TRANSPARENCY_THRESHOLDS } from '@convertmate/model3d';
+import {
+  BrowserModel3dEngine,
+  MMD_TRANSPARENCY_THRESHOLDS,
+  type VrmPreviewSession,
+} from '@convertmate/model3d';
 import { vrmTransparencySettingsAtomFamily } from '@/state/preferences';
 import { useTranslation } from '@/i18n';
 import s from '@/styles/converter.module.css';
@@ -51,43 +53,16 @@ export default function VrmTransparencyPreviewModal({
     ...MMD_TRANSPARENCY_THRESHOLDS,
     ...(stored ?? {}),
   }));
-  const [previewUrl, setPreviewUrl] = useState<string>();
-  const [previewing, setPreviewing] = useState(false);
+  const [previewing, setPreviewing] = useState(true);
   const [previewError, setPreviewError] = useState<string>();
   const canvasHostRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const timeout = window.setTimeout(async () => {
-      setPreviewing(true);
-      setPreviewError(undefined);
-      const result = await previewEngine.convert(
-        { ...job, outputFormat: 'vrm', status: 'pending', progress: 0 },
-        { model3d: { auxiliaryFiles, transparency: draft } },
-      );
-      if (cancelled) {
-        if (result.resultUrl) URL.revokeObjectURL(result.resultUrl);
-        return;
-      }
-      if (result.status === 'error' || !result.resultUrl) {
-        setPreviewError(result.error ?? t('model3d.previewFailed'));
-      } else {
-        setPreviewUrl((current) => {
-          if (current) URL.revokeObjectURL(current);
-          return result.resultUrl;
-        });
-      }
-      setPreviewing(false);
-    }, 350);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeout);
-    };
-  }, [auxiliaryFiles, draft, job, t]);
+  const sessionRef = useRef<VrmPreviewSession | undefined>(undefined);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
 
   useEffect(() => {
     const host = canvasHostRef.current;
-    if (!host || !previewUrl) return;
+    if (!host) return;
     const scene = new Scene();
     scene.background = new Color(0x111722);
     const camera = new PerspectiveCamera(35, 1, 0.01, 1000);
@@ -100,7 +75,6 @@ export default function VrmTransparencyPreviewModal({
     scene.add(light);
     const controls3d = new OrbitControls(camera, renderer.domElement);
     controls3d.enableDamping = true;
-    let model: Object3D | undefined;
     let disposed = false;
     const resize = () => {
       const width = Math.max(1, host.clientWidth);
@@ -109,23 +83,29 @@ export default function VrmTransparencyPreviewModal({
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
     };
-    new GLTFLoader().load(
-      previewUrl,
-      (gltf) => {
-        if (disposed) return;
-        model = gltf.scene;
-        scene.add(model);
-        const bounds = new Box3().setFromObject(model);
+    previewEngine
+      .createVrmPreviewSession(job, auxiliaryFiles, draftRef.current)
+      .then((session) => {
+        if (disposed) {
+          session.dispose();
+          return;
+        }
+        sessionRef.current = session;
+        session.updateTransparency(draftRef.current);
+        scene.add(session.root);
+        const bounds = new Box3().setFromObject(session.root);
         const size = bounds.getSize(new Vector3());
         const center = bounds.getCenter(new Vector3());
         const distance = Math.max(size.x, size.y, size.z, 0.1) * 1.7;
         camera.position.set(center.x, center.y, center.z + distance);
         controls3d.target.copy(center);
         controls3d.update();
-      },
-      undefined,
-      (error) => setPreviewError(String(error)),
-    );
+        setPreviewing(false);
+      })
+      .catch((error) => {
+        setPreviewError(error instanceof Error ? error.message : String(error));
+        setPreviewing(false);
+      });
     const observer = new ResizeObserver(resize);
     observer.observe(host);
     resize();
@@ -138,25 +118,18 @@ export default function VrmTransparencyPreviewModal({
       observer.disconnect();
       renderer.setAnimationLoop(null);
       controls3d.dispose();
-      model?.traverse((object) => {
-        const mesh = object as { geometry?: { dispose(): void }; material?: unknown };
-        mesh.geometry?.dispose();
-        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-        materials.forEach((material) =>
-          (material as { dispose?: () => void } | undefined)?.dispose?.(),
-        );
-      });
+      sessionRef.current?.dispose();
+      sessionRef.current = undefined;
       renderer.dispose();
       renderer.domElement.remove();
     };
-  }, [previewUrl]);
+    // The session deliberately loads once per modal. Slider updates are handled below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  useEffect(
-    () => () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-    },
-    [previewUrl],
-  );
+  useEffect(() => {
+    sessionRef.current?.updateTransparency(draft);
+  }, [draft]);
 
   const update = (key: SettingKey, value: number) =>
     setDraft((current) => ({ ...current, [key]: value }));
@@ -180,7 +153,8 @@ export default function VrmTransparencyPreviewModal({
           </button>
         </header>
         <div className={s.previewBody}>
-          <div className={s.previewStage} ref={canvasHostRef}>
+          <div className={s.previewStage}>
+            <div className={s.previewCanvasHost} ref={canvasHostRef} />
             {previewing && <span className={s.previewStatus}>{t('model3d.updatingPreview')}</span>}
             {previewError && <span className={s.previewError}>{previewError}</span>}
           </div>

@@ -180,9 +180,8 @@ export const messages = {
       incompatible: "{{count}} model(s) can't convert to {{format}}.",
       previewAdjust: 'Preview & adjust',
       previewTitle: 'VRM transparency preview — {{file}}',
-      previewHelp:
-        'Drag to rotate and scroll to zoom. The preview regenerates after a setting changes.',
-      updatingPreview: 'Updating VRM preview…',
+      previewHelp: 'Drag to rotate and scroll to zoom. Setting changes are applied immediately.',
+      updatingPreview: 'Loading the preview model…',
       previewFailed: 'Could not generate the VRM preview.',
       closePreview: 'Close preview',
       cancelPreview: 'Cancel',
@@ -415,9 +414,8 @@ export const messages = {
       incompatible: '{{count}}件のモデルは{{format}}へ変換できません。',
       previewAdjust: 'プレビュー・調整',
       previewTitle: 'VRM透過プレビュー — {{file}}',
-      previewHelp:
-        'ドラッグで回転、スクロールで拡大できます。設定変更後にプレビューを再生成します。',
-      updatingPreview: 'VRMプレビューを更新中…',
+      previewHelp: 'ドラッグで回転、スクロールで拡大できます。設定変更はすぐに反映されます。',
+      updatingPreview: 'プレビューモデルを読み込み中…',
       previewFailed: 'VRMプレビューを生成できませんでした。',
       closePreview: 'プレビューを閉じる',
       cancelPreview: 'キャンセル',

@@ -309,7 +309,11 @@
   min-height: 480px;
   overflow: hidden;
 }
-.previewStage canvas {
+.previewCanvasHost {
+  position: absolute;
+  inset: 0;
+}
+.previewCanvasHost canvas {
   display: block;
   width: 100%;
   height: 100%;
