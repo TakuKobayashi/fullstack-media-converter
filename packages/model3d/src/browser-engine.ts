@@ -65,13 +65,13 @@ export const MMD_TRANSPARENCY_THRESHOLDS = {
    * Texture alpha values at or below this byte value count as fully transparent.
    * Increase it to absorb very faint pixels into the transparent population.
    */
-  textureTransparentMaxAlphaByte: 0,
+  textureTransparentMaxAlphaByte: 16,
 
   /**
    * Texture alpha values at or above this byte value count as fully opaque.
    * Lower it to treat nearly opaque pixels as opaque instead of intermediate.
    */
-  textureOpaqueMinAlphaByte: 255,
+  textureOpaqueMinAlphaByte: 240,
 
   /**
    * Maximum share of intermediate-alpha pixels allowed for a cutout texture.
@@ -79,6 +79,13 @@ export const MMD_TRANSPARENCY_THRESHOLDS = {
    * The value is a ratio from 0 to 1 (0.08 means 8%).
    */
   cutoutMaxIntermediateAlphaRatio: 0.08,
+
+  /**
+   * A texture-driven BLEND with at least this share of near-transparent and
+   * near-opaque pixels is treated as a layered cutout and writes to the depth
+   * buffer. Lower it if layered bangs still lose the transparent render order.
+   */
+  blendZWriteMinExtremeAlphaRatio: 0.7,
 
   /**
    * Minimum alpha cutoff written for MASK materials. Increasing it removes more
@@ -92,6 +99,22 @@ export const MMD_TRANSPARENCY_THRESHOLDS = {
    */
   mtoonRenderQueueOffsetLimit: 9,
 } as const;
+
+/** Set this to true to print one alpha-analysis record per converted MMD material. */
+export const MMD_TRANSPARENCY_DIAGNOSTICS_ENABLED = false;
+
+type MmdTransparencyMode = 'opaque' | 'alphaTest' | 'alphaBlend';
+
+interface MmdTransparencyAnalysis {
+  mode: MmdTransparencyMode;
+  materialAlpha: number;
+  transparentPixels: number;
+  intermediatePixels: number;
+  opaquePixels: number;
+  intermediateRatio: number;
+  extremeRatio: number;
+  textureDrivenBlendWithZWrite: boolean;
+}
 
 export class BrowserModel3dEngine implements ConversionEngine {
   canConvert(inputFormat: InputFormat, outputFormat: OutputFormat): boolean {
@@ -476,13 +499,21 @@ export class BrowserModel3dEngine implements ConversionEngine {
     const diffuse = metadata.diffuse ?? [1, 1, 1, toon.opacity ?? 1];
     const ambient = metadata.ambient ?? [0.2, 0.2, 0.2];
     const edgeColor = metadata.edgeColor ?? [0, 0, 0, 1];
-    const transparencyMode = this.resolveMmdTransparencyMode(
+    const transparency = this.resolveMmdTransparencyMode(
       metadata.transparencyMode,
       toon.map ?? undefined,
       diffuse[3],
     );
-    const isBlend = transparencyMode === 'alphaBlend';
-    const isMask = transparencyMode === 'alphaTest';
+    const isBlend = transparency.mode === 'alphaBlend';
+    const isMask = transparency.mode === 'alphaTest';
+    if (MMD_TRANSPARENCY_DIAGNOSTICS_ENABLED) {
+      console.debug('[MMD transparency]', {
+        material: source.name,
+        materialIndex: metadata.materialIndex,
+        declaredMode: metadata.transparencyMode,
+        ...transparency,
+      });
+    }
     const material = new MeshStandardMaterial({
       name: source.name,
       color: new Color(diffuse[0], diffuse[1], diffuse[2]),
@@ -494,7 +525,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       alphaTest: isMask
         ? Math.max(MMD_TRANSPARENCY_THRESHOLDS.maskMinAlphaCutoff, toon.alphaTest ?? 0)
         : 0,
-      depthWrite: !isBlend,
+      depthWrite: !isBlend || transparency.textureDrivenBlendWithZWrite,
       side: metadata.flags?.doubleSided || toon.side === DoubleSide ? DoubleSide : toon.side,
       emissive: new Color(0, 0, 0),
       emissiveMap: null,
@@ -508,7 +539,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     );
     material.userData.vrmMToon = {
       specVersion: '1.0',
-      transparentWithZWrite: false,
+      transparentWithZWrite: transparency.textureDrivenBlendWithZWrite,
       renderQueueOffsetNumber: isBlend
         ? -Math.min(
             MMD_TRANSPARENCY_THRESHOLDS.mtoonRenderQueueOffsetLimit,
@@ -536,38 +567,56 @@ export class BrowserModel3dEngine implements ConversionEngine {
   }
 
   private resolveMmdTransparencyMode(
-    declared: 'opaque' | 'alphaTest' | 'alphaBlend' | undefined,
+    declared: MmdTransparencyMode | undefined,
     texture: Texture | undefined,
     materialAlpha: number,
-  ): 'opaque' | 'alphaTest' | 'alphaBlend' {
-    if (materialAlpha < MMD_TRANSPARENCY_THRESHOLDS.materialOpaqueMinAlpha) {
-      return 'alphaBlend';
-    }
+  ): MmdTransparencyAnalysis {
     const pixels = this.readTexturePixels(texture);
-    if (!pixels) return declared ?? 'opaque';
     let transparentPixels = 0;
     let intermediatePixels = 0;
     let opaquePixels = 0;
-    for (let offset = 3; offset < pixels.data.length; offset += 4) {
-      const alpha = pixels.data[offset];
-      if (alpha <= MMD_TRANSPARENCY_THRESHOLDS.textureTransparentMaxAlphaByte) {
-        transparentPixels += 1;
-      } else if (alpha >= MMD_TRANSPARENCY_THRESHOLDS.textureOpaqueMinAlphaByte) {
-        opaquePixels += 1;
-      } else intermediatePixels += 1;
+    if (pixels) {
+      for (let offset = 3; offset < pixels.data.length; offset += 4) {
+        const alpha = pixels.data[offset];
+        if (alpha <= MMD_TRANSPARENCY_THRESHOLDS.textureTransparentMaxAlphaByte) {
+          transparentPixels += 1;
+        } else if (alpha >= MMD_TRANSPARENCY_THRESHOLDS.textureOpaqueMinAlphaByte) {
+          opaquePixels += 1;
+        } else intermediatePixels += 1;
+      }
     }
     const total = transparentPixels + intermediatePixels + opaquePixels;
-    if (!total || (transparentPixels === 0 && intermediatePixels === 0)) {
-      return declared ?? 'opaque';
-    }
-    const intermediateRatio = intermediatePixels / total;
+    const intermediateRatio = total ? intermediatePixels / total : 0;
+    const extremeRatio = total ? (transparentPixels + opaquePixels) / total : 0;
     const mostlyCutout =
       transparentPixels > 0 &&
       intermediateRatio <= MMD_TRANSPARENCY_THRESHOLDS.cutoutMaxIntermediateAlphaRatio;
-    if (declared === 'alphaTest' || intermediatePixels === 0 || mostlyCutout) {
-      return 'alphaTest';
+    let mode: MmdTransparencyMode;
+    if (materialAlpha < MMD_TRANSPARENCY_THRESHOLDS.materialOpaqueMinAlpha) {
+      mode = 'alphaBlend';
+    } else if (!total || (transparentPixels === 0 && intermediatePixels === 0)) {
+      mode = declared ?? 'opaque';
+    } else if (declared === 'alphaTest' || intermediatePixels === 0 || mostlyCutout) {
+      mode = 'alphaTest';
+    } else {
+      mode = 'alphaBlend';
     }
-    return 'alphaBlend';
+    const textureDrivenBlendWithZWrite =
+      mode === 'alphaBlend' &&
+      materialAlpha >= MMD_TRANSPARENCY_THRESHOLDS.materialOpaqueMinAlpha &&
+      transparentPixels > 0 &&
+      opaquePixels > 0 &&
+      extremeRatio >= MMD_TRANSPARENCY_THRESHOLDS.blendZWriteMinExtremeAlphaRatio;
+    return {
+      mode,
+      materialAlpha,
+      transparentPixels,
+      intermediatePixels,
+      opaquePixels,
+      intermediateRatio,
+      extremeRatio,
+      textureDrivenBlendWithZWrite,
+    };
   }
 
   private rasterizeMmdUv(
