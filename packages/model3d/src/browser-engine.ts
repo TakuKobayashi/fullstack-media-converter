@@ -246,11 +246,19 @@ export class BrowserModel3dEngine implements ConversionEngine {
     root.traverse((object) => {
       if ((object as Mesh).isMesh) meshes.push(object as Mesh);
     });
+    const materialIndices = meshes.flatMap((mesh) =>
+      (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).map(
+        (material) =>
+          (material.userData.mmdMaterial as { materialIndex?: number } | undefined)
+            ?.materialIndex ?? 0,
+      ),
+    );
+    const maxMaterialIndex = Math.max(0, ...materialIndices);
     for (const mesh of meshes) {
       const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       const bakedMaterials = await Promise.all(
         sourceMaterials.map((material, materialIndex) =>
-          this.bakeMmdMaterial(material, mesh, materialIndex, useMToon),
+          this.bakeMmdMaterial(material, mesh, materialIndex, useMToon, maxMaterialIndex),
         ),
       );
       mesh.material = Array.isArray(mesh.material) ? bakedMaterials : bakedMaterials[0];
@@ -262,6 +270,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     mesh: Mesh,
     materialIndex: number,
     useMToon: boolean,
+    maxMaterialIndex: number,
   ): Promise<Material> {
     const toon = source as Material & {
       color?: { r: number; g: number; b: number };
@@ -277,6 +286,8 @@ export class BrowserModel3dEngine implements ConversionEngine {
           diffuse?: [number, number, number, number];
           ambient?: [number, number, number];
           specular?: [number, number, number];
+          materialIndex?: number;
+          transparencyMode?: 'opaque' | 'alphaTest' | 'alphaBlend';
           sphereMode?: 'none' | 'multiply' | 'add' | 'subTexture';
           edgeColor?: [number, number, number, number];
           edgeSize?: number;
@@ -285,7 +296,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       | undefined;
     if (!metadata) return source;
     if (useMToon) {
-      return this.createMmdMToonFallback(source, metadata, toon);
+      return this.createMmdMToonFallback(source, metadata, toon, maxMaterialIndex);
     }
 
     const basePixels = this.readTexturePixels(toon.map ?? undefined);
@@ -400,6 +411,8 @@ export class BrowserModel3dEngine implements ConversionEngine {
       diffuse?: [number, number, number, number];
       ambient?: [number, number, number];
       specular?: [number, number, number];
+      materialIndex?: number;
+      transparencyMode?: 'opaque' | 'alphaTest' | 'alphaBlend';
       sphereMode?: 'none' | 'multiply' | 'add' | 'subTexture';
       edgeColor?: [number, number, number, number];
       edgeSize?: number;
@@ -412,30 +425,46 @@ export class BrowserModel3dEngine implements ConversionEngine {
       transparent?: boolean;
       side?: number;
     },
+    maxMaterialIndex: number,
   ): Material {
     const diffuse = metadata.diffuse ?? [1, 1, 1, toon.opacity ?? 1];
     const ambient = metadata.ambient ?? [0.2, 0.2, 0.2];
     const edgeColor = metadata.edgeColor ?? [0, 0, 0, 1];
+    const transparencyMode = this.resolveMmdTransparencyMode(
+      metadata.transparencyMode,
+      toon.map ?? undefined,
+      diffuse[3],
+    );
+    const isBlend = transparencyMode === 'alphaBlend';
+    const isMask = transparencyMode === 'alphaTest';
     const material = new MeshStandardMaterial({
       name: source.name,
       color: new Color(diffuse[0], diffuse[1], diffuse[2]),
       map: toon.map ?? null,
       metalness: 0,
       roughness: 1,
-      transparent: toon.transparent || diffuse[3] < 1,
+      transparent: isBlend,
       opacity: diffuse[3],
-      alphaTest: toon.alphaTest ?? 0,
+      alphaTest: isMask ? Math.max(0.01, toon.alphaTest ?? 0) : 0,
+      depthWrite: !isBlend,
       side: metadata.flags?.doubleSided || toon.side === DoubleSide ? DoubleSide : toon.side,
       emissive: new Color(0, 0, 0),
       emissiveMap: null,
     });
-    const outlineEnabled = Boolean(metadata.flags?.edge && (metadata.edgeSize ?? 0) > 0);
+    const outlineEnabled = Boolean(
+      !isBlend && metadata.flags?.edge && (metadata.edgeSize ?? 0) > 0,
+    );
+    const shadeStrength = Math.max(
+      0.55,
+      Math.min(0.82, (ambient[0] + ambient[1] + ambient[2]) / 3 + 0.2),
+    );
     material.userData.vrmMToon = {
       specVersion: '1.0',
-      transparentWithZWrite: material.transparent,
-      shadeColorFactor: ambient.map((value, index) =>
-        Math.max(0, Math.min(1, value + diffuse[index] * 0.25)),
-      ),
+      transparentWithZWrite: false,
+      renderQueueOffsetNumber: isBlend
+        ? -Math.min(9, Math.max(0, maxMaterialIndex - (metadata.materialIndex ?? 0)))
+        : 0,
+      shadeColorFactor: [shadeStrength, shadeStrength, shadeStrength],
       shadingShiftFactor: -0.05,
       shadingToonyFactor: 0.95,
       giEqualizationFactor: 0.9,
@@ -453,6 +482,35 @@ export class BrowserModel3dEngine implements ConversionEngine {
       matcapFactor: [0, 0, 0],
     };
     return material;
+  }
+
+  private resolveMmdTransparencyMode(
+    declared: 'opaque' | 'alphaTest' | 'alphaBlend' | undefined,
+    texture: Texture | undefined,
+    materialAlpha: number,
+  ): 'opaque' | 'alphaTest' | 'alphaBlend' {
+    if (materialAlpha < 1) return 'alphaBlend';
+    const pixels = this.readTexturePixels(texture);
+    if (!pixels) return declared ?? 'opaque';
+    let transparentPixels = 0;
+    let intermediatePixels = 0;
+    let opaquePixels = 0;
+    for (let offset = 3; offset < pixels.data.length; offset += 4) {
+      const alpha = pixels.data[offset];
+      if (alpha === 0) transparentPixels += 1;
+      else if (alpha === 255) opaquePixels += 1;
+      else intermediatePixels += 1;
+    }
+    const total = transparentPixels + intermediatePixels + opaquePixels;
+    if (!total || (transparentPixels === 0 && intermediatePixels === 0)) {
+      return declared ?? 'opaque';
+    }
+    const intermediateRatio = intermediatePixels / total;
+    const mostlyCutout = transparentPixels > 0 && intermediateRatio <= 0.08;
+    if (declared === 'alphaTest' || intermediatePixels === 0 || mostlyCutout) {
+      return 'alphaTest';
+    }
+    return 'alphaBlend';
   }
 
   private rasterizeMmdUv(
