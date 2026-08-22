@@ -80,7 +80,8 @@ export default function VrmTransparencyPreviewModal({
     host.replaceChildren(renderer.domElement);
     scene.add(new AmbientLight(0xffffff, 1.8));
     const light = new DirectionalLight(0xffffff, 2.2);
-    light.position.set(2, 3, 4);
+    const previewFrontZ = job.outputFormat === 'vrm' ? -1 : 1;
+    light.position.set(2, 3, 4 * previewFrontZ);
     scene.add(light);
     const controls3d = new OrbitControls(camera, renderer.domElement);
     controls3d.enableDamping = true;
@@ -106,7 +107,7 @@ export default function VrmTransparencyPreviewModal({
         const size = bounds.getSize(new Vector3());
         const center = bounds.getCenter(new Vector3());
         const distance = Math.max(size.x, size.y, size.z, 0.1) * 1.7;
-        camera.position.set(center.x, center.y, center.z + distance);
+        camera.position.set(center.x, center.y, center.z + distance * previewFrontZ);
         controls3d.target.copy(center);
         controls3d.update();
         setPreviewing(false);
