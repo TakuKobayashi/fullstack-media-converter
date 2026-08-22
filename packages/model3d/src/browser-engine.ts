@@ -129,6 +129,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       throw new Error('Could not calculate a valid VRM scale for the MMD model.');
     }
     root.scale.multiplyScalar(scale);
+    root.rotateY(Math.PI);
     root.updateMatrixWorld(true);
   }
 
@@ -689,6 +690,9 @@ export class BrowserModel3dEngine implements ConversionEngine {
     ) as {
       nodes?: Array<{ name?: string; children?: number[] }>;
       materials?: Array<{
+        pbrMetallicRoughness?: {
+          baseColorTexture?: { index: number; texCoord?: number };
+        };
         emissiveFactor?: number[];
         emissiveTexture?: { index: number; texCoord?: number };
         extensions?: Record<string, unknown>;
@@ -755,6 +759,9 @@ export class BrowserModel3dEngine implements ConversionEngine {
 
   private applyMToonExtensions(json: {
     materials?: Array<{
+      pbrMetallicRoughness?: {
+        baseColorTexture?: { index: number; texCoord?: number };
+      };
       emissiveFactor?: number[];
       emissiveTexture?: { index: number; texCoord?: number };
       extensions?: Record<string, unknown>;
@@ -769,6 +776,10 @@ export class BrowserModel3dEngine implements ConversionEngine {
       if (!marker) continue;
       hasMToon = true;
       const { matcapFromEmissive, ...mtoon } = marker;
+      const baseColorTexture = material.pbrMetallicRoughness?.baseColorTexture;
+      if (baseColorTexture) {
+        mtoon.shadeMultiplyTexture = { ...baseColorTexture };
+      }
       if (matcapFromEmissive && material.emissiveTexture) {
         mtoon.matcapTexture = { ...material.emissiveTexture };
         delete material.emissiveTexture;
