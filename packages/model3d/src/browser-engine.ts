@@ -1,5 +1,6 @@
 import {
   Bone,
+  Box3,
   BufferAttribute,
   CanvasTexture,
   Color,
@@ -45,6 +46,7 @@ import {
 } from '@convertmate/shared';
 
 const MMD_BAKE_LIGHT = new Vector3(0.5, 1, 1).normalize();
+const MMD_VRM_TARGET_HEIGHT_METERS = 1.7;
 
 export class BrowserModel3dEngine implements ConversionEngine {
   canConvert(inputFormat: InputFormat, outputFormat: OutputFormat): boolean {
@@ -76,6 +78,9 @@ export class BrowserModel3dEngine implements ConversionEngine {
         (job.outputFormat === 'glb' || job.outputFormat === 'gltf' || job.outputFormat === 'vrm')
       ) {
         await this.bakeMmdMaterials(root, job.outputFormat === 'vrm');
+      }
+      if ((job.inputFormat === 'pmx' || job.inputFormat === 'pmd') && job.outputFormat === 'vrm') {
+        this.normalizeMmdVrmScale(root);
       }
       options.onProgress?.(65);
       const blob = await this.exportModel(
@@ -110,6 +115,21 @@ export class BrowserModel3dEngine implements ConversionEngine {
       return objectUrl;
     });
     return manager;
+  }
+
+  private normalizeMmdVrmScale(root: Object3D): void {
+    root.updateMatrixWorld(true);
+    const bounds = new Box3().setFromObject(root, true);
+    const height = bounds.max.y - bounds.min.y;
+    if (!Number.isFinite(height) || height <= 1e-6) {
+      throw new Error('Could not determine the MMD model height for VRM scale normalization.');
+    }
+    const scale = MMD_VRM_TARGET_HEIGHT_METERS / height;
+    if (!Number.isFinite(scale) || scale <= 0) {
+      throw new Error('Could not calculate a valid VRM scale for the MMD model.');
+    }
+    root.scale.multiplyScalar(scale);
+    root.updateMatrixWorld(true);
   }
 
   private async loadModel(
