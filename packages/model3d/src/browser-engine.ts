@@ -28,6 +28,7 @@ import {
   Vector3,
 } from 'three';
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
+import { DDSLoader } from 'three/examples/jsm/loaders/DDSLoader.js';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
@@ -35,6 +36,7 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { TDSLoader } from 'three/examples/jsm/loaders/TDSLoader.js';
+import { TGALoader } from 'three/examples/jsm/loaders/TGALoader.js';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
@@ -714,6 +716,10 @@ export class BrowserModel3dEngine implements ConversionEngine {
 
   private async createLoadingManager(files: File[], objectUrls: string[]): Promise<LoadingManager> {
     const manager = new LoadingManager();
+    // TextureLoader cannot decode these formats by itself. Register the
+    // dedicated loaders before FBX/OBJ/DAE/3DS request their referenced maps.
+    manager.addHandler(/\.tga(?:[?#].*)?$/i, new TGALoader(manager));
+    manager.addHandler(/\.dds(?:[?#].*)?$/i, new DDSLoader(manager));
     const byName = new Map(files.map((file) => [file.name.toLowerCase(), file]));
     const filesByStem = new Map<string, File[]>();
     const textureStem = (name: string) =>
