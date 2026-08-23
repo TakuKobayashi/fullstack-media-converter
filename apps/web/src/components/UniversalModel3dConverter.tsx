@@ -387,7 +387,14 @@ export default function UniversalModel3dConverter() {
   useEffect(() => {
     if (targetFormat !== 'vrm') return;
     let cancelled = false;
-    const candidates = jobs.filter((job) => job.status === 'pending');
+    // Same-format selections (VRM -> VRM, GLB -> GLB, etc.) are uniformly
+    // treated as non-conversion targets. Humanoid validation is meaningful
+    // only for files that can actually be converted to VRM.
+    const candidates = jobs.filter(
+      (job) =>
+        job.status === 'pending' &&
+        isModel3dOutputCandidate(job.inputFormat as Model3dFormat, 'vrm'),
+    );
     const pendingChecks = candidates.flatMap((job) => {
       const jobAuxiliaryFiles = relatedFilesByJobId[job.id] ?? [];
       const auxiliarySignature = jobAuxiliaryFiles
@@ -405,16 +412,14 @@ export default function UniversalModel3dConverter() {
     setVrmValidations((current) => {
       const next = { ...current };
       for (const { job, signature } of pendingChecks) {
-        next[job.id] = isModel3dOutputCandidate(job.inputFormat as Model3dFormat, 'vrm')
-          ? { signature, status: 'checking' }
-          : { signature, status: 'invalid' };
+        next[job.id] = { signature, status: 'checking' };
       }
       vrmValidationsRef.current = next;
       return next;
     });
     void (async () => {
       for (const { job, signature, jobAuxiliaryFiles } of pendingChecks) {
-        if (cancelled || !isModel3dOutputCandidate(job.inputFormat as Model3dFormat, 'vrm')) continue;
+        if (cancelled) continue;
         const settings =
           appliedTransparencySettings[job.id] ??
           jotaiStore.get(vrmTransparencySettingsAtomFamily(job.file.name)) ??
@@ -876,10 +881,14 @@ export default function UniversalModel3dConverter() {
                   </div>
                 )}
                 {job.error && <p className={s.errorDetail}>{job.error}</p>}
-                {job.outputFormat === 'vrm' && vrmValidations[job.id]?.status === 'checking' && (
+                {job.outputFormat === 'vrm' &&
+                  isModel3dOutputCandidate(job.inputFormat as Model3dFormat, 'vrm') &&
+                  vrmValidations[job.id]?.status === 'checking' && (
                   <p className={s.mixedHint}>{t('model3d.checkingVrmCompatibility')}</p>
                 )}
-                {job.outputFormat === 'vrm' && vrmValidations[job.id]?.status === 'invalid' && (
+                {job.outputFormat === 'vrm' &&
+                  isModel3dOutputCandidate(job.inputFormat as Model3dFormat, 'vrm') &&
+                  vrmValidations[job.id]?.status === 'invalid' && (
                   <p className={s.errorDetail}>
                     {t('model3d.vrmPreviewIncompatible', {
                       error: vrmValidations[job.id]?.error ?? '',
