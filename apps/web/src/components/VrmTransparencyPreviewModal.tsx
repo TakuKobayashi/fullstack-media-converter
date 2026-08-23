@@ -17,8 +17,10 @@ import type { ConversionJob, Model3dTransparencySettings } from '@convertmate/sh
 import {
   BrowserModel3dEngine,
   MMD_TRANSPARENCY_THRESHOLDS,
+  VRM_REQUIRED_HUMAN_BONES,
   type Model3dPreviewSession,
   type Model3dAnimationSource,
+  type VrmRequiredHumanBone,
 } from '@convertmate/model3d';
 import { vrmTransparencySettingsAtomFamily } from '@/state/preferences';
 import { useTranslation } from '@/i18n';
@@ -49,6 +51,10 @@ export interface VrmTransparencyPreviewModalProps {
   onClose: () => void;
   onLoadFailure: (error: string) => void;
   onApply: (settings: Model3dTransparencySettings) => void;
+  onHumanoidAssignmentsApply: (
+    assignments: Record<string, string>,
+    missing: VrmRequiredHumanBone[],
+  ) => void;
 }
 
 export default function VrmTransparencyPreviewModal({
@@ -58,6 +64,7 @@ export default function VrmTransparencyPreviewModal({
   onClose,
   onLoadFailure,
   onApply,
+  onHumanoidAssignmentsApply,
 }: VrmTransparencyPreviewModalProps) {
   const { t } = useTranslation();
   const [stored, setStored] = useAtom(vrmTransparencySettingsAtomFamily(job.file.name));
@@ -70,6 +77,9 @@ export default function VrmTransparencyPreviewModal({
   const [animations, setAnimations] = useState<string[]>([]);
   const [expressions, setExpressions] = useState<string[]>([]);
   const [bones, setBones] = useState<string[]>([]);
+  const [vrmHumanBones, setVrmHumanBones] = useState<Partial<Record<VrmRequiredHumanBone, string>>>({});
+  const [boneDraft, setBoneDraft] = useState<Record<string, VrmRequiredHumanBone | ''>>({});
+  const [boneAssignmentWarning, setBoneAssignmentWarning] = useState('');
   const [selectedAnimation, setSelectedAnimation] = useState('');
   const [selectedExpression, setSelectedExpression] = useState('');
   const [selectedBone, setSelectedBone] = useState('');
@@ -115,6 +125,18 @@ export default function VrmTransparencyPreviewModal({
         setAnimations(session.animations);
         setExpressions(session.expressions);
         setBones(session.bones);
+        const storageKey = `convertmate:vrm-humanoid:${job.file.name}:${job.file.size}:${job.file.source instanceof File ? job.file.source.lastModified : 0}`;
+        let saved: Record<string, string> = {};
+        try { saved = JSON.parse(localStorage.getItem(storageKey) ?? '{}') as Record<string, string>; } catch { saved = {}; }
+        setVrmHumanBones({
+          ...session.vrmHumanBones,
+          ...Object.fromEntries(Object.entries(saved).map(([part, bone]) => [part, bone])),
+        });
+        const combined = { ...session.vrmHumanBones, ...saved };
+        onHumanoidAssignmentsApply(
+          Object.fromEntries(Object.entries(combined).map(([part, bone]) => [part, bone])),
+          VRM_REQUIRED_HUMAN_BONES.filter((part) => !combined[part]),
+        );
         setSelectedAnimation(session.animations[0] ?? '');
         session.updateTransparency(draftRef.current);
         scene.add(session.root);
@@ -171,6 +193,11 @@ export default function VrmTransparencyPreviewModal({
   const update = (key: SettingKey, value: number) =>
     setDraft((current) => ({ ...current, [key]: value }));
   const isMmd = job.inputFormat === 'pmx' || job.inputFormat === 'pmd';
+  const isVrm = job.outputFormat === 'vrm';
+  const assignedParts = new Set(Object.keys(vrmHumanBones));
+  const assignedBones = new Set(Object.values(vrmHumanBones));
+  const missingVrmBones = VRM_REQUIRED_HUMAN_BONES.filter((part) => !assignedParts.has(part));
+  const hasTooFewBonesForVrm = bones.length < missingVrmBones.length;
 
   return (
     <div className={s.previewBackdrop} role="presentation" onMouseDown={onClose}>
@@ -285,20 +312,51 @@ export default function VrmTransparencyPreviewModal({
                 {bones.length ? (
                   <div className={s.previewBoneList}>
                     {bones.map((name) => (
-                      <button
-                        type="button"
+                      <div
                         key={name}
-                        className={selectedBone === name ? s.previewBoneActive : ''}
-                        aria-pressed={selectedBone === name}
-                        onClick={() => {
-                          setSelectedBone(name);
-                          sessionRef.current?.showBones(true);
-                          sessionRef.current?.selectBone(name);
-                        }}
-                      >{name}</button>
+                        className={`${s.previewBoneRow} ${isVrm && assignedBones.has(name) ? s.previewBoneAssigned : ''}`}
+                      >
+                        <button type="button" className={selectedBone === name ? s.previewBoneActive : ''}
+                          onClick={() => { setSelectedBone(name); sessionRef.current?.showBones(true); sessionRef.current?.selectBone(name); }}>
+                          {name}
+                        </button>
+                        {isVrm && missingVrmBones.length > 0 && !hasTooFewBonesForVrm && !assignedBones.has(name) && (
+                          <select value={boneDraft[name] ?? ''} onChange={(event) => setBoneDraft((current) => ({ ...current, [name]: event.target.value as VrmRequiredHumanBone | '' }))}>
+                            <option value="">{t('model3d.selectVrmPart')}</option>
+                            {missingVrmBones.map((part) => (
+                              <option key={part} value={part} disabled={Object.entries(boneDraft).some(([bone, selected]) => bone !== name && selected === part)}>{t(`model3d.vrmBone.${part}`)}</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
                     ))}
                   </div>
                 ) : <p>{t('model3d.noBones')}</p>}
+                {isVrm && missingVrmBones.length > 0 && hasTooFewBonesForVrm && (
+                  <p className={s.boneWarning}>
+                    {t('model3d.tooFewBonesForVrm', {
+                      bones: bones.length,
+                      parts: missingVrmBones.length,
+                    })}
+                  </p>
+                )}
+                {isVrm && missingVrmBones.length > 0 && !hasTooFewBonesForVrm && (
+                  <>
+                    <p className={s.boneWarning}>{boneAssignmentWarning || t('model3d.missingVrmParts', { parts: missingVrmBones.map((part) => t(`model3d.vrmBone.${part}`)).join(', ') })}</p>
+                    <button type="button" className={s.previewApply} onClick={() => {
+                      const additions = Object.fromEntries(Object.entries(boneDraft).filter((entry): entry is [string, VrmRequiredHumanBone] => Boolean(entry[1])).map(([bone, part]) => [part, bone]));
+                      const next = { ...vrmHumanBones, ...additions };
+                      const remaining = VRM_REQUIRED_HUMAN_BONES.filter((part) => !next[part]);
+                      const assignments = Object.fromEntries(Object.entries(next).map(([part, bone]) => [part, bone]));
+                      const storageKey = `convertmate:vrm-humanoid:${job.file.name}:${job.file.size}:${job.file.source instanceof File ? job.file.source.lastModified : 0}`;
+                      localStorage.setItem(storageKey, JSON.stringify(assignments));
+                      setVrmHumanBones(next);
+                      setBoneDraft({});
+                      setBoneAssignmentWarning(remaining.length ? t('model3d.assignRemainingVrmParts') : '');
+                      onHumanoidAssignmentsApply(assignments, remaining);
+                    }}>{t('model3d.applyBoneAssignments')}</button>
+                  </>
+                )}
               </div>
             )}
             {isMmd && controls

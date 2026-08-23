@@ -136,6 +136,7 @@ export interface Model3dConvertOptions {
   auxiliaryFilesByJobId?: Record<string, File[]>;
   transparency?: Model3dTransparencySettings;
   transparencyByFileName?: Record<string, Model3dTransparencySettings>;
+  humanoidBoneAssignmentsByJobId?: Record<string, Record<string, string>>;
 }
 
 export interface ConversionOptions {

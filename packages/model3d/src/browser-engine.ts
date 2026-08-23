@@ -66,6 +66,13 @@ import {
 const MMD_VRM_TARGET_HEIGHT_METERS = 1.7;
 const MMD_BAKE_LIGHT = new Vector3(0.5, 1, 1).normalize();
 
+export const VRM_REQUIRED_HUMAN_BONES = [
+  'hips', 'spine', 'head', 'leftUpperLeg', 'leftLowerLeg', 'leftFoot',
+  'rightUpperLeg', 'rightLowerLeg', 'rightFoot', 'leftUpperArm',
+  'leftLowerArm', 'leftHand', 'rightUpperArm', 'rightLowerArm', 'rightHand',
+] as const;
+export type VrmRequiredHumanBone = (typeof VRM_REQUIRED_HUMAN_BONES)[number];
+
 function asArray<T>(value: T | T[]): T[] {
   return [value].flat() as T[];
 }
@@ -152,6 +159,7 @@ export interface Model3dPreviewSession {
   animations: string[];
   expressions: string[];
   bones: string[];
+  vrmHumanBones: Partial<Record<VrmRequiredHumanBone, string>>;
   playAnimation(name: string): void;
   pauseAnimation(): void;
   stopAnimation(): void;
@@ -222,7 +230,10 @@ export class BrowserModel3dEngine implements ConversionEngine {
       }
       if ((job.inputFormat === 'pmx' || job.inputFormat === 'pmd') && job.outputFormat === 'vrm') {
         this.prepareMmdVrmHumanoidHierarchy(root);
-        this.canonicalizeMmdVrmBoneNames(root);
+        this.canonicalizeMmdVrmBoneNames(
+          root,
+          options.model3d?.humanoidBoneAssignmentsByJobId?.[job.id],
+        );
         this.normalizeMmdVrmScale(root);
       }
       options.onProgress?.(65);
@@ -454,6 +465,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     root.traverse((object) => {
       if ((object as Bone).isBone) bones.push(object as Bone);
     });
+    const vrmHumanBones = this.describeVrmHumanBones(root);
     bones.forEach((bone, index) => {
       const baseName = bone.name.trim() || `Bone ${index + 1}`;
       let name = baseName;
@@ -552,6 +564,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
         ? [...new Set([...expressionTargets.keys(), ...expressionNodes.keys()])]
         : [],
       bones: previewBones ? [...boneObjects.keys()] : [],
+      vrmHumanBones,
       playAnimation: (name) => {
         const clip = animationClips.get(name);
         if (!clip) return;
@@ -777,7 +790,10 @@ export class BrowserModel3dEngine implements ConversionEngine {
    * both and give humanoid bones stable names before GLTFExporter strips that
    * loader-specific metadata from the nodes used by the VRM extension pass.
    */
-  private canonicalizeMmdVrmBoneNames(root: Object3D): void {
+  private canonicalizeMmdVrmBoneNames(
+    root: Object3D,
+    manualAssignments: Record<string, string> = {},
+  ): void {
     const objects: Object3D[] = [];
     root.traverse((object) => objects.push(object));
     const indices = new Map(objects.map((object, index) => [object, index]));
@@ -793,10 +809,44 @@ export class BrowserModel3dEngine implements ConversionEngine {
           .filter((index): index is number => index !== undefined),
       })),
     );
+    for (const [humanBone, sourceName] of Object.entries(manualAssignments)) {
+      const node = objects.findIndex((object) =>
+        [object.name, object.userData.mmdBoneName, object.userData.mmdEnglishBoneName].includes(
+          sourceName,
+        ),
+      );
+      if (node >= 0) mapped[humanBone] = { node };
+    }
     for (const [humanBone, { node }] of Object.entries(mapped)) {
       const object = objects[node];
       if (object) object.name = `VRM_${humanBone}`;
     }
+  }
+
+  private describeVrmHumanBones(
+    root: Object3D,
+  ): Partial<Record<VrmRequiredHumanBone, string>> {
+    const objects: Object3D[] = [];
+    root.traverse((object) => objects.push(object));
+    const indices = new Map(objects.map((object, index) => [object, index]));
+    const mapped = this.mapVrmHumanBones(
+      objects.map((object) => ({
+        name: object.name,
+        aliases: [
+          object.userData.mmdBoneName as string | undefined,
+          object.userData.mmdEnglishBoneName as string | undefined,
+        ].filter((name): name is string => Boolean(name)),
+        children: object.children
+          .map((child) => indices.get(child))
+          .filter((index): index is number => index !== undefined),
+      })),
+    );
+    return Object.fromEntries(
+      VRM_REQUIRED_HUMAN_BONES.flatMap((humanBone) => {
+        const object = objects[mapped[humanBone]?.node];
+        return object ? [[humanBone, object.name]] : [];
+      }),
+    );
   }
 
   private async loadModel(
@@ -2215,24 +2265,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       extensions?: Record<string, unknown>;
     };
     const humanBones = this.mapVrmHumanBones(json.nodes ?? []);
-    const requiredBones = [
-      'hips',
-      'spine',
-      'head',
-      'leftUpperLeg',
-      'leftLowerLeg',
-      'leftFoot',
-      'rightUpperLeg',
-      'rightLowerLeg',
-      'rightFoot',
-      'leftUpperArm',
-      'leftLowerArm',
-      'leftHand',
-      'rightUpperArm',
-      'rightLowerArm',
-      'rightHand',
-    ] as const;
-    const missing = requiredBones.filter((bone) => !humanBones[bone]);
+    const missing = VRM_REQUIRED_HUMAN_BONES.filter((bone) => !humanBones[bone]);
     if (missing.length) {
       throw new Error(`Required VRM humanoid bones were not identified: ${missing.join(', ')}`);
     }

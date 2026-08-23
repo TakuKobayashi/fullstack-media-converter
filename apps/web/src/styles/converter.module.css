@@ -503,6 +503,29 @@
 }
 .previewBoneList {
   max-height: 320px;
+  flex-direction: column;
+  flex-wrap: nowrap;
+}
+.previewBoneRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.8fr);
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.previewBoneRow > button {
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.previewBoneAssigned {
+  border-color: rgba(34, 197, 94, 0.7);
+  background: rgba(34, 197, 94, 0.14);
+}
+.previewBoneAssigned > button {
+  background: rgba(34, 197, 94, 0.2);
 }
 .previewControl {
   display: block;

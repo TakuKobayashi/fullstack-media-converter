@@ -27,7 +27,7 @@ import {
 } from '@convertmate/shared';
 import { ConversionQueue } from '@convertmate/core';
 import { BrowserModel3dEngine, MMD_TRANSPARENCY_THRESHOLDS } from '@convertmate/model3d';
-import type { Model3dAnimationOutputFormat, Model3dAnimationSource } from '@convertmate/model3d';
+import type { Model3dAnimationOutputFormat, Model3dAnimationSource, VrmRequiredHumanBone } from '@convertmate/model3d';
 import { model3dOutputFormatAtom, vrmTransparencySettingsAtomFamily } from '@/state/preferences';
 import VrmTransparencyPreviewModal from '@/components/VrmTransparencyPreviewModal';
 import { useBatchDownload } from '@/hooks/useBatchDownload';
@@ -72,6 +72,11 @@ function revokeJobOutputs(job: ConversionJob): void {
   const urls = new Set(job.outputs?.map((output) => output.url) ?? []);
   if (job.resultUrl) urls.add(job.resultUrl);
   urls.forEach((url) => URL.revokeObjectURL(url));
+}
+
+function humanoidStorageKey(job: ConversionJob): string {
+  const modified = job.file.source instanceof File ? job.file.source.lastModified : 0;
+  return `convertmate:vrm-humanoid:${job.file.name}:${job.file.size}:${modified}`;
 }
 
 const TRANSPARENCY_PREVIEW_OUTPUTS = new Set<Model3dOutputFormat>(['glb', 'gltf', 'vrm']);
@@ -154,6 +159,10 @@ export default function UniversalModel3dConverter() {
     Record<string, Model3dTransparencySettings>
   >({});
   const [vrmValidations, setVrmValidations] = useState<Record<string, VrmValidation>>({});
+  const [humanoidOverrides, setHumanoidOverrides] = useState<Record<string, {
+    assignments: Record<string, string>;
+    missing: VrmRequiredHumanBone[];
+  }>>({});
   const vrmValidationsRef = useRef<Record<string, VrmValidation>>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const queueRef = useRef<ConversionQueue | null>(null);
@@ -434,14 +443,26 @@ export default function UniversalModel3dConverter() {
       ]),
     );
     const queue = new ConversionQueue(engine, 1, {
-      model3d: { auxiliaryFiles, auxiliaryFilesByJobId: relatedFilesByJobId, transparencyByFileName },
+      model3d: {
+        auxiliaryFiles,
+        auxiliaryFilesByJobId: relatedFilesByJobId,
+        transparencyByFileName,
+        humanoidBoneAssignmentsByJobId: Object.fromEntries(
+          pending.flatMap((job) => humanoidOverrides[job.id]
+            ? [[job.id, humanoidOverrides[job.id].assignments]]
+            : []),
+        ),
+      },
     });
     queueRef.current = queue;
     queue.addMany(pending);
     const unsubscribe = queue.on(({ type, job }) => {
       if (!job) return;
       const patch: Partial<ConversionJob> = {};
-      if (type === 'job:start') Object.assign(patch, { status: 'processing', progress: 0 });
+      if (type === 'job:start') {
+        Object.assign(patch, { status: 'processing', progress: 0 });
+        localStorage.removeItem(humanoidStorageKey(job));
+      }
       if (type === 'job:progress') patch.progress = job.progress;
       if (type === 'job:done') {
         Object.assign(patch, {
@@ -451,6 +472,11 @@ export default function UniversalModel3dConverter() {
           outputs: job.outputs,
         });
         jotaiStore.set(vrmTransparencySettingsAtomFamily(job.file.name), RESET);
+        setHumanoidOverrides((current) => {
+          const next = { ...current };
+          delete next[job.id];
+          return next;
+        });
         setAppliedTransparencySettings((current) => {
           const next = { ...current };
           delete next[job.id];
@@ -466,7 +492,7 @@ export default function UniversalModel3dConverter() {
     await queue.run();
     unsubscribe();
     setModelRunning(false);
-  }, [appliedTransparencySettings, auxiliaryFiles, jobs, relatedFilesByJobId, targetFormat, vrmValidations]);
+  }, [appliedTransparencySettings, auxiliaryFiles, humanoidOverrides, jobs, relatedFilesByJobId, targetFormat, vrmValidations]);
 
   const convertAnimations = useCallback(async () => {
     const pendingAnimations = animationItems.filter((item) => item.status === 'pending');
@@ -834,6 +860,9 @@ export default function UniversalModel3dConverter() {
                     {t('model3d.vrmPreviewIncompatible', {
                       error: vrmValidations[job.id]?.error ?? '',
                     })}
+                    {humanoidOverrides[job.id]?.missing.length
+                      ? ` ${t('model3d.missingVrmParts', { parts: humanoidOverrides[job.id].missing.map((part) => t(`model3d.vrmBone.${part}`)).join(', ') })}`
+                      : ''}
                   </p>
                 )}
                 {previewFailures[`${job.id}:${job.outputFormat}`] && (
@@ -845,8 +874,6 @@ export default function UniversalModel3dConverter() {
                   TRANSPARENCY_PREVIEW_OUTPUTS.has(job.outputFormat as Model3dOutputFormat) &&
                   job.status === 'pending' &&
                   !modelRunning &&
-                  (job.outputFormat !== 'vrm' ||
-                    vrmValidations[job.id]?.status === 'valid') &&
                   !previewFailures[`${job.id}:${job.outputFormat}`] && (
                     <Model3dTransparencySummary
                       fileName={job.file.name}
@@ -935,6 +962,21 @@ export default function UniversalModel3dConverter() {
                 ...current,
                 [previewJob.id]: settings,
               }));
+            }}
+            onHumanoidAssignmentsApply={(assignments, missing) => {
+              setHumanoidOverrides((current) => ({
+                ...current,
+                [previewJob.id]: { assignments, missing },
+              }));
+              if (!missing.length) {
+                setVrmValidations((current) => ({
+                  ...current,
+                  [previewJob.id]: {
+                    signature: current[previewJob.id]?.signature ?? previewJob.id,
+                    status: 'valid',
+                  },
+                }));
+              }
             }}
             onLoadFailure={(error) => {
               setPreviewFailures((current) => ({
