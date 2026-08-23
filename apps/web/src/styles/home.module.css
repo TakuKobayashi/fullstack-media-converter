@@ -27,8 +27,8 @@
 .heroInner {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
-  gap: 72px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+  gap: 48px;
   align-items: center;
 }
 .eyebrow,
@@ -82,9 +82,10 @@
   line-height: 1.8;
 }
 .ctaGroup {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  max-width: 720px;
   margin-top: 38px;
 }
 .ctaPrimary,
@@ -93,16 +94,17 @@
   align-items: center;
   justify-content: center;
   min-height: 50px;
-  padding: 0 24px;
+  padding: 0 12px;
   border-radius: 8px;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 600;
+  white-space: nowrap;
   transition:
     transform 0.2s,
     border-color 0.2s;
 }
 .ctaPrimary {
-  gap: 30px;
+  gap: 10px;
   color: white;
   background: var(--indigo);
 }
@@ -209,6 +211,8 @@
 }
 .converterCard {
   position: relative;
+  display: flex;
+  flex-direction: column;
   min-height: 410px;
   padding: 32px;
   overflow: hidden;
@@ -300,12 +304,13 @@
   font-size: 0.67rem;
 }
 .cardAction {
-  position: absolute;
-  left: 32px;
-  bottom: 30px;
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 10px;
+  margin-top: auto;
+  padding-top: 28px;
   color: var(--cream);
   font-size: 0.82rem;
   font-weight: 600;
@@ -401,6 +406,11 @@
     gap: 42px;
   }
 }
+@media (max-width: 700px) {
+  .ctaGroup {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 @media (max-width: 520px) {
   .title {
     font-size: 3.25rem;
@@ -409,14 +419,10 @@
     font-size: clamp(2rem, 10vw, 2.8rem);
   }
   .ctaGroup {
-    align-items: stretch;
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
   .converterCard {
     min-height: 430px;
     padding: 24px;
-  }
-  .cardAction {
-    left: 24px;
   }
 }

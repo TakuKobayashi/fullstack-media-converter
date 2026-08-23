@@ -19,8 +19,8 @@ export const messages = {
     },
     home: {
       eyebrow: 'Private browser-based conversion',
-      title: 'Convert media.',
-      titleAccent: 'Keep it yours.',
+      title: 'Convert any media.',
+      titleAccent: 'To the format you need.',
       subtitle:
         'A focused workspace for batch image, video, audio, and 3D model conversion. Nothing is uploaded; every file is processed on your device.',
       imageCta: 'Convert images',
@@ -29,7 +29,7 @@ export const messages = {
       model3dCta: 'Convert 3D models',
       beta: 'Beta',
       sectionEyebrow: 'Choose a workspace',
-      sectionTitle: 'Four converters. Every route.',
+      sectionTitle: 'Choose the right converter for your files',
       sectionIntro:
         'Choose what you are working with, then select the output format inside the converter.',
       open: 'Open converter',
@@ -46,21 +46,23 @@ export const messages = {
         },
         {
           title: '3D Model Converter',
-          description: 'Convert static {{formats}} models locally in your browser.',
+          description: 'Convert {{formats}} 3D models locally in your browser.',
         },
       ],
       benefits: [
         {
-          title: 'Local by design',
-          description: 'Your files stay on your device. Conversion happens inside the browser.',
+          title: 'Convert without uploading to a server',
+          description:
+            'Files are not uploaded to a server. Conversion happens entirely in your browser.',
         },
         {
           title: 'Built for batches',
           description: 'Add different source formats together and export the entire queue at once.',
         },
         {
-          title: 'No friction',
-          description: 'No account, no upload wait, no watermark, and no server-side file limits.',
+          title: 'No registration required',
+          description:
+            'Use the tools without creating an account. No watermarks are added to converted files.',
         },
       ],
       metadata: 'Metadata utility',
@@ -165,10 +167,7 @@ export const messages = {
     },
     model3d: {
       badge: '3D Model Converter',
-      limitationsTitle: 'Format conversion limitations',
-      limitationsNotice:
-        'Some models may not convert correctly. Materials, textures, transparency, bones, and other format-specific data can look different or be omitted in the converted file. Keep your original files and verify the result before using it.',
-      title: 'Static 3D Model',
+      title: '3D Model',
       suffix: 'Converter',
       subtitle: 'Convert {{inputs}} models to {{outputs}} without uploading them.',
       drop: 'Drop models and related files here',
@@ -245,7 +244,7 @@ export const messages = {
       lossExpressions: 'Expressions and morph targets',
       lossSceneData: 'Object hierarchy, physics, constraints, cameras, lights, and format-specific metadata',
       lossStlSurfaceData: 'Textures, UV coordinates, materials, vertex colors, and transparency',
-      proseTitle: 'Private static 3D model conversion',
+      proseTitle: 'Private 3D model conversion',
       prose:
         'Models and animation clips are separated after import and converted independently in your browser. Model conversion does not embed animation clips. Animations can be exported as GLB, glTF, VRMA, or three.js JSON and remain linked to every model for preview. OBJ and STL bake the current pose into a static mesh and ignore expressions. Format-specific data such as physics, cameras, lights, constraints, and some metadata may still be omitted.',
       bullets: [
@@ -275,7 +274,7 @@ export const messages = {
       image: 'Universal Image Converter | Fullstack Media Converter',
       video: 'Universal Video Converter | Fullstack Media Converter',
       audio: 'Universal Audio Converter | Fullstack Media Converter',
-      model3d: 'Static 3D Model Converter | Fullstack Media Converter',
+        model3d: '3D Model Converter | Fullstack Media Converter',
       exif: 'EXIF Export | Fullstack Media Converter',
     },
   },
@@ -299,8 +298,8 @@ export const messages = {
     },
     home: {
       eyebrow: 'ブラウザ内で完結する安全な変換',
-      title: 'メディアを変換。',
-      titleAccent: 'ファイルは手元に。',
+      title: 'あらゆるメディアを、',
+      titleAccent: '欲しい形式へ。',
       subtitle:
         '画像、動画、音声、3Dモデルをまとめて変換できるシンプルなワークスペースです。ファイルはアップロードされず、すべてお使いの端末内で処理されます。',
       imageCta: '画像を変換する',
@@ -309,7 +308,7 @@ export const messages = {
       model3dCta: '3Dモデルを変換する',
       beta: 'ベータ',
       sectionEyebrow: '変換ツールを選択',
-      sectionTitle: '4つのツールですべての変換に対応',
+      sectionTitle: '用途に合わせて選べる変換ツール',
       sectionIntro:
         '画像、動画、音声または3Dモデルを選び、変換ページ内で出力形式を指定してください。',
       open: '変換ツールを開く',
@@ -326,22 +325,21 @@ export const messages = {
         },
         {
           title: '3Dモデル変換ツール',
-          description: '{{formats}}の静的3Dモデルをブラウザ内で変換します。',
+          description: '{{formats}}の3Dモデルをブラウザ内で変換します。',
         },
       ],
       benefits: [
         {
-          title: '端末内で安全に処理',
-          description: 'ファイルはお使いの端末から外部へ送信されず、ブラウザ内で変換されます。',
+          title: 'サーバーへアップロードせずに変換',
+          description: 'ファイルはサーバーへアップロードされず、変換処理はブラウザ内で完結します。',
         },
         {
           title: '一括変換に対応',
           description: '異なる入力形式をまとめて追加し、変換結果を一度に書き出せます。',
         },
         {
-          title: '登録不要ですぐ使える',
-          description:
-            'アカウント登録、アップロード待ち、透かし、サーバー側の容量制限はありません。',
+          title: '登録なしですぐに使える',
+          description: 'アカウント登録なしで利用でき、変換後のファイルに透かしも追加されません。',
         },
       ],
       metadata: 'メタデータツール',
@@ -443,10 +441,7 @@ export const messages = {
     },
     model3d: {
       badge: '3Dモデル変換ツール',
-      limitationsTitle: '形式変換時の制限事項',
-      limitationsNotice:
-        'モデルによっては正常に変換できない場合があります。変換後は、マテリアル、テクスチャ、透過、ボーンなどの情報が元のモデルと異なったり、一部失われたりする可能性があります。元ファイルを保管し、変換結果を確認してからご利用ください。',
-      title: '静的3Dモデル',
+      title: '3Dモデル',
       suffix: '変換',
       subtitle: '{{inputs}}を{{outputs}}へ、アップロードせずに変換できます。',
       drop: '3Dモデルと関連ファイルをここにドロップ',
@@ -522,7 +517,7 @@ export const messages = {
       lossExpressions: '表情・モーフ',
       lossSceneData: 'オブジェクト階層・物理・制約・カメラ・ライト・形式固有のメタデータ',
       lossStlSurfaceData: 'テクスチャ・UV座標・マテリアル・頂点カラー・透明度',
-      proseTitle: 'アップロード不要の静的3Dモデル変換',
+      proseTitle: 'アップロード不要の3Dモデル変換',
       prose:
         '入力後にモデルとアニメーションクリップを分離し、ブラウザ内で個別に変換します。モデル変換にはアニメーションを埋め込みません。アニメーションはGLB、glTF、VRMA、three.js JSONとして出力でき、Preview用として全モデルに関連付けられます。OBJとSTLでは現在の姿勢を静的メッシュへ焼き込み、表情を無視します。物理設定、カメラ、ライト、コンストレイント、一部のメタデータなどは失われる場合があります。',
       bullets: [

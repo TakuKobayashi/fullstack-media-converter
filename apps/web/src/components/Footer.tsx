@@ -13,7 +13,6 @@ export default function Footer() {
     { href: localizedPath('/video-converter'), label: t('footer.video') },
     { href: localizedPath('/audio-converter'), label: t('footer.audio') },
     { href: localizedPath('/model3d-converter'), label: t('footer.model3d') },
-    { href: localizedPath('/export-exif'), label: t('footer.exif') },
   ];
   return (
     <footer className={s.footer}>
