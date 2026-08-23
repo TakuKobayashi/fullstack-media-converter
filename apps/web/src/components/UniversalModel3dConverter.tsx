@@ -39,6 +39,7 @@ import VrmTransparencyPreviewModal from '@/components/VrmTransparencyPreviewModa
 import { useBatchDownload } from '@/hooks/useBatchDownload';
 import { useTranslation } from '@/i18n';
 import s from '@/styles/converter.module.css';
+import RakutenMotionAd from '@/components/RakutenMotionAd';
 
 const engine = new BrowserModel3dEngine();
 const jotaiStore = getDefaultStore();
@@ -708,9 +709,7 @@ export default function UniversalModel3dConverter() {
         </div>
       </section>
       <div className="container">
-        <div className={s.adSlot} aria-hidden="true">
-          {t('common.ad')}
-        </div>
+        <RakutenMotionAd />
         <div
           className={`${s.dropZone} ${dragging ? s.dropZoneActive : ''}`}
           onDragOver={(event) => {

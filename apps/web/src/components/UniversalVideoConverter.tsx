@@ -23,6 +23,7 @@ import { useTranslation } from '@/i18n';
 import { useAtom } from 'jotai';
 import { videoOutputFormatAtom } from '@/state/preferences';
 import { useBatchDownload } from '@/hooks/useBatchDownload';
+import RakutenMotionAd from '@/components/RakutenMotionAd';
 
 const engine = new BrowserVideoEngine();
 function formatBytes(bytes: number): string {
@@ -166,9 +167,7 @@ export default function UniversalVideoConverter() {
       </section>
 
       <div className="container">
-        <div className={s.adSlot} aria-hidden="true">
-          {t('common.ad')}
-        </div>
+        <RakutenMotionAd />
 
         <div
           className={`${s.dropZone} ${isDragOver ? s.dropZoneActive : ''}`}
@@ -397,11 +396,7 @@ export default function UniversalVideoConverter() {
           </div>
         )}
 
-        {jobs.length > 0 && (
-          <div className={s.adSlot} style={{ marginTop: 32 }} aria-hidden="true">
-            {t('common.ad')}
-          </div>
-        )}
+        {jobs.length > 0 && <RakutenMotionAd />}
 
         <div className={s.prose}>
           <h2>{t('video.proseTitle')}</h2>

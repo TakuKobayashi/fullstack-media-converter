@@ -20,6 +20,7 @@ import s from '@/styles/converter.module.css';
 import { useTranslation } from '@/i18n';
 import { useAtom } from 'jotai';
 import { imageQualityAtom } from '@/state/preferences';
+import RakutenMotionAd from '@/components/RakutenMotionAd';
 
 export interface BatchConverterProps {
   engine: ConversionEngine;
@@ -214,10 +215,7 @@ export default function BatchConverter({
       </section>
 
       <div className="container">
-        {/* Ad slot top */}
-        <div className={s.adSlot} aria-hidden="true">
-          {t('common.ad')}
-        </div>
+        <RakutenMotionAd />
 
         {/* Drop zone */}
         <div
@@ -403,12 +401,7 @@ export default function BatchConverter({
           </div>
         )}
 
-        {/* Ad slot bottom */}
-        {jobs.length > 0 && (
-          <div className={s.adSlot} style={{ marginTop: 32 }} aria-hidden="true">
-            {t('common.ad')}
-          </div>
-        )}
+        {jobs.length > 0 && <RakutenMotionAd />}
 
         {/* SEO prose */}
         {prose && <div className={s.prose}>{prose}</div>}

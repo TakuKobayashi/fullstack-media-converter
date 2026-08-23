@@ -28,6 +28,7 @@ import s from '@/styles/converter.module.css';
 import { useTranslation } from '@/i18n';
 import { useAtom } from 'jotai';
 import { imageOutputFormatAtom, imageQualityAtom } from '@/state/preferences';
+import RakutenMotionAd from '@/components/RakutenMotionAd';
 import { useBatchDownload } from '@/hooks/useBatchDownload';
 
 const engine = new BrowserImageEngine();
@@ -172,9 +173,7 @@ export default function UniversalImageConverter() {
       </section>
 
       <div className="container">
-        <div className={s.adSlot} aria-hidden="true">
-          {t('common.ad')}
-        </div>
+        <RakutenMotionAd />
 
         {/* Drop zone */}
         <div
@@ -424,11 +423,7 @@ export default function UniversalImageConverter() {
           </div>
         )}
 
-        {jobs.length > 0 && (
-          <div className={s.adSlot} style={{ marginTop: 32 }} aria-hidden="true">
-            {t('common.ad')}
-          </div>
-        )}
+        {jobs.length > 0 && <RakutenMotionAd />}
 
         <div className={s.prose}>
           <h2>{t('image.proseTitle')}</h2>

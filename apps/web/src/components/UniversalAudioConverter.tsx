@@ -20,6 +20,7 @@ import { audioBitrateAtom, audioOutputFormatAtom } from '@/state/preferences';
 import { useTranslation } from '@/i18n';
 import { useBatchDownload } from '@/hooks/useBatchDownload';
 import s from '@/styles/converter.module.css';
+import RakutenMotionAd from '@/components/RakutenMotionAd';
 
 const engine = new BrowserAudioEngine();
 
@@ -139,9 +140,7 @@ export default function UniversalAudioConverter() {
         </div>
       </section>
       <div className="container">
-        <div className={s.adSlot} aria-hidden="true">
-          {t('common.ad')}
-        </div>
+        <RakutenMotionAd />
         <div
           className={`${s.dropZone} ${dragging ? s.dropZoneActive : ''}`}
           onDragOver={(event) => {
