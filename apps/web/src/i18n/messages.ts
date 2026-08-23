@@ -165,8 +165,8 @@ export const messages = {
     },
     model3d: {
       badge: '3D Model Converter',
-      betaTitle: 'This feature is currently in beta',
-      betaNotice:
+      limitationsTitle: 'Format conversion limitations',
+      limitationsNotice:
         'Some models may not convert correctly. Materials, textures, transparency, bones, and other format-specific data can look different or be omitted in the converted file. Keep your original files and verify the result before using it.',
       title: 'Static 3D Model',
       suffix: 'Converter',
@@ -443,8 +443,8 @@ export const messages = {
     },
     model3d: {
       badge: '3Dモデル変換ツール',
-      betaTitle: '3Dモデル変換機能はベータ版です',
-      betaNotice:
+      limitationsTitle: '形式変換時の制限事項',
+      limitationsNotice:
         'モデルによっては正常に変換できない場合があります。変換後は、マテリアル、テクスチャ、透過、ボーンなどの情報が元のモデルと異なったり、一部失われたりする可能性があります。元ファイルを保管し、変換結果を確認してからご利用ください。',
       title: '静的3Dモデル',
       suffix: '変換',
