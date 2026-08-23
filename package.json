@@ -6,6 +6,7 @@
     "dev": "pnpm --filter @convertmate/web dev",
     "build": "pnpm --filter @convertmate/web build",
     "build:cli": "pnpm --filter @convertmate/cli build",
+    "test:model3d": "pnpm --filter @convertmate/model3d test",
     "test:action": "node --test action/test/*.test.js",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

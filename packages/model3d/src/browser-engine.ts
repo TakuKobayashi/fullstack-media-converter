@@ -222,7 +222,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       const loadingContext = await this.createLoadingManager(
         auxiliaryFiles,
         objectUrls,
-        this.formatMayUseKtx2(job.inputFormat),
+        await this.sourceUsesKtx2(source, job.inputFormat),
       );
       disposeLoadingContext = loadingContext.dispose;
       const manager = loadingContext.manager;
@@ -341,8 +341,12 @@ export class BrowserModel3dEngine implements ConversionEngine {
     const loadingContext = await this.createLoadingManager(
       auxiliaryFiles,
       objectUrls,
-      this.formatMayUseKtx2(job.inputFormat) ||
-        animationSources.some((source) => this.formatMayUseKtx2(source.format)),
+      (await this.sourceUsesKtx2(source, job.inputFormat)) ||
+        (await Promise.all(
+          animationSources.map((animation) =>
+            this.sourceUsesKtx2(animation.file, animation.format),
+          ),
+        )).some(Boolean),
     );
     const manager = loadingContext.manager;
     let root: Object3D;
@@ -738,8 +742,16 @@ export class BrowserModel3dEngine implements ConversionEngine {
     return result;
   }
 
-  private formatMayUseKtx2(format: InputFormat): boolean {
-    return format === 'gltf' || format === 'glb' || format === 'vrm' || format === 'vrma';
+  private async sourceUsesKtx2(
+    source: File | ArrayBuffer,
+    format: InputFormat,
+  ): Promise<boolean> {
+    if (format !== 'gltf' && format !== 'glb' && format !== 'vrm' && format !== 'vrma') {
+      return false;
+    }
+    const buffer = source instanceof File ? await source.arrayBuffer() : source;
+    const text = new TextDecoder().decode(buffer);
+    return /KHR_texture_basisu|\.ktx2(?:["'\s}\]])/i.test(text);
   }
 
   private async createLoadingManager(
@@ -1257,7 +1269,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       const loadingContext = await this.createLoadingManager(
         auxiliaryFiles,
         objectUrls,
-        this.formatMayUseKtx2(format),
+        await this.sourceUsesKtx2(file, format),
       );
       disposeLoadingContext = loadingContext.dispose;
       const root = await this.loadModel(
@@ -1294,7 +1306,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       const loadingContext = await this.createLoadingManager(
         auxiliaryFiles,
         objectUrls,
-        this.formatMayUseKtx2(source.format),
+        await this.sourceUsesKtx2(source.file, source.format),
       );
       disposeLoadingContext = loadingContext.dispose;
       const root = await this.loadModel(
