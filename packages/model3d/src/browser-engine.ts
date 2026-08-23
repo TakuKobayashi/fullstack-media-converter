@@ -26,11 +26,13 @@ import {
   Texture,
   VectorKeyframeTrack,
   Vector3,
+  WebGLRenderer,
 } from 'three';
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
 import { DDSLoader } from 'three/examples/jsm/loaders/DDSLoader.js';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js';
@@ -208,6 +210,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
 
   async convert(job: ConversionJob, options: ConversionOptions = {}): Promise<ConversionJob> {
     const objectUrls: string[] = [];
+    let disposeLoadingContext: (() => void) | undefined;
     try {
       options.onProgress?.(5);
       const source = job.file.source;
@@ -216,7 +219,13 @@ export class BrowserModel3dEngine implements ConversionEngine {
       }
       const auxiliaryFiles =
         options.model3d?.auxiliaryFilesByJobId?.[job.id] ?? options.model3d?.auxiliaryFiles ?? [];
-      const manager = await this.createLoadingManager(auxiliaryFiles, objectUrls);
+      const loadingContext = await this.createLoadingManager(
+        auxiliaryFiles,
+        objectUrls,
+        this.formatMayUseKtx2(job.inputFormat),
+      );
+      disposeLoadingContext = loadingContext.dispose;
+      const manager = loadingContext.manager;
       const root = await this.loadModel(source, job.inputFormat, auxiliaryFiles, manager);
       options.onProgress?.(45);
       const preserveBones =
@@ -296,6 +305,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
         error: error instanceof Error ? error.message : String(error),
       };
     } finally {
+      disposeLoadingContext?.();
       objectUrls.forEach((url) => URL.revokeObjectURL(url));
     }
   }
@@ -328,8 +338,21 @@ export class BrowserModel3dEngine implements ConversionEngine {
       throw new Error('Browser model preview requires a File or ArrayBuffer.');
     }
     const objectUrls: string[] = [];
-    const manager = await this.createLoadingManager(auxiliaryFiles, objectUrls);
-    const root = await this.loadModel(source, job.inputFormat, auxiliaryFiles, manager);
+    const loadingContext = await this.createLoadingManager(
+      auxiliaryFiles,
+      objectUrls,
+      this.formatMayUseKtx2(job.inputFormat) ||
+        animationSources.some((source) => this.formatMayUseKtx2(source.format)),
+    );
+    const manager = loadingContext.manager;
+    let root: Object3D;
+    try {
+      root = await this.loadModel(source, job.inputFormat, auxiliaryFiles, manager);
+    } catch (error) {
+      loadingContext.dispose();
+      objectUrls.forEach((url) => URL.revokeObjectURL(url));
+      throw error;
+    }
     // Preview animations come exclusively from the separately listed animation assets.
     root.animations = [];
     const loadedAnimationRoots = new Map<File, Object3D>();
@@ -655,6 +678,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
         root.traverse((object) => {
           if ((object as Mesh).isMesh) (object as Mesh).geometry.dispose();
         });
+        loadingContext.dispose();
         objectUrls.forEach((url) => URL.revokeObjectURL(url));
       },
     };
@@ -714,12 +738,31 @@ export class BrowserModel3dEngine implements ConversionEngine {
     return result;
   }
 
-  private async createLoadingManager(files: File[], objectUrls: string[]): Promise<LoadingManager> {
+  private formatMayUseKtx2(format: InputFormat): boolean {
+    return format === 'gltf' || format === 'glb' || format === 'vrm' || format === 'vrma';
+  }
+
+  private async createLoadingManager(
+    files: File[],
+    objectUrls: string[],
+    formatMayUseKtx2 = false,
+  ): Promise<{ manager: LoadingManager; dispose: () => void }> {
     const manager = new LoadingManager();
     // TextureLoader cannot decode these formats by itself. Register the
     // dedicated loaders before FBX/OBJ/DAE/3DS request their referenced maps.
     manager.addHandler(/\.tga(?:[?#].*)?$/i, new TGALoader(manager));
     manager.addHandler(/\.dds(?:[?#].*)?$/i, new DDSLoader(manager));
+    let ktx2Loader: KTX2Loader | undefined;
+    let supportRenderer: WebGLRenderer | undefined;
+    const needsKtx2 =
+      formatMayUseKtx2 || files.some((file) => file.name.toLowerCase().endsWith('.ktx2'));
+    if (needsKtx2) {
+      supportRenderer = new WebGLRenderer({ antialias: false, powerPreference: 'low-power' });
+      ktx2Loader = new KTX2Loader(manager)
+        .setTranscoderPath('/model3d-basis/')
+        .detectSupport(supportRenderer);
+      manager.addHandler(/\.ktx2(?:[?#].*)?$/i, ktx2Loader);
+    }
     const byName = new Map(files.map((file) => [file.name.toLowerCase(), file]));
     const filesByStem = new Map<string, File[]>();
     const textureStem = (name: string) =>
@@ -794,7 +837,17 @@ export class BrowserModel3dEngine implements ConversionEngine {
       objectUrls.push(objectUrl);
       return objectUrl;
     });
-    return manager;
+    let disposed = false;
+    return {
+      manager,
+      dispose: () => {
+        if (disposed) return;
+        disposed = true;
+        ktx2Loader?.dispose();
+        supportRenderer?.dispose();
+        supportRenderer?.forceContextLoss();
+      },
+    };
   }
 
   private normalizeMmdVrmScale(root: Object3D): void {
@@ -1134,9 +1187,12 @@ export class BrowserModel3dEngine implements ConversionEngine {
       case 'gltf':
       case 'glb':
       case 'vrm':
-      case 'vrma':
+      case 'vrma': {
+        const loader = new GLTFLoader(manager);
+        const ktx2Handler = manager.getHandler('texture.ktx2');
+        if (ktx2Handler instanceof KTX2Loader) loader.setKTX2Loader(ktx2Handler);
         return new Promise((resolve, reject) =>
-          new GLTFLoader(manager).parse(
+          loader.parse(
             format === 'gltf' ? text() : buffer,
             '',
             (gltf) => {
@@ -1146,6 +1202,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
             reject,
           ),
         );
+      }
       case 'stl': {
         const geometry = new STLLoader(manager).parse(buffer);
         geometry.computeVertexNormals();
@@ -1195,12 +1252,19 @@ export class BrowserModel3dEngine implements ConversionEngine {
     auxiliaryFiles: File[] = [],
   ): Promise<Model3dSourceInspection> {
     const objectUrls: string[] = [];
+    let disposeLoadingContext: (() => void) | undefined;
     try {
+      const loadingContext = await this.createLoadingManager(
+        auxiliaryFiles,
+        objectUrls,
+        this.formatMayUseKtx2(format),
+      );
+      disposeLoadingContext = loadingContext.dispose;
       const root = await this.loadModel(
         file,
         format,
         auxiliaryFiles,
-        await this.createLoadingManager(auxiliaryFiles, objectUrls),
+        loadingContext.manager,
       );
       let hasMesh = false;
       root.traverse((object) => {
@@ -1214,6 +1278,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
         })),
       };
     } finally {
+      disposeLoadingContext?.();
       objectUrls.forEach((url) => URL.revokeObjectURL(url));
     }
   }
@@ -1224,12 +1289,19 @@ export class BrowserModel3dEngine implements ConversionEngine {
     auxiliaryFiles: File[] = [],
   ): Promise<Blob> {
     const objectUrls: string[] = [];
+    let disposeLoadingContext: (() => void) | undefined;
     try {
+      const loadingContext = await this.createLoadingManager(
+        auxiliaryFiles,
+        objectUrls,
+        this.formatMayUseKtx2(source.format),
+      );
+      disposeLoadingContext = loadingContext.dispose;
       const root = await this.loadModel(
         source.file,
         source.format,
         auxiliaryFiles,
-        await this.createLoadingManager(auxiliaryFiles, objectUrls),
+        loadingContext.manager,
       );
       const clip = root.animations?.[source.clipIndex];
       if (!clip) throw new Error(`Animation clip "${source.clipName}" was not found.`);
@@ -1259,6 +1331,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
         ? new Blob([exported], { type: 'model/gltf-binary' })
         : new Blob([JSON.stringify(exported)], { type: 'model/gltf+json' });
     } finally {
+      disposeLoadingContext?.();
       objectUrls.forEach((url) => URL.revokeObjectURL(url));
     }
   }
