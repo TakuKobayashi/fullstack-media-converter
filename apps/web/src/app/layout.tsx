@@ -7,37 +7,47 @@ import { SITE_URL } from '@/lib/seo';
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: 'Fullstack Media Converter — Private Image & Video Converter',
+    default: 'Free Browser File Converter — Image, Video, Audio & 3D',
     template: '%s | Fullstack Media Converter',
   },
   description:
-    'Convert images and videos in bulk — entirely in your browser. No uploads, no server, 100% private.',
+    'Convert images, videos, audio, and 3D models in your browser without uploading files to a server. No registration or watermarks.',
   keywords: [
     'bulk image converter',
     'video converter',
     'batch convert',
+    'audio converter',
+    '3D model converter',
     'private file converter',
     'free converter',
   ],
+  alternates: {
+    canonical: `${SITE_URL}/`,
+    languages: { 'en-US': `${SITE_URL}/`, 'ja-JP': `${SITE_URL}/ja/`, 'x-default': `${SITE_URL}/` },
+  },
   openGraph: {
     type: 'website',
+    locale: 'en_US',
+    url: `${SITE_URL}/`,
     siteName: 'Fullstack Media Converter',
-    title: 'Fullstack Media Converter — Private Image & Video Converter',
-    description: 'Convert image and video batches locally. Works offline. No uploads.',
+    title: 'Free Browser File Converter — Image, Video, Audio & 3D',
+    description:
+      'Convert images, videos, audio, and 3D models in your browser without uploading files to a server.',
     images: [
       {
         url: `${SITE_URL}/og/home.png`,
         width: 1536,
         height: 864,
-        alt: 'Image, video and metadata conversion in one private browser tool',
+        alt: 'Image, video, audio, and 3D model conversion in the browser',
         type: 'image/png',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Fullstack Media Converter — Private Image & Video Converter',
-    description: 'Convert image and video batches locally. Works offline. No uploads.',
+    title: 'Free Browser File Converter — Image, Video, Audio & 3D',
+    description:
+      'Convert images, videos, audio, and 3D models without uploading files to a server.',
     images: [`${SITE_URL}/og/home.png`],
   },
   manifest: '/manifest.json',
