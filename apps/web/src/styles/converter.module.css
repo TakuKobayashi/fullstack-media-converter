@@ -290,7 +290,9 @@
   color: var(--muted);
   font-size: 0.8rem;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 
 .relatedDropZone:hover,

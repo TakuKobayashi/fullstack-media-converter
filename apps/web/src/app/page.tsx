@@ -109,9 +109,7 @@ export default function HomePage() {
                     <span className={s.cardNumber}>{converter.number}</span>
                     <span className={s.cardIcon}>{converter.icon}</span>
                   </div>
-                  <h3>
-                    {t(`home.converters.${index}.title`)}
-                  </h3>
+                  <h3>{t(`home.converters.${index}.title`)}</h3>
                   <p>
                     {t(`home.converters.${index}.description`, {
                       formats: converter.formats.join(locale === 'ja' ? '・' : ', '),

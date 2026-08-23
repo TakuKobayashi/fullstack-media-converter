@@ -26,10 +26,12 @@ export function useBatchDownload(jobs: ConversionJob[], archivePrefix: string) {
       job.outputs?.length
         ? job.outputs
         : job.resultUrl
-          ? [{
-              name: job.file.name.replace(/\.[^.]+$/, `.${job.outputFormat}`),
-              url: job.resultUrl,
-            }]
+          ? [
+              {
+                name: job.file.name.replace(/\.[^.]+$/, `.${job.outputFormat}`),
+                url: job.resultUrl,
+              },
+            ]
           : [],
     );
     if (outputs.length === 1) {

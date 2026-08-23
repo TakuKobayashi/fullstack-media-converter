@@ -32,10 +32,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     const en = `${SITE_URL}${routeFor(tool, 'en')}/`;
     const ja = `${SITE_URL}${routeFor(tool, 'ja')}/`;
     const languages = { 'en-US': en, 'ja-JP': ja, 'x-default': en };
-    pages.push(
-      { url: en, alternates: { languages } },
-      { url: ja, alternates: { languages } },
-    );
+    pages.push({ url: en, alternates: { languages } }, { url: ja, alternates: { languages } });
   }
   return pages;
 }

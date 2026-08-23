@@ -15,7 +15,8 @@ if (!globalThis.ProgressEvent) {
   globalThis.ProgressEvent = class ProgressEvent extends Event {} as typeof ProgressEvent;
 }
 
-const sessions: Array<Awaited<ReturnType<BrowserModel3dEngine['createModel3dPreviewSession']>>> = [];
+const sessions: Array<Awaited<ReturnType<BrowserModel3dEngine['createModel3dPreviewSession']>>> =
+  [];
 
 async function fixture(name: string): Promise<File> {
   const path = fileURLToPath(new URL(`./fixtures/vrm/${name}`, import.meta.url));

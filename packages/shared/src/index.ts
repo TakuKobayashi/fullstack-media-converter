@@ -53,7 +53,19 @@ export interface AudioInputFormatDefinition {
   extensions: readonly `.${string}`[];
 }
 export type Model3dFormat =
-  'fbx' | 'obj' | 'gltf' | 'glb' | 'vrm' | 'vrma' | 'stl' | 'ply' | 'dae' | '3ds' | 'pmx' | 'pmd' | 'vmd';
+  | 'fbx'
+  | 'obj'
+  | 'gltf'
+  | 'glb'
+  | 'vrm'
+  | 'vrma'
+  | 'stl'
+  | 'ply'
+  | 'dae'
+  | '3ds'
+  | 'pmx'
+  | 'pmd'
+  | 'vmd';
 export type Model3dOutputFormat = 'glb' | 'gltf' | 'obj' | 'stl' | 'vrm';
 export interface Model3dInputFormatDefinition {
   format: Model3dFormat;
@@ -474,7 +486,15 @@ export const MODEL3D_BONE_OUTPUT_FORMATS = [
   'gltf',
   'vrm',
 ] as const satisfies readonly Model3dOutputFormat[];
-export const MODEL3D_ANIMATION_INPUT_FORMATS = ['fbx', 'gltf', 'glb', 'vrm', 'vrma', 'dae', 'vmd'] as const;
+export const MODEL3D_ANIMATION_INPUT_FORMATS = [
+  'fbx',
+  'gltf',
+  'glb',
+  'vrm',
+  'vrma',
+  'dae',
+  'vmd',
+] as const;
 export const MODEL3D_ANIMATION_OUTPUT_FORMATS = ['glb', 'gltf', 'vrm'] as const;
 export const MODEL3D_EXPRESSION_INPUT_FORMATS = [
   'fbx',

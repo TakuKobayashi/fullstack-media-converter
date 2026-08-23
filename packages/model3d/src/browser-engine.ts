@@ -74,13 +74,34 @@ const MMD_BAKE_LIGHT = new Vector3(0.5, 1, 1).normalize();
 const WHITE_PIXEL_DATA_URL =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nQAAAABJRU5ErkJggg==';
 const LOCAL_TEXTURE_EXTENSIONS = new Set([
-  'bmp', 'gif', 'jpeg', 'jpg', 'png', 'psd', 'tga', 'tif', 'tiff', 'webp',
+  'bmp',
+  'gif',
+  'jpeg',
+  'jpg',
+  'png',
+  'psd',
+  'tga',
+  'tif',
+  'tiff',
+  'webp',
 ]);
 
 export const VRM_REQUIRED_HUMAN_BONES = [
-  'hips', 'spine', 'head', 'leftUpperLeg', 'leftLowerLeg', 'leftFoot',
-  'rightUpperLeg', 'rightLowerLeg', 'rightFoot', 'leftUpperArm',
-  'leftLowerArm', 'leftHand', 'rightUpperArm', 'rightLowerArm', 'rightHand',
+  'hips',
+  'spine',
+  'head',
+  'leftUpperLeg',
+  'leftLowerLeg',
+  'leftFoot',
+  'rightUpperLeg',
+  'rightLowerLeg',
+  'rightFoot',
+  'leftUpperArm',
+  'leftLowerArm',
+  'leftHand',
+  'rightUpperArm',
+  'rightLowerArm',
+  'rightHand',
 ] as const;
 export type VrmRequiredHumanBone = (typeof VRM_REQUIRED_HUMAN_BONES)[number];
 
@@ -345,11 +366,13 @@ export class BrowserModel3dEngine implements ConversionEngine {
       auxiliaryFiles,
       objectUrls,
       (await this.sourceUsesKtx2(source, job.inputFormat)) ||
-        (await Promise.all(
-          animationSources.map((animation) =>
-            this.sourceUsesKtx2(animation.file, animation.format),
-          ),
-        )).some(Boolean),
+        (
+          await Promise.all(
+            animationSources.map((animation) =>
+              this.sourceUsesKtx2(animation.file, animation.format),
+            ),
+          )
+        ).some(Boolean),
     );
     const manager = loadingContext.manager;
     let root: Object3D;
@@ -757,10 +780,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     return result;
   }
 
-  private async sourceUsesKtx2(
-    source: File | ArrayBuffer,
-    format: InputFormat,
-  ): Promise<boolean> {
+  private async sourceUsesKtx2(source: File | ArrayBuffer, format: InputFormat): Promise<boolean> {
     if (format !== 'gltf' && format !== 'glb' && format !== 'vrm' && format !== 'vrma') {
       return false;
     }
@@ -842,9 +862,9 @@ export class BrowserModel3dEngine implements ConversionEngine {
       );
       const decodedPsd = stemMatches.find((candidate) => decodedPsdUrlByFile.has(candidate));
       const file = exactFile?.name.toLowerCase().endsWith('.psd')
-        ? stemReplacement ?? (decodedPsdUrlByFile.has(exactFile) ? exactFile : decodedPsd)
-        : exactFile ??
-          (stemMatches.length === 1 ? stemMatches[0] : stemReplacement ?? decodedPsd);
+        ? (stemReplacement ?? (decodedPsdUrlByFile.has(exactFile) ? exactFile : decodedPsd))
+        : (exactFile ??
+          (stemMatches.length === 1 ? stemMatches[0] : (stemReplacement ?? decodedPsd)));
       if (!file) {
         const extension = name.split('.').pop() ?? '';
         // Imported files are processed entirely in the browser. A relative
@@ -955,8 +975,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
           vertexColors?: boolean;
         };
         const image = imported.map?.image as
-          | { src?: string; currentSrc?: string; width?: number; height?: number }
-          | undefined;
+          { src?: string; currentSrc?: string; width?: number; height?: number } | undefined;
         const imageUrl = image?.currentSrc || image?.src || '';
         const hasLoadedImage =
           Number(image?.width) > 0 && Number(image?.height) > 0 && Boolean(imageUrl);
@@ -964,7 +983,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
         // URLs. The data URL is our missing-texture placeholder and must not
         // become part of the preview material.
         const isResolvedTexture = hasLoadedImage && imageUrl.startsWith('blob:');
-        const map = isResolvedTexture ? imported.map ?? null : null;
+        const map = isResolvedTexture ? (imported.map ?? null) : null;
         if (map) {
           map.colorSpace = SRGBColorSpace;
           map.needsUpdate = true;
@@ -1138,9 +1157,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     }
   }
 
-  private describeVrmHumanBones(
-    root: Object3D,
-  ): Partial<Record<VrmRequiredHumanBone, string>> {
+  private describeVrmHumanBones(root: Object3D): Partial<Record<VrmRequiredHumanBone, string>> {
     const loadedVrm = this.loadedVrms.get(root);
     if (loadedVrm) {
       return Object.fromEntries(
@@ -1303,12 +1320,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
         await this.sourceUsesKtx2(file, format),
       );
       disposeLoadingContext = loadingContext.dispose;
-      const root = await this.loadModel(
-        file,
-        format,
-        auxiliaryFiles,
-        loadingContext.manager,
-      );
+      const root = await this.loadModel(file, format, auxiliaryFiles, loadingContext.manager);
       let hasMesh = false;
       root.traverse((object) => {
         if ((object as Mesh).isMesh) hasMesh = true;
@@ -2679,8 +2691,10 @@ export class BrowserModel3dEngine implements ConversionEngine {
       };
       const color = source.color ?? new Color(1, 1, 1);
       mtl.push('', `newmtl ${name}`, `Kd ${color.r} ${color.g} ${color.b}`);
-      if (source.emissive) mtl.push(`Ke ${source.emissive.r} ${source.emissive.g} ${source.emissive.b}`);
-      if (source.specular) mtl.push(`Ks ${source.specular.r} ${source.specular.g} ${source.specular.b}`);
+      if (source.emissive)
+        mtl.push(`Ke ${source.emissive.r} ${source.emissive.g} ${source.emissive.b}`);
+      if (source.specular)
+        mtl.push(`Ks ${source.specular.r} ${source.specular.g} ${source.specular.b}`);
       if (Number.isFinite(source.shininess)) mtl.push(`Ns ${source.shininess}`);
       const opacity = Math.max(0, Math.min(1, Number(source.opacity ?? 1)));
       mtl.push(`d ${opacity}`, 'illum 2');
@@ -2726,13 +2740,16 @@ export class BrowserModel3dEngine implements ConversionEngine {
       for (let index = 0; index < positions.count; index += 1) {
         vertex.fromBufferAttribute(positions, index).applyMatrix4(mesh.matrixWorld);
         if (colors) {
-          obj.push(`v ${vertex.x} ${vertex.y} ${vertex.z} ${colors.getX(index)} ${colors.getY(index)} ${colors.getZ(index)}`);
+          obj.push(
+            `v ${vertex.x} ${vertex.y} ${vertex.z} ${colors.getX(index)} ${colors.getY(index)} ${colors.getZ(index)}`,
+          );
         } else {
           obj.push(`v ${vertex.x} ${vertex.y} ${vertex.z}`);
         }
       }
       if (uvs) {
-        for (let index = 0; index < uvs.count; index += 1) obj.push(`vt ${uvs.getX(index)} ${uvs.getY(index)}`);
+        for (let index = 0; index < uvs.count; index += 1)
+          obj.push(`vt ${uvs.getX(index)} ${uvs.getY(index)}`);
       }
       if (normals) {
         for (let index = 0; index < normals.count; index += 1) {
@@ -2769,7 +2786,10 @@ export class BrowserModel3dEngine implements ConversionEngine {
     });
 
     const outputs = [
-      { name: `${baseName}.obj`, blob: new Blob([`${obj.join('\n')}\n`], { type: getMimeType('obj') }) },
+      {
+        name: `${baseName}.obj`,
+        blob: new Blob([`${obj.join('\n')}\n`], { type: getMimeType('obj') }),
+      },
       { name: `${baseName}.mtl`, blob: new Blob([`${mtl.join('\n')}\n`], { type: 'text/plain' }) },
       ...textureOutputs,
     ];

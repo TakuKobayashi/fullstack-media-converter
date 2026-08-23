@@ -29,7 +29,11 @@ import {
 } from '@convertmate/shared';
 import { ConversionQueue } from '@convertmate/core';
 import { BrowserModel3dEngine, MMD_TRANSPARENCY_THRESHOLDS } from '@convertmate/model3d';
-import type { Model3dAnimationOutputFormat, Model3dAnimationSource, VrmRequiredHumanBone } from '@convertmate/model3d';
+import type {
+  Model3dAnimationOutputFormat,
+  Model3dAnimationSource,
+  VrmRequiredHumanBone,
+} from '@convertmate/model3d';
 import { model3dOutputFormatAtom, vrmTransparencySettingsAtomFamily } from '@/state/preferences';
 import VrmTransparencyPreviewModal from '@/components/VrmTransparencyPreviewModal';
 import { useBatchDownload } from '@/hooks/useBatchDownload';
@@ -57,13 +61,15 @@ function relatedStem(path: string): string {
   // Image converters commonly preserve the original extension and produce
   // names such as `body.psd.png`. Treat that as the same texture as the FBX
   // reference `body.psd` (and the simpler replacement `body.png`).
-  return relatedBasename(path)
-    .replace(/\.[^.]+$/, '')
-    .replace(/\.psd$/, '')
-    // Versioned exports of the same texture use prefixes such as
-    // `sotai4.0_` and `TS4.0.1_`; the FBX sample contains the former while
-    // its supplied PSD contains the latter.
-    .replace(/^[a-z]+\d+(?:[._-]\d+)*[._-]*/, '');
+  return (
+    relatedBasename(path)
+      .replace(/\.[^.]+$/, '')
+      .replace(/\.psd$/, '')
+      // Versioned exports of the same texture use prefixes such as
+      // `sotai4.0_` and `TS4.0.1_`; the FBX sample contains the former while
+      // its supplied PSD contains the latter.
+      .replace(/^[a-z]+\d+(?:[._-]\d+)*[._-]*/, '')
+  );
 }
 
 function matchReferencedFiles(referencedPaths: string[], files: File[]): File[] {
@@ -72,15 +78,15 @@ function matchReferencedFiles(referencedPaths: string[], files: File[]): File[] 
   const stems = new Set([...references].map(relatedStem));
   return files.filter((file) => {
     const path = normalizeRelatedPath(file.webkitRelativePath || file.name);
-    return references.has(path) || basenames.has(relatedBasename(path)) || stems.has(relatedStem(path));
+    return (
+      references.has(path) || basenames.has(relatedBasename(path)) || stems.has(relatedStem(path))
+    );
   });
 }
 
 function relatedExtensionsFor(format: InputFormat): readonly string[] {
   return (
-    MODEL3D_RELATED_FILE_EXTENSIONS[
-      format as keyof typeof MODEL3D_RELATED_FILE_EXTENSIONS
-    ] ?? []
+    MODEL3D_RELATED_FILE_EXTENSIONS[format as keyof typeof MODEL3D_RELATED_FILE_EXTENSIONS] ?? []
   );
 }
 
@@ -97,10 +103,26 @@ function humanoidStorageKey(job: ConversionJob): string {
 
 const TRANSPARENCY_PREVIEW_OUTPUTS = new Set<Model3dOutputFormat>(['glb', 'gltf', 'vrm']);
 const MAY_CONTAIN_SCENE_DATA_INPUTS = new Set<Model3dFormat>([
-  'fbx', 'gltf', 'glb', 'vrm', 'dae', '3ds', 'pmx', 'pmd',
+  'fbx',
+  'gltf',
+  'glb',
+  'vrm',
+  'dae',
+  '3ds',
+  'pmx',
+  'pmd',
 ]);
 const STL_MAY_LOSE_SURFACE_DATA_INPUTS = new Set<Model3dFormat>([
-  'fbx', 'obj', 'gltf', 'glb', 'vrm', 'ply', 'dae', '3ds', 'pmx', 'pmd',
+  'fbx',
+  'obj',
+  'gltf',
+  'glb',
+  'vrm',
+  'ply',
+  'dae',
+  '3ds',
+  'pmx',
+  'pmd',
 ]);
 const FORMAT_LOSS_TITLE_KEYS = {
   obj: 'model3d.objLossTitle',
@@ -150,10 +172,10 @@ function Model3dTransparencySummary({
             ? 'model3d.currentTransparency'
             : 'model3d.currentTransparencyPortable',
           {
-          transparent: settings.textureTransparentMaxAlphaByte,
-          opaque: settings.textureOpaqueMinAlphaByte,
-          cutout: Math.round(settings.cutoutMaxIntermediateAlphaRatio * 100),
-          zwrite: Math.round(settings.blendZWriteMinExtremeAlphaRatio * 100),
+            transparent: settings.textureTransparentMaxAlphaByte,
+            opaque: settings.textureOpaqueMinAlphaByte,
+            cutout: Math.round(settings.cutoutMaxIntermediateAlphaRatio * 100),
+            zwrite: Math.round(settings.blendZWriteMinExtremeAlphaRatio * 100),
           },
         )}
       </span>
@@ -185,10 +207,15 @@ export default function UniversalModel3dConverter() {
     Record<string, Model3dTransparencySettings>
   >({});
   const [vrmValidations, setVrmValidations] = useState<Record<string, VrmValidation>>({});
-  const [humanoidOverrides, setHumanoidOverrides] = useState<Record<string, {
-    assignments: Record<string, string>;
-    missing: VrmRequiredHumanBone[];
-  }>>({});
+  const [humanoidOverrides, setHumanoidOverrides] = useState<
+    Record<
+      string,
+      {
+        assignments: Record<string, string>;
+        missing: VrmRequiredHumanBone[];
+      }
+    >
+  >({});
   const vrmValidationsRef = useRef<Record<string, VrmValidation>>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const queueRef = useRef<ConversionQueue | null>(null);
@@ -209,10 +236,7 @@ export default function UniversalModel3dConverter() {
   const batchDownloadJobs = useMemo(
     () =>
       jobs.filter(
-        (job) =>
-          !(
-            job.outputFormat === 'vrm' && vrmValidations[job.id]?.status === 'invalid'
-          ),
+        (job) => !(job.outputFormat === 'vrm' && vrmValidations[job.id]?.status === 'invalid'),
       ),
     [jobs, vrmValidations],
   );
@@ -222,22 +246,23 @@ export default function UniversalModel3dConverter() {
     .filter((job) => job.status === 'done')
     .reduce((count, job) => count + (job.outputs?.length ?? (job.resultUrl ? 1 : 0)), 0);
   const animationDownloadJobs = useMemo<ConversionJob[]>(
-    () => animationItems.map((item) => ({
-      id: item.id,
-      file: {
+    () =>
+      animationItems.map((item) => ({
         id: item.id,
-        name: item.file.name,
-        size: item.file.size,
-        source: item.file,
-      },
-      inputFormat: item.format,
-      outputFormat: 'glb',
-      status: item.status,
-      progress: item.progress,
-      error: item.error,
-      outputs: item.outputs,
-      resultUrl: item.outputs?.[0]?.url,
-    })),
+        file: {
+          id: item.id,
+          name: item.file.name,
+          size: item.file.size,
+          source: item.file,
+        },
+        inputFormat: item.format,
+        outputFormat: 'glb',
+        status: item.status,
+        progress: item.progress,
+        error: item.error,
+        outputs: item.outputs,
+        resultUrl: item.outputs?.[0]?.url,
+      })),
     [animationItems],
   );
   const {
@@ -289,30 +314,39 @@ export default function UniversalModel3dConverter() {
       });
       addRelatedFiles(auxiliary);
       setInspectingFiles(true);
-      const inspected = await Promise.all(primary.map(async (file) => {
-        const format = (guessFormat(file.name) ?? 'glb') as Model3dFormat;
-        try {
-          const inspection = await engine.inspectModel3dSource(file, format, files);
-          return { file, format, ...inspection };
-        } catch {
-          return {
-            file,
-            format,
-            hasMesh: format !== 'vmd' && format !== 'vrma',
-            animations: [] as Array<{ index: number; name: string }>,
-          };
-        }
-      }));
+      const inspected = await Promise.all(
+        primary.map(async (file) => {
+          const format = (guessFormat(file.name) ?? 'glb') as Model3dFormat;
+          try {
+            const inspection = await engine.inspectModel3dSource(file, format, files);
+            return { file, format, ...inspection };
+          } catch {
+            return {
+              file,
+              format,
+              hasMesh: format !== 'vmd' && format !== 'vrma',
+              animations: [] as Array<{ index: number; name: string }>,
+            };
+          }
+        }),
+      );
       setJobs((current) => [
         ...current,
-        ...inspected.filter(({ hasMesh }) => hasMesh).map(({ file, format }) => ({
-          id: generateId(),
-          file: { id: generateId(), name: file.name, size: file.size, source: file } as ConversionFile,
-          inputFormat: format,
-          outputFormat: targetFormat,
-          status: 'pending' as const,
-          progress: 0,
-        })),
+        ...inspected
+          .filter(({ hasMesh }) => hasMesh)
+          .map(({ file, format }) => ({
+            id: generateId(),
+            file: {
+              id: generateId(),
+              name: file.name,
+              size: file.size,
+              source: file,
+            } as ConversionFile,
+            inputFormat: format,
+            outputFormat: targetFormat,
+            status: 'pending' as const,
+            progress: 0,
+          })),
       ]);
       setAnimationItems((current) => [
         ...current,
@@ -335,9 +369,7 @@ export default function UniversalModel3dConverter() {
 
   useEffect(() => {
     let cancelled = false;
-    const candidates = jobs.filter(
-      (job) => relatedExtensionsFor(job.inputFormat).length > 0,
-    );
+    const candidates = jobs.filter((job) => relatedExtensionsFor(job.inputFormat).length > 0);
     if (!candidates.length) return;
     void Promise.all(
       candidates.map(async (job) => {
@@ -354,7 +386,8 @@ export default function UniversalModel3dConverter() {
         }
       }),
     ).then((entries) => {
-      if (!cancelled) setTextureReferences((current) => ({ ...current, ...Object.fromEntries(entries) }));
+      if (!cancelled)
+        setTextureReferences((current) => ({ ...current, ...Object.fromEntries(entries) }));
     });
     return () => {
       cancelled = true;
@@ -396,8 +429,7 @@ export default function UniversalModel3dConverter() {
     () =>
       pendingConvertibleJobs.some((job) =>
         model3dFormatMayContainBones(job.inputFormat as Model3dFormat),
-      ) &&
-      !model3dOutputSupportsBones(targetFormat),
+      ) && !model3dOutputSupportsBones(targetFormat),
     [pendingConvertibleJobs, targetFormat],
   );
   const expressionsWillBeRemoved = useMemo(
@@ -431,9 +463,8 @@ export default function UniversalModel3dConverter() {
     staticSceneDataWillBeRemoved ? t('model3d.lossSceneData') : undefined,
     stlSurfaceDataWillBeRemoved ? t('model3d.lossStlSurfaceData') : undefined,
   ].filter((item): item is string => Boolean(item));
-  const detailedFormatLossTitleKey = FORMAT_LOSS_TITLE_KEYS[
-    targetFormat as keyof typeof FORMAT_LOSS_TITLE_KEYS
-  ];
+  const detailedFormatLossTitleKey =
+    FORMAT_LOSS_TITLE_KEYS[targetFormat as keyof typeof FORMAT_LOSS_TITLE_KEYS];
   const detailedFormatLossTitle = detailedFormatLossTitleKey
     ? t(detailedFormatLossTitleKey)
     : undefined;
@@ -530,9 +561,9 @@ export default function UniversalModel3dConverter() {
         auxiliaryFilesByJobId: relatedFilesByJobId,
         transparencyByFileName,
         humanoidBoneAssignmentsByJobId: Object.fromEntries(
-          pending.flatMap((job) => humanoidOverrides[job.id]
-            ? [[job.id, humanoidOverrides[job.id].assignments]]
-            : []),
+          pending.flatMap((job) =>
+            humanoidOverrides[job.id] ? [[job.id, humanoidOverrides[job.id].assignments]] : [],
+          ),
         ),
       },
     });
@@ -574,33 +605,56 @@ export default function UniversalModel3dConverter() {
     await queue.run();
     unsubscribe();
     setModelRunning(false);
-  }, [appliedTransparencySettings, auxiliaryFiles, humanoidOverrides, jobs, relatedFilesByJobId, targetFormat, vrmValidations]);
+  }, [
+    appliedTransparencySettings,
+    auxiliaryFiles,
+    humanoidOverrides,
+    jobs,
+    relatedFilesByJobId,
+    targetFormat,
+    vrmValidations,
+  ]);
 
   const convertAnimations = useCallback(async () => {
     const pendingAnimations = animationItems.filter((item) => item.status === 'pending');
     if (!pendingAnimations.length) return;
     setAnimationRunning(true);
     for (const item of pendingAnimations) {
-      setAnimationItems((current) => current.map((entry) =>
-        entry.id === item.id ? { ...entry, status: 'processing', progress: 20 } : entry,
-      ));
+      setAnimationItems((current) =>
+        current.map((entry) =>
+          entry.id === item.id ? { ...entry, status: 'processing', progress: 20 } : entry,
+        ),
+      );
       try {
-        const blob = await engine.convertAnimationSource(item, animationTargetFormat, auxiliaryFiles);
+        const blob = await engine.convertAnimationSource(
+          item,
+          animationTargetFormat,
+          auxiliaryFiles,
+        );
         const extension = animationTargetFormat === 'three-json' ? 'json' : animationTargetFormat;
         const safeClipName = item.clipName.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '-');
         const name = `${item.file.name.replace(/\.[^.]+$/, '')}-${safeClipName}.${extension}`;
         const output = { name, url: URL.createObjectURL(blob), mimeType: blob.type };
-        setAnimationItems((current) => current.map((entry) =>
-          entry.id === item.id
-            ? { ...entry, status: 'done', progress: 100, outputs: [output] }
-            : entry,
-        ));
+        setAnimationItems((current) =>
+          current.map((entry) =>
+            entry.id === item.id
+              ? { ...entry, status: 'done', progress: 100, outputs: [output] }
+              : entry,
+          ),
+        );
       } catch (error) {
-        setAnimationItems((current) => current.map((entry) =>
-          entry.id === item.id
-            ? { ...entry, status: 'error', progress: 0, error: error instanceof Error ? error.message : String(error) }
-            : entry,
-        ));
+        setAnimationItems((current) =>
+          current.map((entry) =>
+            entry.id === item.id
+              ? {
+                  ...entry,
+                  status: 'error',
+                  progress: 0,
+                  error: error instanceof Error ? error.message : String(error),
+                }
+              : entry,
+          ),
+        );
       }
     }
     setAnimationRunning(false);
@@ -621,7 +675,9 @@ export default function UniversalModel3dConverter() {
   };
 
   const clearAnimations = () => {
-    animationItems.forEach((item) => item.outputs?.forEach((output) => URL.revokeObjectURL(output.url)));
+    animationItems.forEach((item) =>
+      item.outputs?.forEach((output) => URL.revokeObjectURL(output.url)),
+    );
     setAnimationItems([]);
     if (!jobs.length) setAuxiliaryFiles([]);
     setPreviewJob(undefined);
@@ -699,13 +755,19 @@ export default function UniversalModel3dConverter() {
                 disabled={modelRunning}
               >
                 {MODEL3D_OUTPUT_FORMATS.map((format) => (
-                  <option key={format} value={format}>{format.toUpperCase()}</option>
+                  <option key={format} value={format}>
+                    {format.toUpperCase()}
+                  </option>
                 ))}
               </select>
             </div>
             {incompatible > 0 && (
               <p className={s.mixedHint}>
-                ⚠ {t('model3d.incompatible', { count: incompatible, format: targetFormat.toUpperCase() })}
+                ⚠{' '}
+                {t('model3d.incompatible', {
+                  count: incompatible,
+                  format: targetFormat.toUpperCase(),
+                })}
               </p>
             )}
             {!detailedFormatLossTitle && bonesWillBeRemoved && (
@@ -720,12 +782,22 @@ export default function UniversalModel3dConverter() {
             {detailedFormatLossTitle && detailedFormatLossItems.length > 0 && (
               <div className={s.boneWarning}>
                 <strong>⚠ {detailedFormatLossTitle}</strong>
-                <ul>{detailedFormatLossItems.map((item) => <li key={item}>{item}</li>)}</ul>
+                <ul>
+                  {detailedFormatLossItems.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
               </div>
             )}
             <div className={s.controls}>
-              <button className={s.convertBtn} onClick={convert} disabled={modelRunning || pending === 0}>
-                {modelRunning ? t('common.converting') : t('model3d.convertModels', { count: pending })}
+              <button
+                className={s.convertBtn}
+                onClick={convert}
+                disabled={modelRunning || pending === 0}
+              >
+                {modelRunning
+                  ? t('common.converting')
+                  : t('model3d.convertModels', { count: pending })}
               </button>
               <button
                 className={s.downloadAllBtn}
@@ -744,7 +816,9 @@ export default function UniversalModel3dConverter() {
                 {t('model3d.clearAllModels')}
               </button>
             </div>
-            {packageError && <p className={s.errorDetail}>{t('common.zipError', { error: packageError })}</p>}
+            {packageError && (
+              <p className={s.errorDetail}>{t('common.zipError', { error: packageError })}</p>
+            )}
           </section>
         )}
         {animationItems.length > 0 && (
@@ -757,17 +831,21 @@ export default function UniversalModel3dConverter() {
                 value={animationTargetFormat}
                 onChange={(event) => {
                   const next = event.target.value as Model3dAnimationOutputFormat;
-                  setAnimationItems((current) => current.filter((item) => {
-                    if (item.status === 'pending') return true;
-                    item.outputs?.forEach((output) => URL.revokeObjectURL(output.url));
-                    return false;
-                  }));
+                  setAnimationItems((current) =>
+                    current.filter((item) => {
+                      if (item.status === 'pending') return true;
+                      item.outputs?.forEach((output) => URL.revokeObjectURL(output.url));
+                      return false;
+                    }),
+                  );
                   setAnimationTargetFormat(next);
                 }}
                 disabled={animationRunning}
               >
                 {ANIMATION_OUTPUT_FORMATS.map((format) => (
-                  <option key={format} value={format}>{format === 'three-json' ? 'three.js JSON' : format.toUpperCase()}</option>
+                  <option key={format} value={format}>
+                    {format === 'three-json' ? 'three.js JSON' : format.toUpperCase()}
+                  </option>
                 ))}
               </select>
             </div>
@@ -775,11 +853,15 @@ export default function UniversalModel3dConverter() {
               <button
                 className={s.convertBtn}
                 onClick={convertAnimations}
-                disabled={animationRunning || !animationItems.some((item) => item.status === 'pending')}
+                disabled={
+                  animationRunning || !animationItems.some((item) => item.status === 'pending')
+                }
               >
-                {animationRunning ? t('common.converting') : t('model3d.convertAnimations', {
-                  count: animationItems.filter((item) => item.status === 'pending').length,
-                })}
+                {animationRunning
+                  ? t('common.converting')
+                  : t('model3d.convertAnimations', {
+                      count: animationItems.filter((item) => item.status === 'pending').length,
+                    })}
               </button>
               <button
                 className={s.downloadAllBtn}
@@ -788,7 +870,11 @@ export default function UniversalModel3dConverter() {
               >
                 {isPackagingAnimations
                   ? t('common.zipProgress', { progress: animationPackageProgress })
-                  : t(completedAnimationDownloadCount > 1 ? 'common.downloadZip' : 'common.download')}
+                  : t(
+                      completedAnimationDownloadCount > 1
+                        ? 'common.downloadZip'
+                        : 'common.download',
+                    )}
               </button>
               <button
                 type="button"
@@ -799,7 +885,11 @@ export default function UniversalModel3dConverter() {
                 {t('model3d.clearAllAnimations')}
               </button>
             </div>
-            {animationPackageError && <p className={s.errorDetail}>{t('common.zipError', { error: animationPackageError })}</p>}
+            {animationPackageError && (
+              <p className={s.errorDetail}>
+                {t('common.zipError', { error: animationPackageError })}
+              </p>
+            )}
           </section>
         )}
 
@@ -847,10 +937,12 @@ export default function UniversalModel3dConverter() {
                     (job.outputs?.length
                       ? job.outputs
                       : job.resultUrl
-                        ? [{
-                            name: job.file.name.replace(/\.[^.]+$/, `.${job.outputFormat}`),
-                            url: job.resultUrl,
-                          }]
+                        ? [
+                            {
+                              name: job.file.name.replace(/\.[^.]+$/, `.${job.outputFormat}`),
+                              url: job.resultUrl,
+                            },
+                          ]
                         : []
                     ).map((output) => (
                       <a
@@ -930,7 +1022,9 @@ export default function UniversalModel3dConverter() {
                     <ul className={s.relatedFilesList}>
                       {animationItems.map((item) => (
                         <li key={`${job.id}:${item.id}`}>
-                          <span>{item.file.name} — {item.clipName}</span>
+                          <span>
+                            {item.file.name} — {item.clipName}
+                          </span>
                           <small>{item.format.toUpperCase()}</small>
                         </li>
                       ))}
@@ -941,20 +1035,20 @@ export default function UniversalModel3dConverter() {
                 {job.outputFormat === 'vrm' &&
                   isModel3dOutputCandidate(job.inputFormat as Model3dFormat, 'vrm') &&
                   vrmValidations[job.id]?.status === 'checking' && (
-                  <p className={s.mixedHint}>{t('model3d.checkingVrmCompatibility')}</p>
-                )}
+                    <p className={s.mixedHint}>{t('model3d.checkingVrmCompatibility')}</p>
+                  )}
                 {job.outputFormat === 'vrm' &&
                   isModel3dOutputCandidate(job.inputFormat as Model3dFormat, 'vrm') &&
                   vrmValidations[job.id]?.status === 'invalid' && (
-                  <p className={s.errorDetail}>
-                    {t('model3d.vrmPreviewIncompatible', {
-                      error: vrmValidations[job.id]?.error ?? '',
-                    })}
-                    {humanoidOverrides[job.id]?.missing.length
-                      ? ` ${t('model3d.missingVrmParts', { parts: humanoidOverrides[job.id].missing.map((part) => t(`model3d.vrmBone.${part}`)).join(', ') })}`
-                      : ''}
-                  </p>
-                )}
+                    <p className={s.errorDetail}>
+                      {t('model3d.vrmPreviewIncompatible', {
+                        error: vrmValidations[job.id]?.error ?? '',
+                      })}
+                      {humanoidOverrides[job.id]?.missing.length
+                        ? ` ${t('model3d.missingVrmParts', { parts: humanoidOverrides[job.id].missing.map((part) => t(`model3d.vrmBone.${part}`)).join(', ') })}`
+                        : ''}
+                    </p>
+                  )}
                 {previewFailures[`${job.id}:${job.outputFormat}`] && (
                   <p className={s.errorDetail}>
                     {t('model3d.previewFailed')} {previewFailures[`${job.id}:${job.outputFormat}`]}
@@ -1023,7 +1117,12 @@ export default function UniversalModel3dConverter() {
                   <span>→</span>
                   <span className={s.detectedBadge}>{animationTargetFormat}</span>
                   {item.outputs?.map((output) => (
-                    <a key={output.name} className={s.dlLink} href={output.url} download={output.name}>
+                    <a
+                      key={output.name}
+                      className={s.dlLink}
+                      href={output.url}
+                      download={output.name}
+                    >
                       {output.name}
                     </a>
                   ))}
@@ -1031,9 +1130,15 @@ export default function UniversalModel3dConverter() {
                   {item.status === 'pending' && (
                     <button
                       type="button"
-                      onClick={() => setAnimationItems((current) => current.filter((entry) => entry.id !== item.id))}
+                      onClick={() =>
+                        setAnimationItems((current) =>
+                          current.filter((entry) => entry.id !== item.id),
+                        )
+                      }
                       style={{ background: 'none', color: 'var(--muted)' }}
-                    >×</button>
+                    >
+                      ×
+                    </button>
                   )}
                 </div>
               ))}

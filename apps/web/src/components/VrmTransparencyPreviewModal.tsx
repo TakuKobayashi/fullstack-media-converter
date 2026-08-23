@@ -78,7 +78,9 @@ export default function VrmTransparencyPreviewModal({
   const [animations, setAnimations] = useState<string[]>([]);
   const [expressions, setExpressions] = useState<string[]>([]);
   const [bones, setBones] = useState<string[]>([]);
-  const [vrmHumanBones, setVrmHumanBones] = useState<Partial<Record<VrmRequiredHumanBone, string>>>({});
+  const [vrmHumanBones, setVrmHumanBones] = useState<Partial<Record<VrmRequiredHumanBone, string>>>(
+    {},
+  );
   const [boneDraft, setBoneDraft] = useState<Record<string, VrmRequiredHumanBone | ''>>({});
   const [boneAssignmentWarning, setBoneAssignmentWarning] = useState('');
   const [selectedAnimation, setSelectedAnimation] = useState('');
@@ -128,7 +130,11 @@ export default function VrmTransparencyPreviewModal({
         setBones(session.bones);
         const storageKey = `convertmate:vrm-humanoid:${job.file.name}:${job.file.size}:${job.file.source instanceof File ? job.file.source.lastModified : 0}`;
         let saved: Record<string, string> = {};
-        try { saved = JSON.parse(localStorage.getItem(storageKey) ?? '{}') as Record<string, string>; } catch { saved = {}; }
+        try {
+          saved = JSON.parse(localStorage.getItem(storageKey) ?? '{}') as Record<string, string>;
+        } catch {
+          saved = {};
+        }
         setVrmHumanBones({
           ...session.vrmHumanBones,
           ...Object.fromEntries(Object.entries(saved).map(([part, bone]) => [part, bone])),
@@ -287,15 +293,28 @@ export default function VrmTransparencyPreviewModal({
                         setSelectedAnimation(event.target.value);
                       }}
                     >
-                      {animations.map((name) => <option key={name}>{name}</option>)}
+                      {animations.map((name) => (
+                        <option key={name}>{name}</option>
+                      ))}
                     </select>
                     <div className={s.previewPlaybackControls}>
-                      <button type="button" onClick={() => sessionRef.current?.playAnimation(selectedAnimation)}>Play</button>
-                      <button type="button" onClick={() => sessionRef.current?.pauseAnimation()}>Pause</button>
-                      <button type="button" onClick={() => sessionRef.current?.stopAnimation()}>Stop</button>
+                      <button
+                        type="button"
+                        onClick={() => sessionRef.current?.playAnimation(selectedAnimation)}
+                      >
+                        Play
+                      </button>
+                      <button type="button" onClick={() => sessionRef.current?.pauseAnimation()}>
+                        Pause
+                      </button>
+                      <button type="button" onClick={() => sessionRef.current?.stopAnimation()}>
+                        Stop
+                      </button>
                     </div>
                   </>
-                ) : <p>{t('model3d.noAnimations')}</p>}
+                ) : (
+                  <p>{t('model3d.noAnimations')}</p>
+                )}
               </div>
             )}
             {openList === 'expressions' && (
@@ -312,17 +331,23 @@ export default function VrmTransparencyPreviewModal({
                           setSelectedExpression(name);
                           sessionRef.current?.selectExpression(name);
                         }}
-                      >{name}</button>
+                      >
+                        {name}
+                      </button>
                     ))}
                   </div>
-                ) : <p>{t('model3d.noExpressions')}</p>}
+                ) : (
+                  <p>{t('model3d.noExpressions')}</p>
+                )}
                 <button
                   type="button"
                   onClick={() => {
                     setSelectedExpression('');
                     sessionRef.current?.resetExpressions();
                   }}
-                >{t('model3d.resetExpression')}</button>
+                >
+                  {t('model3d.resetExpression')}
+                </button>
               </div>
             )}
             {openList === 'bones' && (
@@ -334,22 +359,50 @@ export default function VrmTransparencyPreviewModal({
                         key={name}
                         className={`${s.previewBoneRow} ${isVrm && assignedBones.has(name) ? s.previewBoneAssigned : ''}`}
                       >
-                        <button type="button" className={selectedBone === name ? s.previewBoneActive : ''}
-                          onClick={() => { setSelectedBone(name); sessionRef.current?.showBones(true); sessionRef.current?.selectBone(name); }}>
+                        <button
+                          type="button"
+                          className={selectedBone === name ? s.previewBoneActive : ''}
+                          onClick={() => {
+                            setSelectedBone(name);
+                            sessionRef.current?.showBones(true);
+                            sessionRef.current?.selectBone(name);
+                          }}
+                        >
                           {name}
                         </button>
-                        {isVrm && missingVrmBones.length > 0 && !hasTooFewBonesForVrm && !assignedBones.has(name) && (
-                          <select value={boneDraft[name] ?? ''} onChange={(event) => setBoneDraft((current) => ({ ...current, [name]: event.target.value as VrmRequiredHumanBone | '' }))}>
-                            <option value="">{t('model3d.selectVrmPart')}</option>
-                            {missingVrmBones.map((part) => (
-                              <option key={part} value={part} disabled={Object.entries(boneDraft).some(([bone, selected]) => bone !== name && selected === part)}>{t(`model3d.vrmBone.${part}`)}</option>
-                            ))}
-                          </select>
-                        )}
+                        {isVrm &&
+                          missingVrmBones.length > 0 &&
+                          !hasTooFewBonesForVrm &&
+                          !assignedBones.has(name) && (
+                            <select
+                              value={boneDraft[name] ?? ''}
+                              onChange={(event) =>
+                                setBoneDraft((current) => ({
+                                  ...current,
+                                  [name]: event.target.value as VrmRequiredHumanBone | '',
+                                }))
+                              }
+                            >
+                              <option value="">{t('model3d.selectVrmPart')}</option>
+                              {missingVrmBones.map((part) => (
+                                <option
+                                  key={part}
+                                  value={part}
+                                  disabled={Object.entries(boneDraft).some(
+                                    ([bone, selected]) => bone !== name && selected === part,
+                                  )}
+                                >
+                                  {t(`model3d.vrmBone.${part}`)}
+                                </option>
+                              ))}
+                            </select>
+                          )}
                       </div>
                     ))}
                   </div>
-                ) : <p>{t('model3d.noBones')}</p>}
+                ) : (
+                  <p>{t('model3d.noBones')}</p>
+                )}
                 {isVrm && missingVrmBones.length > 0 && hasTooFewBonesForVrm && (
                   <p className={s.boneWarning}>
                     {t('model3d.tooFewBonesForVrm', {
@@ -360,68 +413,96 @@ export default function VrmTransparencyPreviewModal({
                 )}
                 {isVrm && missingVrmBones.length > 0 && !hasTooFewBonesForVrm && (
                   <>
-                    <p className={s.boneWarning}>{boneAssignmentWarning || t('model3d.missingVrmParts', { parts: missingVrmBones.map((part) => t(`model3d.vrmBone.${part}`)).join(', ') })}</p>
-                    <button type="button" className={s.previewApply} onClick={() => {
-                      const additions = Object.fromEntries(Object.entries(boneDraft).filter((entry): entry is [string, VrmRequiredHumanBone] => Boolean(entry[1])).map(([bone, part]) => [part, bone]));
-                      const next = { ...vrmHumanBones, ...additions };
-                      const remaining = VRM_REQUIRED_HUMAN_BONES.filter((part) => !next[part]);
-                      const assignments = Object.fromEntries(Object.entries(next).map(([part, bone]) => [part, bone]));
-                      const storageKey = `convertmate:vrm-humanoid:${job.file.name}:${job.file.size}:${job.file.source instanceof File ? job.file.source.lastModified : 0}`;
-                      localStorage.setItem(storageKey, JSON.stringify(assignments));
-                      setVrmHumanBones(next);
-                      setBoneDraft({});
-                      setBoneAssignmentWarning(remaining.length ? t('model3d.assignRemainingVrmParts') : '');
-                      onHumanoidAssignmentsApply(assignments, remaining);
-                    }}>{t('model3d.applyBoneAssignments')}</button>
+                    <p className={s.boneWarning}>
+                      {boneAssignmentWarning ||
+                        t('model3d.missingVrmParts', {
+                          parts: missingVrmBones
+                            .map((part) => t(`model3d.vrmBone.${part}`))
+                            .join(', '),
+                        })}
+                    </p>
+                    <button
+                      type="button"
+                      className={s.previewApply}
+                      onClick={() => {
+                        const additions = Object.fromEntries(
+                          Object.entries(boneDraft)
+                            .filter((entry): entry is [string, VrmRequiredHumanBone] =>
+                              Boolean(entry[1]),
+                            )
+                            .map(([bone, part]) => [part, bone]),
+                        );
+                        const next = { ...vrmHumanBones, ...additions };
+                        const remaining = VRM_REQUIRED_HUMAN_BONES.filter((part) => !next[part]);
+                        const assignments = Object.fromEntries(
+                          Object.entries(next).map(([part, bone]) => [part, bone]),
+                        );
+                        const storageKey = `convertmate:vrm-humanoid:${job.file.name}:${job.file.size}:${job.file.source instanceof File ? job.file.source.lastModified : 0}`;
+                        localStorage.setItem(storageKey, JSON.stringify(assignments));
+                        setVrmHumanBones(next);
+                        setBoneDraft({});
+                        setBoneAssignmentWarning(
+                          remaining.length ? t('model3d.assignRemainingVrmParts') : '',
+                        );
+                        onHumanoidAssignmentsApply(assignments, remaining);
+                      }}
+                    >
+                      {t('model3d.applyBoneAssignments')}
+                    </button>
                   </>
                 )}
               </div>
             )}
-            {isMmd && controls
-              .filter(({ key }) => job.outputFormat === 'vrm' || !VRM_ONLY_SETTING_KEYS.has(key))
-              .map(({ key, min, max, step }) => (
-                <label className={s.previewControl} key={key}>
-                  <span>{t(`model3d.transparency.${key}`)}</span>
-                  <div>
-                    <input
-                      type="range"
-                      min={min}
-                      max={max}
-                      step={step}
-                      value={draft[key]}
-                      onChange={(event) => update(key, Number(event.target.value))}
-                    />
-                    <input
-                      type="number"
-                      min={min}
-                      max={max}
-                      step={step}
-                      value={draft[key]}
-                      onChange={(event) => update(key, Number(event.target.value))}
-                    />
-                  </div>
-                </label>
-              ))}
+            {isMmd &&
+              controls
+                .filter(({ key }) => job.outputFormat === 'vrm' || !VRM_ONLY_SETTING_KEYS.has(key))
+                .map(({ key, min, max, step }) => (
+                  <label className={s.previewControl} key={key}>
+                    <span>{t(`model3d.transparency.${key}`)}</span>
+                    <div>
+                      <input
+                        type="range"
+                        min={min}
+                        max={max}
+                        step={step}
+                        value={draft[key]}
+                        onChange={(event) => update(key, Number(event.target.value))}
+                      />
+                      <input
+                        type="number"
+                        min={min}
+                        max={max}
+                        step={step}
+                        value={draft[key]}
+                        onChange={(event) => update(key, Number(event.target.value))}
+                      />
+                    </div>
+                  </label>
+                ))}
           </div>
         </div>
         <footer className={s.previewFooter}>
-          {isMmd && <button type="button" onClick={() => setDraft({ ...MMD_TRANSPARENCY_THRESHOLDS })}>
-            {t('model3d.resetTransparency')}
-          </button>}
+          {isMmd && (
+            <button type="button" onClick={() => setDraft({ ...MMD_TRANSPARENCY_THRESHOLDS })}>
+              {t('model3d.resetTransparency')}
+            </button>
+          )}
           <button type="button" onClick={onClose}>
             {isMmd ? t('model3d.cancelPreview') : t('model3d.closePreview')}
           </button>
-          {isMmd && <button
-            type="button"
-            className={s.previewApply}
-            onClick={() => {
-              setStored(draft);
-              onApply(draft);
-              onClose();
-            }}
-          >
-            {t('model3d.applyTransparency')}
-          </button>}
+          {isMmd && (
+            <button
+              type="button"
+              className={s.previewApply}
+              onClick={() => {
+                setStored(draft);
+                onApply(draft);
+                onClose();
+              }}
+            >
+              {t('model3d.applyTransparency')}
+            </button>
+          )}
         </footer>
       </section>
     </div>
