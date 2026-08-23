@@ -7,6 +7,7 @@ import {
   Box3,
   Color,
   DirectionalLight,
+  Mesh,
   PerspectiveCamera,
   Scene,
   Vector3,
@@ -141,11 +142,28 @@ export default function VrmTransparencyPreviewModal({
         session.updateTransparency(draftRef.current);
         scene.add(session.root);
         scene.add(session.boneOverlay);
-        const bounds = new Box3().setFromObject(session.root);
+        const bounds = new Box3().makeEmpty();
+        session.root.updateMatrixWorld(true);
+        session.root.traverse((object) => {
+          if (!(object as Mesh).isMesh || !object.visible) return;
+          bounds.union(new Box3().setFromObject(object, true));
+        });
+        if (bounds.isEmpty()) bounds.setFromObject(session.root, true);
         const size = bounds.getSize(new Vector3());
         const center = bounds.getCenter(new Vector3());
-        const distance = Math.max(size.x, size.y, size.z, 0.1) * 1.7;
+        const finiteBounds = [...size.toArray(), ...center.toArray()].every(Number.isFinite);
+        if (!finiteBounds) {
+          size.set(1, 1.7, 1);
+          center.set(0, 0.85, 0);
+        }
+        const verticalDistance = size.y / (2 * Math.tan((camera.fov * Math.PI) / 360));
+        const horizontalDistance = verticalDistance / Math.max(camera.aspect, 0.1);
+        const distance = Math.max(verticalDistance, horizontalDistance, size.z * 2, 0.5) * 1.25;
+        camera.near = Math.max(distance / 10_000, 0.001);
+        camera.far = Math.max(distance * 20, 1000);
         camera.position.set(center.x, center.y, center.z + distance * previewFrontZ);
+        camera.lookAt(center);
+        camera.updateProjectionMatrix();
         controls3d.target.copy(center);
         controls3d.update();
         setPreviewing(false);

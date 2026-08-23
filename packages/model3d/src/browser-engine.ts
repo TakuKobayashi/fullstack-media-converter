@@ -65,6 +65,11 @@ import {
 
 const MMD_VRM_TARGET_HEIGHT_METERS = 1.7;
 const MMD_BAKE_LIGHT = new Vector3(0.5, 1, 1).normalize();
+const WHITE_PIXEL_DATA_URL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nQAAAABJRU5ErkJggg==';
+const LOCAL_TEXTURE_EXTENSIONS = new Set([
+  'bmp', 'gif', 'jpeg', 'jpg', 'png', 'psd', 'tga', 'tif', 'tiff', 'webp',
+]);
 
 export const VRM_REQUIRED_HUMAN_BONES = [
   'hips', 'spine', 'head', 'leftUpperLeg', 'leftLowerLeg', 'leftFoot',
@@ -208,7 +213,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       }
       const auxiliaryFiles =
         options.model3d?.auxiliaryFilesByJobId?.[job.id] ?? options.model3d?.auxiliaryFiles ?? [];
-      const manager = this.createLoadingManager(auxiliaryFiles, objectUrls);
+      const manager = await this.createLoadingManager(auxiliaryFiles, objectUrls);
       const root = await this.loadModel(source, job.inputFormat, auxiliaryFiles, manager);
       options.onProgress?.(45);
       const preserveBones =
@@ -228,13 +233,14 @@ export class BrowserModel3dEngine implements ConversionEngine {
         }
         this.applyMmdPortableMaterials(root, transparency, job.outputFormat === 'vrm');
       }
-      if ((job.inputFormat === 'pmx' || job.inputFormat === 'pmd') && job.outputFormat === 'vrm') {
-        this.prepareMmdVrmHumanoidHierarchy(root);
+      if (job.outputFormat === 'vrm') {
+        const isMmd = job.inputFormat === 'pmx' || job.inputFormat === 'pmd';
+        if (isMmd) this.prepareMmdVrmHumanoidHierarchy(root);
         this.canonicalizeMmdVrmBoneNames(
           root,
           options.model3d?.humanoidBoneAssignmentsByJobId?.[job.id],
         );
-        this.normalizeMmdVrmScale(root);
+        if (isMmd) this.normalizeMmdVrmScale(root);
       }
       options.onProgress?.(65);
       const baseName = job.file.name.replace(/\.[^.]+$/, '');
@@ -307,7 +313,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       throw new Error('Browser model preview requires a File or ArrayBuffer.');
     }
     const objectUrls: string[] = [];
-    const manager = this.createLoadingManager(auxiliaryFiles, objectUrls);
+    const manager = await this.createLoadingManager(auxiliaryFiles, objectUrls);
     const root = await this.loadModel(source, job.inputFormat, auxiliaryFiles, manager);
     // Preview animations come exclusively from the separately listed animation assets.
     root.animations = [];
@@ -337,6 +343,10 @@ export class BrowserModel3dEngine implements ConversionEngine {
     const materialSources = new Map<Mesh, Material[]>();
     const generatedMaterials = new Set<Material>();
     let maxMaterialIndex = 0;
+    if (job.inputFormat === 'fbx') {
+      this.applyFbxPreviewMaterials(root, materialSources, generatedMaterials);
+      this.createFbxStaticPreviewSurfaces(root);
+    }
     if (isMmd) {
       root.traverse((object) => {
         if (!(object as Mesh).isMesh) return;
@@ -689,15 +699,79 @@ export class BrowserModel3dEngine implements ConversionEngine {
     return result;
   }
 
-  private createLoadingManager(files: File[], objectUrls: string[]): LoadingManager {
+  private async createLoadingManager(files: File[], objectUrls: string[]): Promise<LoadingManager> {
     const manager = new LoadingManager();
     const byName = new Map(files.map((file) => [file.name.toLowerCase(), file]));
+    const filesByStem = new Map<string, File[]>();
+    const textureStem = (name: string) =>
+      name
+        .toLowerCase()
+        .replace(/\.[^.]+$/, '')
+        .replace(/\.psd$/, '')
+        .replace(/^[a-z]+\d+(?:[._-]\d+)*[._-]*/, '');
+    for (const file of files) {
+      const stem = textureStem(file.name);
+      filesByStem.set(stem, [...(filesByStem.get(stem) ?? []), file]);
+    }
+    const objectUrlByFile = new Map<File, string>();
+    const decodedPsdUrlByFile = new Map<File, string>();
+    const psdFiles = files.filter((file) => file.name.toLowerCase().endsWith('.psd'));
+    if (psdFiles.length) {
+      const { readPsd } = await import('ag-psd');
+      for (const file of psdFiles) {
+        try {
+          const psd = readPsd(await file.arrayBuffer(), {
+            skipLayerImageData: true,
+            skipThumbnail: true,
+          });
+          if (!psd.canvas) continue;
+          const png = await new Promise<Blob>((resolve, reject) => {
+            psd.canvas!.toBlob((blob) => {
+              if (blob) resolve(blob);
+              else reject(new Error(`Could not render PSD texture: ${file.name}`));
+            }, 'image/png');
+          });
+          const objectUrl = URL.createObjectURL(png);
+          decodedPsdUrlByFile.set(file, objectUrl);
+          objectUrls.push(objectUrl);
+        } catch (error) {
+          console.warn(`Could not decode PSD texture "${file.name}".`, error);
+        }
+      }
+    }
     manager.setURLModifier((url) => {
       const clean = decodeURIComponent(url.split(/[?#]/)[0].replace(/\\/g, '/'));
       const name = clean.split('/').pop()?.toLowerCase() ?? '';
-      const file = byName.get(name);
-      if (!file) return url;
+      const exactFile = byName.get(name);
+      const stem = textureStem(name);
+      const stemMatches = filesByStem.get(stem) ?? [];
+      // FBX exports frequently retain a PSD path. Browsers cannot decode PSD,
+      // so allow a user-supplied image with the same basename (foo.png for
+      // foo.psd) to serve as its explicit replacement.
+      const stemReplacement = stemMatches.find(
+        (candidate) => !candidate.name.toLowerCase().endsWith('.psd'),
+      );
+      const decodedPsd = stemMatches.find((candidate) => decodedPsdUrlByFile.has(candidate));
+      const file = exactFile?.name.toLowerCase().endsWith('.psd')
+        ? stemReplacement ?? (decodedPsdUrlByFile.has(exactFile) ? exactFile : decodedPsd)
+        : exactFile ??
+          (stemMatches.length === 1 ? stemMatches[0] : stemReplacement ?? decodedPsd);
+      if (!file) {
+        const extension = name.split('.').pop() ?? '';
+        // Imported files are processed entirely in the browser. A relative
+        // texture path embedded in FBX must not fall through to the current
+        // Next.js route (for example `/model3d-converter/foo.psd`). PSD is not
+        // browser-decodable either, so use a harmless transparent placeholder
+        // until the user supplies a supported auxiliary image explicitly.
+        if (LOCAL_TEXTURE_EXTENSIONS.has(extension)) return WHITE_PIXEL_DATA_URL;
+        return url;
+      }
+      const decodedPsdUrl = decodedPsdUrlByFile.get(file);
+      if (decodedPsdUrl) return decodedPsdUrl;
+      const cachedObjectUrl = objectUrlByFile.get(file);
+      if (cachedObjectUrl) return cachedObjectUrl;
       const objectUrl = URL.createObjectURL(file);
+      objectUrlByFile.set(file, objectUrl);
       objectUrls.push(objectUrl);
       return objectUrl;
     });
@@ -722,6 +796,148 @@ export class BrowserModel3dEngine implements ConversionEngine {
     // its normalized humanoid axes from the exported world rest rotations, so
     // an extra root rotation mirrors VRMA motion during retargeting.
     root.updateMatrixWorld(true);
+  }
+
+  /**
+   * Some DCC FBX exporters store transparency using the inverse convention
+   * expected by FBXLoader. Those files arrive with every mesh material at
+   * opacity 0, so only the skeleton is visible. Restrict the correction to the
+   * all-transparent case to preserve intentional transparency in mixed models.
+   */
+  private normalizeFbxMaterialVisibility(root: Object3D): void {
+    const materials = new Set<Material>();
+    root.traverse((object) => {
+      if (!(object as Mesh).isMesh || !object.visible) return;
+      for (const material of asArray((object as Mesh).material)) {
+        if (material?.visible) materials.add(material);
+      }
+    });
+    if (!materials.size) return;
+    const allFullyTransparent = [...materials].every((material) => {
+      const opacity = Number((material as Material & { opacity?: number }).opacity ?? 1);
+      return Number.isFinite(opacity) && opacity <= 1e-6;
+    });
+    for (const material of materials) {
+      const renderable = material as Material & {
+        opacity?: number;
+        transparent?: boolean;
+        side?: number;
+      };
+      // FBX coordinate conversion can leave avatar faces wound opposite to the
+      // preview camera. Do not let back-face culling hide an otherwise valid
+      // skinned mesh; this also exports as glTF doubleSided material metadata.
+      renderable.side = DoubleSide;
+      if (allFullyTransparent) {
+        renderable.opacity = 1;
+        // Keep alpha blending enabled so a replacement PNG can still
+        // contribute its authored alpha channel, as PMX materials do.
+        renderable.transparent = true;
+      }
+      material.needsUpdate = true;
+    }
+  }
+
+  /** Build a predictable FBX preview even when its DCC materials are unusable. */
+  private applyFbxPreviewMaterials(
+    root: Object3D,
+    sources: Map<Mesh, Material[]>,
+    owned: Set<Material>,
+  ): void {
+    root.traverse((object) => {
+      if (!(object as Mesh).isMesh) return;
+      const mesh = object as Mesh;
+      const sourceMaterials = asArray(mesh.material);
+      sources.set(mesh, sourceMaterials);
+      const previewMaterials = sourceMaterials.map((source) => {
+        const imported = source as Material & {
+          map?: Texture | null;
+          alphaMap?: Texture | null;
+          alphaTest?: number;
+          vertexColors?: boolean;
+        };
+        const image = imported.map?.image as
+          | { src?: string; currentSrc?: string; width?: number; height?: number }
+          | undefined;
+        const imageUrl = image?.currentSrc || image?.src || '';
+        const hasLoadedImage =
+          Number(image?.width) > 0 && Number(image?.height) > 0 && Boolean(imageUrl);
+        // Decoded external textures and binary embedded FBX textures are blob
+        // URLs. The data URL is our missing-texture placeholder and must not
+        // become part of the preview material.
+        const isResolvedTexture = hasLoadedImage && imageUrl.startsWith('blob:');
+        const map = isResolvedTexture ? imported.map ?? null : null;
+        if (map) {
+          map.colorSpace = SRGBColorSpace;
+          map.needsUpdate = true;
+        }
+        const material = new MeshBasicMaterial({
+          color: 0xffffff,
+          map,
+          // FBX source textures frequently carry an alpha channel intended
+          // for a DCC shader rather than surface opacity. Ignore it in the
+          // inspection preview so it cannot erase the entire avatar.
+          alphaMap: null,
+          alphaTest: 0,
+          opacity: 1,
+          transparent: false,
+          side: DoubleSide,
+          // FBX vertex colors are often exported as black masks for the
+          // original DCC shader. MeshBasicMaterial multiplies them into both
+          // the white fallback and the added texture, producing a black model.
+          vertexColors: false,
+          depthTest: true,
+          depthWrite: true,
+        });
+        material.color.setHex(0xffffff);
+        material.opacity = 1;
+        material.visible = true;
+        material.name = source.name;
+        owned.add(material);
+        return material;
+      });
+      mesh.material = preserveArrayShape(mesh.material, previewMaterials);
+      // FBX skin bounds can be authored in another coordinate basis. The
+      // preview contains few avatar meshes, so favor a reliable display.
+      mesh.frustumCulled = false;
+    });
+  }
+
+  /**
+   * Render a rest-pose surface independently of Three.js skinning. A few FBX
+   * exporters produce valid geometry and bones but bind data that disappears
+   * in the WebGL skinning path. Baking only the preview surface guarantees a
+   * visible white avatar while retaining the original skeleton for inspection
+   * and VRM mapping.
+   */
+  private createFbxStaticPreviewSurfaces(root: Object3D): void {
+    root.updateMatrixWorld(true);
+    const rootWorldInverse = root.matrixWorld.clone().invert();
+    const skinnedMeshes: SkinnedMesh[] = [];
+    root.traverse((object) => {
+      if ((object as SkinnedMesh).isSkinnedMesh) skinnedMeshes.push(object as SkinnedMesh);
+    });
+    for (const source of skinnedMeshes) {
+      const geometry = source.geometry.clone();
+      const position = geometry.getAttribute('position');
+      const vertex = new Vector3();
+      for (let index = 0; index < position.count; index += 1) {
+        vertex.fromBufferAttribute(position, index);
+        source.applyBoneTransform(index, vertex);
+        vertex.applyMatrix4(source.matrixWorld).applyMatrix4(rootWorldInverse);
+        position.setXYZ(index, vertex.x, vertex.y, vertex.z);
+      }
+      position.needsUpdate = true;
+      geometry.deleteAttribute('skinIndex');
+      geometry.deleteAttribute('skinWeight');
+      geometry.computeBoundingBox();
+      geometry.computeBoundingSphere();
+      const surface = new Mesh(geometry, source.material);
+      surface.name = `${source.name || 'FBXMesh'}__PreviewSurface`;
+      surface.renderOrder = source.renderOrder;
+      surface.frustumCulled = false;
+      root.add(surface);
+      source.visible = false;
+    }
   }
 
   /**
@@ -858,8 +1074,34 @@ export class BrowserModel3dEngine implements ConversionEngine {
     const buffer = source instanceof File ? await source.arrayBuffer() : source;
     const text = () => new TextDecoder().decode(buffer);
     switch (format) {
-      case 'fbx':
-        return new FBXLoader(manager).parse(buffer, '');
+      case 'fbx': {
+        let finishTextures!: () => void;
+        const texturesFinished = new Promise<void>((resolve) => {
+          finishTextures = resolve;
+        });
+        const previousOnLoad = manager.onLoad;
+        const previousItemStart = manager.itemStart.bind(manager);
+        let textureRequests = 0;
+        manager.itemStart = (url) => {
+          textureRequests += 1;
+          previousItemStart(url);
+        };
+        manager.onLoad = () => {
+          previousOnLoad?.();
+          finishTextures();
+        };
+        const root = new FBXLoader(manager).parse(buffer, '');
+        root.traverse((object) => {
+          if ((object as SkinnedMesh).isSkinnedMesh) {
+            (object as SkinnedMesh).normalizeSkinWeights();
+          }
+        });
+        if (textureRequests > 0) await texturesFinished;
+        manager.onLoad = previousOnLoad;
+        manager.itemStart = previousItemStart;
+        this.normalizeFbxMaterialVisibility(root);
+        return root;
+      }
       case 'obj': {
         const loader = new OBJLoader(manager);
         const mtl = auxiliaryFiles.find((file) => file.name.toLowerCase().endsWith('.mtl'));
@@ -939,7 +1181,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
         file,
         format,
         auxiliaryFiles,
-        this.createLoadingManager(auxiliaryFiles, objectUrls),
+        await this.createLoadingManager(auxiliaryFiles, objectUrls),
       );
       let hasMesh = false;
       root.traverse((object) => {
@@ -968,7 +1210,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
         source.file,
         source.format,
         auxiliaryFiles,
-        this.createLoadingManager(auxiliaryFiles, objectUrls),
+        await this.createLoadingManager(auxiliaryFiles, objectUrls),
       );
       const clip = root.animations?.[source.clipIndex];
       if (!clip) throw new Error(`Animation clip "${source.clipName}" was not found.`);
@@ -1348,7 +1590,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     }
 
     if (format === '3ds' || format === 'fbx') {
-      const extensionPattern = 'png|jpe?g|webp|bmp|tga|dds|ktx2';
+      const extensionPattern = 'png|jpe?g|webp|bmp|tga|dds|ktx2|psd';
       for (const match of text.matchAll(
         new RegExp(`([^\\0\\r\\n"']+?\\.(?:${extensionPattern}))(?=[\\0\\r\\n"']|$)`, 'gi'),
       )) {
@@ -2207,18 +2449,62 @@ export class BrowserModel3dEngine implements ConversionEngine {
         type: getMimeType(format),
       });
     }
-    const exported = await new GLTFExporter().parseAsync(root, {
-      binary: format === 'glb' || format === 'vrm',
-      animations,
-      onlyVisible: true,
-      trs: false,
-    });
+    const restoreInvalidTextures = this.detachInvalidTextures(root);
+    let exported: ArrayBuffer | Record<string, unknown>;
+    try {
+      exported = await new GLTFExporter().parseAsync(root, {
+        binary: format === 'glb' || format === 'vrm',
+        animations,
+        onlyVisible: true,
+        trs: false,
+      });
+    } finally {
+      restoreInvalidTextures();
+    }
     if (exported instanceof ArrayBuffer) {
       const output =
         format === 'vrm' ? this.addVrmExtension(exported, sourceName, sourceFormat) : exported;
       return new Blob([output], { type: getMimeType(format) });
     }
     return new Blob([JSON.stringify(exported)], { type: getMimeType(format) });
+  }
+
+  /**
+   * FBX files can contain material texture slots whose external image could not
+   * be resolved by the browser loader. Three.js keeps the Texture object in
+   * that case, but GLTFExporter rejects it because `texture.image` is null.
+   * Temporarily omit only those slots so the geometry and humanoid skeleton can
+   * still be exported. Restore them afterwards because preview sessions may
+   * continue to use the same scene.
+   */
+  private detachInvalidTextures(root: Object3D): () => void {
+    const detached: Array<{
+      material: Record<string, unknown>;
+      property: string;
+      texture: Texture;
+    }> = [];
+    const visitedMaterials = new Set<Material>();
+
+    root.traverse((object) => {
+      if (!(object as Mesh).isMesh) return;
+      asArray((object as Mesh).material).forEach((material) => {
+        if (!material || visitedMaterials.has(material)) return;
+        visitedMaterials.add(material);
+        const values = material as unknown as Record<string, unknown>;
+        Object.keys(values).forEach((property) => {
+          const value = values[property];
+          if (!(value instanceof Texture) || value.image != null) return;
+          detached.push({ material: values, property, texture: value });
+          values[property] = null;
+        });
+      });
+    });
+
+    return () => {
+      detached.forEach(({ material, property, texture }) => {
+        material[property] = texture;
+      });
+    };
   }
 
   private addVrmExtension(
@@ -2508,6 +2794,11 @@ export class BrowserModel3dEngine implements ConversionEngine {
         'leftupleg',
         'leftupperleg',
         'mixamorigleftupleg',
+        'upperlegl',
+        'thighl',
+        'leftthigh',
+        'lthigh',
+        'bip01lthigh',
         'legl',
         'jbiplupperleg',
         '左足',
@@ -2517,6 +2808,14 @@ export class BrowserModel3dEngine implements ConversionEngine {
         'leftleg',
         'leftlowerleg',
         'mixamorigleftleg',
+        'lowerlegl',
+        'leftcalf',
+        'calfl',
+        'lcalf',
+        'leftshin',
+        'shinl',
+        'lshin',
+        'bip01lcalf',
         'kneel',
         'jbipllowerleg',
         '左ひざ',
@@ -2535,6 +2834,11 @@ export class BrowserModel3dEngine implements ConversionEngine {
         'rightupleg',
         'rightupperleg',
         'mixamorigrightupleg',
+        'upperlegr',
+        'thighr',
+        'rightthigh',
+        'rthigh',
+        'bip01rthigh',
         'legr',
         'jbiprupperleg',
         '右足',
@@ -2544,6 +2848,14 @@ export class BrowserModel3dEngine implements ConversionEngine {
         'rightleg',
         'rightlowerleg',
         'mixamorigrightleg',
+        'lowerlegr',
+        'rightcalf',
+        'calfr',
+        'rcalf',
+        'rightshin',
+        'shinr',
+        'rshin',
+        'bip01rcalf',
         'kneer',
         'jbiprlowerleg',
         '右ひざ',
@@ -2563,6 +2875,9 @@ export class BrowserModel3dEngine implements ConversionEngine {
         'leftarm',
         'leftupperarm',
         'mixamorigleftarm',
+        'upperarml',
+        'lupperarm',
+        'bip01lupperarm',
         'arml',
         'jbiplupperarm',
         '左腕',
@@ -2571,6 +2886,10 @@ export class BrowserModel3dEngine implements ConversionEngine {
         'leftforearm',
         'leftlowerarm',
         'mixamorigleftforearm',
+        'lowerarml',
+        'forearml',
+        'lforearm',
+        'bip01lforearm',
         'elbowl',
         'jbipllowerarm',
         '左ひじ',
@@ -2588,6 +2907,9 @@ export class BrowserModel3dEngine implements ConversionEngine {
         'rightarm',
         'rightupperarm',
         'mixamorigrightarm',
+        'upperarmr',
+        'rupperarm',
+        'bip01rupperarm',
         'armr',
         'jbiprupperarm',
         '右腕',
@@ -2596,6 +2918,10 @@ export class BrowserModel3dEngine implements ConversionEngine {
         'rightforearm',
         'rightlowerarm',
         'mixamorigrightforearm',
+        'lowerarmr',
+        'forearmr',
+        'rforearm',
+        'bip01rforearm',
         'elbowr',
         'jbiprlowerarm',
         '右ひじ',
@@ -2614,6 +2940,12 @@ export class BrowserModel3dEngine implements ConversionEngine {
         .replace(/ひじ/g, '肘')
         .replace(/あご/g, '顎')
         .replace(/[^a-z0-9\u3040-\u30ff\u3400-\u9fff]/g, '');
+    // Common FBX conventions put the side marker at the end (Blender,
+    // Rigify, Unreal and many DCC exports), unlike Mixamo's `LeftHand` form.
+    aliases.leftFoot.unshift('footl', 'lfoot', 'bip01lfoot');
+    aliases.rightFoot.unshift('footr', 'rfoot', 'bip01rfoot');
+    aliases.leftHand.unshift('handl', 'lhand', 'bip01lhand');
+    aliases.rightHand.unshift('handr', 'rhand', 'bip01rhand');
     const normalizedNodes = nodes.map((node, index) => ({
       index,
       names: [node.name, ...(node.aliases ?? [])]

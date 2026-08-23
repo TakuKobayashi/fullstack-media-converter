@@ -421,6 +421,7 @@ export const MODEL3D_AUXILIARY_EXTENSIONS = [
   '.tga',
   '.dds',
   '.ktx2',
+  '.psd',
   '.sph',
   '.spa',
 ] as const;
@@ -433,6 +434,7 @@ const MODEL3D_TEXTURE_EXTENSIONS = [
   '.tga',
   '.dds',
   '.ktx2',
+  '.psd',
 ] as const;
 export const MODEL3D_RELATED_FILE_EXTENSIONS = {
   obj: ['.mtl', ...MODEL3D_TEXTURE_EXTENSIONS],

@@ -173,6 +173,9 @@ importers:
       '@yohawing/three-mmd-loader':
         specifier: ^0.8.2
         version: 0.8.2(three@0.180.0)
+      ag-psd:
+        specifier: ^31.0.2
+        version: 31.0.2
       three:
         specifier: ^0.180.0
         version: 0.180.0

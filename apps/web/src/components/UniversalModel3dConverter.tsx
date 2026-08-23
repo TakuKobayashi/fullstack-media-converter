@@ -51,12 +51,26 @@ function relatedBasename(path: string): string {
   return path.split('/').pop() ?? path;
 }
 
+function relatedStem(path: string): string {
+  // Image converters commonly preserve the original extension and produce
+  // names such as `body.psd.png`. Treat that as the same texture as the FBX
+  // reference `body.psd` (and the simpler replacement `body.png`).
+  return relatedBasename(path)
+    .replace(/\.[^.]+$/, '')
+    .replace(/\.psd$/, '')
+    // Versioned exports of the same texture use prefixes such as
+    // `sotai4.0_` and `TS4.0.1_`; the FBX sample contains the former while
+    // its supplied PSD contains the latter.
+    .replace(/^[a-z]+\d+(?:[._-]\d+)*[._-]*/, '');
+}
+
 function matchReferencedFiles(referencedPaths: string[], files: File[]): File[] {
   const references = new Set(referencedPaths.map(normalizeRelatedPath));
   const basenames = new Set([...references].map(relatedBasename));
+  const stems = new Set([...references].map(relatedStem));
   return files.filter((file) => {
     const path = normalizeRelatedPath(file.webkitRelativePath || file.name);
-    return references.has(path) || basenames.has(relatedBasename(path));
+    return references.has(path) || basenames.has(relatedBasename(path)) || stems.has(relatedStem(path));
   });
 }
 
@@ -166,6 +180,16 @@ export default function UniversalModel3dConverter() {
   const vrmValidationsRef = useRef<Record<string, VrmValidation>>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const queueRef = useRef<ConversionQueue | null>(null);
+  const openPreview = (job: ConversionJob) => {
+    const failureKey = `${job.id}:${job.outputFormat}`;
+    setPreviewFailures((current) => {
+      if (!current[failureKey]) return current;
+      const next = { ...current };
+      delete next[failureKey];
+      return next;
+    });
+    setPreviewJob(job);
+  };
   const inputFormats = MODEL3D_INPUT_FORMAT_LABELS.join(locale === 'ja' ? '・' : ' · ');
   const outputFormats = MODEL3D_OUTPUT_FORMATS.map((format) => format.toUpperCase()).join(
     locale === 'ja' ? '・' : ' · ',
@@ -873,23 +897,24 @@ export default function UniversalModel3dConverter() {
                 {(job.inputFormat === 'pmx' || job.inputFormat === 'pmd') &&
                   TRANSPARENCY_PREVIEW_OUTPUTS.has(job.outputFormat as Model3dOutputFormat) &&
                   job.status === 'pending' &&
-                  !modelRunning &&
-                  !previewFailures[`${job.id}:${job.outputFormat}`] && (
+                  !modelRunning && (
                     <Model3dTransparencySummary
                       fileName={job.file.name}
                       outputFormat={job.outputFormat as Model3dOutputFormat}
-                      onPreview={() => setPreviewJob(job)}
+                      onPreview={() => openPreview(job)}
                       disabled={modelRunning}
                     />
                   )}
                 {((job.inputFormat !== 'pmx' && job.inputFormat !== 'pmd') ||
                   !TRANSPARENCY_PREVIEW_OUTPUTS.has(job.outputFormat as Model3dOutputFormat)) &&
                   job.status === 'pending' &&
-                  !modelRunning &&
-                  !previewFailures[`${job.id}:${job.outputFormat}`] && (
-                    <button type="button" onClick={() => setPreviewJob(job)}>
-                      {t('model3d.previewAdjust')}
-                    </button>
+                  !modelRunning && (
+                    <div className={s.vrmSettingsSummary}>
+                      <span>{t('model3d.previewHelp')}</span>
+                      <button type="button" onClick={() => openPreview(job)}>
+                        {t('model3d.previewAdjust')}
+                      </button>
+                    </div>
                   )}
               </div>
             ))}
@@ -952,9 +977,12 @@ export default function UniversalModel3dConverter() {
 
         {previewJob && (
           <VrmTransparencyPreviewModal
-            key={previewJob.id}
+            key={`${previewJob.id}:${(relatedFilesByJobId[previewJob.id] ?? [])
+              .map((file) => `${file.name}:${file.size}:${file.lastModified}`)
+              .sort()
+              .join('|')}`}
             job={previewJob}
-            auxiliaryFiles={auxiliaryFiles}
+            auxiliaryFiles={relatedFilesByJobId[previewJob.id] ?? []}
             animationSources={animationItems}
             onClose={() => setPreviewJob(undefined)}
             onApply={(settings) => {
