@@ -176,6 +176,9 @@ importers:
       ag-psd:
         specifier: ^31.0.2
         version: 31.0.2
+      jszip:
+        specifier: ^3.10.1
+        version: 3.10.1
       three:
         specifier: ^0.180.0
         version: 0.180.0

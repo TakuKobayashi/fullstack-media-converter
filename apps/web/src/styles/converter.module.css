@@ -846,6 +846,12 @@
   line-height: 1.5;
 }
 
+.boneWarning ul {
+  margin: 4px 0 0 1.25rem;
+  padding: 0;
+  font-weight: 600;
+}
+
 @media (max-width: 640px) {
   .formatBar {
     flex-direction: column;

@@ -238,6 +238,13 @@ export const messages = {
         'The selected input may contain animation, but this output format cannot store it. Animation clips will be ignored during conversion.',
       expressionsRemovedWarning:
         'The selected input may contain facial expressions, but this output format cannot store them. Expression morphs and expression animation will be ignored during conversion.',
+      objLossTitle: 'Information not retained when exporting OBJ:',
+      stlLossTitle: 'Information not retained when exporting STL:',
+      lossBonesAndSkinning: 'Bones and skinning (the current pose becomes a static mesh)',
+      lossAnimations: 'Animations',
+      lossExpressions: 'Expressions and morph targets',
+      lossSceneData: 'Object hierarchy, physics, constraints, cameras, lights, and format-specific metadata',
+      lossStlSurfaceData: 'Textures, UV coordinates, materials, vertex colors, and transparency',
       proseTitle: 'Private static 3D model conversion',
       prose:
         'Models and animation clips are separated after import and converted independently in your browser. Model conversion does not embed animation clips. Animations can be exported as GLB, glTF, VRMA, or three.js JSON and remain linked to every model for preview. OBJ and STL bake the current pose into a static mesh and ignore expressions. Format-specific data such as physics, cameras, lights, constraints, and some metadata may still be omitted.',
@@ -508,6 +515,13 @@ export const messages = {
         '選択した入力にはアニメーション情報が含まれる可能性がありますが、この出力形式には保存できないため、アニメーションを無視して変換します。',
       expressionsRemovedWarning:
         '選択した入力には表情情報が含まれる可能性がありますが、この出力形式には保存できないため、表情モーフと表情アニメーションを無視して変換します。',
+      objLossTitle: 'OBJ変換で保持されない情報：',
+      stlLossTitle: 'STL変換で保持されない情報：',
+      lossBonesAndSkinning: 'ボーン・スキニング（現在の姿勢を静的メッシュ化）',
+      lossAnimations: 'アニメーション',
+      lossExpressions: '表情・モーフ',
+      lossSceneData: 'オブジェクト階層・物理・制約・カメラ・ライト・形式固有のメタデータ',
+      lossStlSurfaceData: 'テクスチャ・UV座標・マテリアル・頂点カラー・透明度',
       proseTitle: 'アップロード不要の静的3Dモデル変換',
       prose:
         '入力後にモデルとアニメーションクリップを分離し、ブラウザ内で個別に変換します。モデル変換にはアニメーションを埋め込みません。アニメーションはGLB、glTF、VRMA、three.js JSONとして出力でき、Preview用として全モデルに関連付けられます。OBJとSTLでは現在の姿勢を静的メッシュへ焼き込み、表情を無視します。物理設定、カメラ、ライト、コンストレイント、一部のメタデータなどは失われる場合があります。',

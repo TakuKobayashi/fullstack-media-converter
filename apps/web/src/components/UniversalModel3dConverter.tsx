@@ -13,8 +13,10 @@ import {
   generateId,
   guessFormat,
   isModel3dOutputCandidate,
+  model3dFormatMayContainAnimations,
   model3dFormatMayContainBones,
   model3dFormatMayContainExpressions,
+  model3dOutputSupportsAnimations,
   model3dOutputSupportsBones,
   model3dOutputSupportsExpressions,
   type ConversionFile,
@@ -94,6 +96,16 @@ function humanoidStorageKey(job: ConversionJob): string {
 }
 
 const TRANSPARENCY_PREVIEW_OUTPUTS = new Set<Model3dOutputFormat>(['glb', 'gltf', 'vrm']);
+const MAY_CONTAIN_SCENE_DATA_INPUTS = new Set<Model3dFormat>([
+  'fbx', 'gltf', 'glb', 'vrm', 'dae', '3ds', 'pmx', 'pmd',
+]);
+const STL_MAY_LOSE_SURFACE_DATA_INPUTS = new Set<Model3dFormat>([
+  'fbx', 'obj', 'gltf', 'glb', 'vrm', 'ply', 'dae', '3ds', 'pmx', 'pmd',
+]);
+const FORMAT_LOSS_TITLE_KEYS = {
+  obj: 'model3d.objLossTitle',
+  stl: 'model3d.stlLossTitle',
+} as const satisfies Partial<Record<Model3dOutputFormat, string>>;
 
 type VrmValidation = {
   signature: string;
@@ -371,19 +383,60 @@ export default function UniversalModel3dConverter() {
       ).length,
     [jobs, targetFormat],
   );
+  const pendingConvertibleJobs = useMemo(
+    () =>
+      jobs.filter(
+        (job) =>
+          job.status === 'pending' &&
+          isModel3dOutputCandidate(job.inputFormat as Model3dFormat, targetFormat),
+      ),
+    [jobs, targetFormat],
+  );
   const bonesWillBeRemoved = useMemo(
     () =>
-      jobs.some((job) => model3dFormatMayContainBones(job.inputFormat as Model3dFormat)) &&
+      pendingConvertibleJobs.some((job) =>
+        model3dFormatMayContainBones(job.inputFormat as Model3dFormat),
+      ) &&
       !model3dOutputSupportsBones(targetFormat),
-    [jobs, targetFormat],
+    [pendingConvertibleJobs, targetFormat],
   );
   const expressionsWillBeRemoved = useMemo(
     () =>
-      jobs.some((job) =>
+      pendingConvertibleJobs.some((job) =>
         model3dFormatMayContainExpressions(job.inputFormat as Model3dFormat),
       ) && !model3dOutputSupportsExpressions(targetFormat),
-    [jobs, targetFormat],
+    [pendingConvertibleJobs, targetFormat],
   );
+  const animationsWillBeRemoved = useMemo(
+    () =>
+      pendingConvertibleJobs.some((job) =>
+        model3dFormatMayContainAnimations(job.inputFormat as Model3dFormat),
+      ) && !model3dOutputSupportsAnimations(targetFormat),
+    [pendingConvertibleJobs, targetFormat],
+  );
+  const staticSceneDataWillBeRemoved =
+    (targetFormat === 'obj' || targetFormat === 'stl') &&
+    pendingConvertibleJobs.some((job) =>
+      MAY_CONTAIN_SCENE_DATA_INPUTS.has(job.inputFormat as Model3dFormat),
+    );
+  const stlSurfaceDataWillBeRemoved =
+    targetFormat === 'stl' &&
+    pendingConvertibleJobs.some((job) =>
+      STL_MAY_LOSE_SURFACE_DATA_INPUTS.has(job.inputFormat as Model3dFormat),
+    );
+  const detailedFormatLossItems = [
+    bonesWillBeRemoved ? t('model3d.lossBonesAndSkinning') : undefined,
+    animationsWillBeRemoved ? t('model3d.lossAnimations') : undefined,
+    expressionsWillBeRemoved ? t('model3d.lossExpressions') : undefined,
+    staticSceneDataWillBeRemoved ? t('model3d.lossSceneData') : undefined,
+    stlSurfaceDataWillBeRemoved ? t('model3d.lossStlSurfaceData') : undefined,
+  ].filter((item): item is string => Boolean(item));
+  const detailedFormatLossTitleKey = FORMAT_LOSS_TITLE_KEYS[
+    targetFormat as keyof typeof FORMAT_LOSS_TITLE_KEYS
+  ];
+  const detailedFormatLossTitle = detailedFormatLossTitleKey
+    ? t(detailedFormatLossTitleKey)
+    : undefined;
   useEffect(() => {
     if (targetFormat !== 'vrm') return;
     let cancelled = false;
@@ -664,8 +717,21 @@ export default function UniversalModel3dConverter() {
                 ⚠ {t('model3d.incompatible', { count: incompatible, format: targetFormat.toUpperCase() })}
               </p>
             )}
-            {bonesWillBeRemoved && <p className={s.boneWarning}>⚠ {t('model3d.bonesRemovedWarning')}</p>}
-            {expressionsWillBeRemoved && <p className={s.boneWarning}>⚠ {t('model3d.expressionsRemovedWarning')}</p>}
+            {!detailedFormatLossTitle && bonesWillBeRemoved && (
+              <p className={s.boneWarning}>⚠ {t('model3d.bonesRemovedWarning')}</p>
+            )}
+            {!detailedFormatLossTitle && animationsWillBeRemoved && (
+              <p className={s.boneWarning}>⚠ {t('model3d.animationsRemovedWarning')}</p>
+            )}
+            {!detailedFormatLossTitle && expressionsWillBeRemoved && (
+              <p className={s.boneWarning}>⚠ {t('model3d.expressionsRemovedWarning')}</p>
+            )}
+            {detailedFormatLossTitle && detailedFormatLossItems.length > 0 && (
+              <div className={s.boneWarning}>
+                <strong>⚠ {detailedFormatLossTitle}</strong>
+                <ul>{detailedFormatLossItems.map((item) => <li key={item}>{item}</li>)}</ul>
+              </div>
+            )}
             <div className={s.controls}>
               <button className={s.convertBtn} onClick={convert} disabled={modelRunning || pending === 0}>
                 {modelRunning ? t('common.converting') : t('model3d.convertModels', { count: pending })}
