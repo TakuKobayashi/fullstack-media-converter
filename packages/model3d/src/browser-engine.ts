@@ -222,6 +222,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       }
       if ((job.inputFormat === 'pmx' || job.inputFormat === 'pmd') && job.outputFormat === 'vrm') {
         this.prepareMmdVrmHumanoidHierarchy(root);
+        this.canonicalizeMmdVrmBoneNames(root);
         this.normalizeMmdVrmScale(root);
       }
       options.onProgress?.(65);
@@ -473,8 +474,16 @@ export class BrowserModel3dEngine implements ConversionEngine {
         Math.min(length * 0.2, markerRadius * 2),
         Math.min(length * 0.12, markerRadius),
       );
-      configureMaterials(arrow.line.material, { transparent: true, opacity: 0.2, depthTest: false });
-      configureMaterials(arrow.cone.material, { transparent: true, opacity: 0.2, depthTest: false });
+      configureMaterials(arrow.line.material, {
+        transparent: true,
+        opacity: 0.2,
+        depthTest: false,
+      });
+      configureMaterials(arrow.cone.material, {
+        transparent: true,
+        opacity: 0.2,
+        depthTest: false,
+      });
       boneOverlay.add(arrow);
       directionalBoneArrows.push({ bone, child: childBone, arrow });
     });
@@ -518,8 +527,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       if (!selectedBoneObject) return;
       const position = selectedBoneObject.getWorldPosition(new Vector3());
       const childBone = selectedBoneObject.children.find((child) => (child as Bone).isBone) as
-        | Bone
-        | undefined;
+        Bone | undefined;
       const childPosition = childBone?.getWorldPosition(new Vector3());
       const direction = childPosition
         ? childPosition.clone().sub(position).normalize()
@@ -632,12 +640,14 @@ export class BrowserModel3dEngine implements ConversionEngine {
       const nodes: Object3D[] = [];
       root.traverse((node) => nodes.push(node));
       const indices = new Map(nodes.map((node, index) => [node, index]));
-      const humanBones = this.mapVrmHumanBones(nodes.map((node) => ({
-        name: node.name,
-        children: node.children
-          .map((child) => indices.get(child))
-          .filter((index): index is number => index !== undefined),
-      })));
+      const humanBones = this.mapVrmHumanBones(
+        nodes.map((node) => ({
+          name: node.name,
+          children: node.children
+            .map((child) => indices.get(child))
+            .filter((index): index is number => index !== undefined),
+        })),
+      );
       return { nodes, humanBones };
     };
     const source = describe(sourceRoot);
@@ -721,8 +731,9 @@ export class BrowserModel3dEngine implements ConversionEngine {
       return objects.find((object) => names.includes(normalize(object.name)));
     };
     const center = find('センター', 'center');
-    const lowerBody = find('下半身', 'lowerbody', 'pelvis');
-    const upperBody = find('上半身', 'upperbody', 'spine');
+    const anatomicalHips = find('腰', 'waist', 'hips', 'pelvis', 'J_Bip_C_Hips');
+    const lowerBody = find('下半身', 'lowerbody', 'pelvis', 'J_Bip_C_Spine');
+    const upperBody = find('上半身', 'upperbody', 'spine', 'J_Bip_C_Spine2');
     if (!center || !lowerBody || !upperBody || lowerBody === upperBody) return;
 
     const isDescendantOf = (object: Object3D, ancestor: Object3D) => {
@@ -733,8 +744,16 @@ export class BrowserModel3dEngine implements ConversionEngine {
       }
       return false;
     };
-    // Some rigs already have the required anatomical hierarchy.
-    if (isDescendantOf(upperBody, lowerBody)) return;
+    // Some rigs use a dedicated waist/hips bone with upper-body and lower-body
+    // branches below it (for example, VRoid's J_Bip naming convention).
+    if (
+      isDescendantOf(upperBody, lowerBody) ||
+      (anatomicalHips &&
+        isDescendantOf(upperBody, anatomicalHips) &&
+        isDescendantOf(lowerBody, anatomicalHips))
+    ) {
+      return;
+    }
 
     root.updateMatrixWorld(true);
     const pelvisWorldPosition = lowerBody.getWorldPosition(new Vector3());
@@ -750,6 +769,34 @@ export class BrowserModel3dEngine implements ConversionEngine {
     hips.attach(lowerBody);
     hips.attach(upperBody);
     root.updateMatrixWorld(true);
+  }
+
+  /**
+   * The MMD loader prefers a PMX bone's English name for the Three.js object
+   * name, but retains the original Japanese name in userData. Match against
+   * both and give humanoid bones stable names before GLTFExporter strips that
+   * loader-specific metadata from the nodes used by the VRM extension pass.
+   */
+  private canonicalizeMmdVrmBoneNames(root: Object3D): void {
+    const objects: Object3D[] = [];
+    root.traverse((object) => objects.push(object));
+    const indices = new Map(objects.map((object, index) => [object, index]));
+    const mapped = this.mapVrmHumanBones(
+      objects.map((object) => ({
+        name: object.name,
+        aliases: [
+          object.userData.mmdBoneName as string | undefined,
+          object.userData.mmdEnglishBoneName as string | undefined,
+        ].filter((name): name is string => Boolean(name)),
+        children: object.children
+          .map((child) => indices.get(child))
+          .filter((index): index is number => index !== undefined),
+      })),
+    );
+    for (const [humanBone, { node }] of Object.entries(mapped)) {
+      const object = objects[node];
+      if (object) object.name = `VRM_${humanBone}`;
+    }
   }
 
   private async loadModel(
@@ -918,25 +965,110 @@ export class BrowserModel3dEngine implements ConversionEngine {
       { name: 'hips', position: [0, 1, 0], aliases: ['下半身', 'センター', 'hips'] },
       { name: 'spine', parent: 'hips', position: [0, 0.18, 0], aliases: ['上半身', 'spine'] },
       { name: 'chest', parent: 'spine', position: [0, 0.18, 0], aliases: ['上半身2', 'chest'] },
-      { name: 'upperChest', parent: 'chest', position: [0, 0.14, 0], aliases: ['上半身3', 'upperChest'] },
+      {
+        name: 'upperChest',
+        parent: 'chest',
+        position: [0, 0.14, 0],
+        aliases: ['上半身3', 'upperChest'],
+      },
       { name: 'neck', parent: 'upperChest', position: [0, 0.14, 0], aliases: ['首', 'neck'] },
       { name: 'head', parent: 'neck', position: [0, 0.12, 0], aliases: ['頭', 'head'] },
-      { name: 'leftUpperLeg', parent: 'hips', position: [0.1, -0.1, 0], aliases: ['左足', 'leftUpperLeg'] },
-      { name: 'leftLowerLeg', parent: 'leftUpperLeg', position: [0, -0.42, 0], aliases: ['左ひざ', '左膝', 'leftLowerLeg'] },
-      { name: 'leftFoot', parent: 'leftLowerLeg', position: [0, -0.4, 0], aliases: ['左足首', 'leftFoot'] },
-      { name: 'leftToes', parent: 'leftFoot', position: [0, -0.05, 0.12], aliases: ['左つま先', 'leftToes'] },
-      { name: 'rightUpperLeg', parent: 'hips', position: [-0.1, -0.1, 0], aliases: ['右足', 'rightUpperLeg'] },
-      { name: 'rightLowerLeg', parent: 'rightUpperLeg', position: [0, -0.42, 0], aliases: ['右ひざ', '右膝', 'rightLowerLeg'] },
-      { name: 'rightFoot', parent: 'rightLowerLeg', position: [0, -0.4, 0], aliases: ['右足首', 'rightFoot'] },
-      { name: 'rightToes', parent: 'rightFoot', position: [0, -0.05, 0.12], aliases: ['右つま先', 'rightToes'] },
-      { name: 'leftShoulder', parent: 'upperChest', position: [0.1, 0.08, 0], aliases: ['左肩', 'leftShoulder'] },
-      { name: 'leftUpperArm', parent: 'leftShoulder', position: [0.12, 0, 0], aliases: ['左腕', 'leftUpperArm'] },
-      { name: 'leftLowerArm', parent: 'leftUpperArm', position: [0.28, 0, 0], aliases: ['左ひじ', '左肘', 'leftLowerArm'] },
-      { name: 'leftHand', parent: 'leftLowerArm', position: [0.25, 0, 0], aliases: ['左手首', 'leftHand'] },
-      { name: 'rightShoulder', parent: 'upperChest', position: [-0.1, 0.08, 0], aliases: ['右肩', 'rightShoulder'] },
-      { name: 'rightUpperArm', parent: 'rightShoulder', position: [-0.12, 0, 0], aliases: ['右腕', 'rightUpperArm'] },
-      { name: 'rightLowerArm', parent: 'rightUpperArm', position: [-0.28, 0, 0], aliases: ['右ひじ', '右肘', 'rightLowerArm'] },
-      { name: 'rightHand', parent: 'rightLowerArm', position: [-0.25, 0, 0], aliases: ['右手首', 'rightHand'] },
+      {
+        name: 'leftUpperLeg',
+        parent: 'hips',
+        position: [0.1, -0.1, 0],
+        aliases: ['左足', 'leftUpperLeg'],
+      },
+      {
+        name: 'leftLowerLeg',
+        parent: 'leftUpperLeg',
+        position: [0, -0.42, 0],
+        aliases: ['左ひざ', '左膝', 'leftLowerLeg'],
+      },
+      {
+        name: 'leftFoot',
+        parent: 'leftLowerLeg',
+        position: [0, -0.4, 0],
+        aliases: ['左足首', 'leftFoot'],
+      },
+      {
+        name: 'leftToes',
+        parent: 'leftFoot',
+        position: [0, -0.05, 0.12],
+        aliases: ['左つま先', 'leftToes'],
+      },
+      {
+        name: 'rightUpperLeg',
+        parent: 'hips',
+        position: [-0.1, -0.1, 0],
+        aliases: ['右足', 'rightUpperLeg'],
+      },
+      {
+        name: 'rightLowerLeg',
+        parent: 'rightUpperLeg',
+        position: [0, -0.42, 0],
+        aliases: ['右ひざ', '右膝', 'rightLowerLeg'],
+      },
+      {
+        name: 'rightFoot',
+        parent: 'rightLowerLeg',
+        position: [0, -0.4, 0],
+        aliases: ['右足首', 'rightFoot'],
+      },
+      {
+        name: 'rightToes',
+        parent: 'rightFoot',
+        position: [0, -0.05, 0.12],
+        aliases: ['右つま先', 'rightToes'],
+      },
+      {
+        name: 'leftShoulder',
+        parent: 'upperChest',
+        position: [0.1, 0.08, 0],
+        aliases: ['左肩', 'leftShoulder'],
+      },
+      {
+        name: 'leftUpperArm',
+        parent: 'leftShoulder',
+        position: [0.12, 0, 0],
+        aliases: ['左腕', 'leftUpperArm'],
+      },
+      {
+        name: 'leftLowerArm',
+        parent: 'leftUpperArm',
+        position: [0.28, 0, 0],
+        aliases: ['左ひじ', '左肘', 'leftLowerArm'],
+      },
+      {
+        name: 'leftHand',
+        parent: 'leftLowerArm',
+        position: [0.25, 0, 0],
+        aliases: ['左手首', 'leftHand'],
+      },
+      {
+        name: 'rightShoulder',
+        parent: 'upperChest',
+        position: [-0.1, 0.08, 0],
+        aliases: ['右肩', 'rightShoulder'],
+      },
+      {
+        name: 'rightUpperArm',
+        parent: 'rightShoulder',
+        position: [-0.12, 0, 0],
+        aliases: ['右腕', 'rightUpperArm'],
+      },
+      {
+        name: 'rightLowerArm',
+        parent: 'rightUpperArm',
+        position: [-0.28, 0, 0],
+        aliases: ['右ひじ', '右肘', 'rightLowerArm'],
+      },
+      {
+        name: 'rightHand',
+        parent: 'rightLowerArm',
+        position: [-0.25, 0, 0],
+        aliases: ['右手首', 'rightHand'],
+      },
     ];
     const nodes = new Map<string, Object3D>();
     definitions.forEach((definition) => {
@@ -1035,7 +1167,8 @@ export class BrowserModel3dEngine implements ConversionEngine {
     }
     const previousFrame = track.frames[previousIndex] ?? 0;
     const nextFrame = track.frames[nextIndex] ?? previousFrame;
-    const ratio = nextFrame === previousFrame ? 0 : (frame - previousFrame) / (nextFrame - previousFrame);
+    const ratio =
+      nextFrame === previousFrame ? 0 : (frame - previousFrame) / (nextFrame - previousFrame);
     const interpolationOffset = nextIndex * 16;
     const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
     const translation = [0, 1, 2].map((axis) =>
@@ -1052,7 +1185,12 @@ export class BrowserModel3dEngine implements ConversionEngine {
     );
     const previous = new Quaternion().fromArray(track.rotations, previousIndex * 4);
     const next = new Quaternion().fromArray(track.rotations, nextIndex * 4);
-    const rotation = previous.slerp(next, rotationRatio).toArray() as [number, number, number, number];
+    const rotation = previous.slerp(next, rotationRatio).toArray() as [
+      number,
+      number,
+      number,
+      number,
+    ];
     return { translation, rotation };
   }
 
@@ -1086,7 +1224,8 @@ export class BrowserModel3dEngine implements ConversionEngine {
     const previousIndex = nextIndex - 1;
     const previousFrame = track.frames[previousIndex] ?? 0;
     const nextFrame = track.frames[nextIndex] ?? previousFrame;
-    const ratio = nextFrame === previousFrame ? 0 : (frame - previousFrame) / (nextFrame - previousFrame);
+    const ratio =
+      nextFrame === previousFrame ? 0 : (frame - previousFrame) / (nextFrame - previousFrame);
     const previous = track.weights[previousIndex] ?? 0;
     return previous + ((track.weights[nextIndex] ?? previous) - previous) * ratio;
   }
@@ -1279,31 +1418,38 @@ export class BrowserModel3dEngine implements ConversionEngine {
     const output = context.createImageData(width, height);
     const accumulated = new Float32Array(width * height * 3);
     const samples = new Uint16Array(width * height);
-    this.rasterizeMmdUv(mesh, materialIndex, width, height, toon.map?.flipY ?? false, (x, y, normal) => {
-      const u = width === 1 ? 0 : x / (width - 1);
-      const v = height === 1 ? 0 : y / (height - 1);
-      const base = this.sampleTexture(basePixels, u, v);
-      const toonSample = this.sampleTexture(
-        toonPixels,
-        0,
-        Math.max(0, Math.min(1, normal.dot(MMD_BAKE_LIGHT) * 0.5 + 0.45)),
-      );
-      const sphereSample = this.sampleTexture(
-        spherePixels,
-        normal.x * 0.5 + 0.5,
-        normal.y * 0.5 + 0.5,
-      );
-      const pixel = y * width + x;
-      const offset = pixel * 3;
-      for (let channel = 0; channel < 3; channel += 1) {
-        let value = lit[channel] * base[channel] * toonSample[channel];
-        if (spherePixels && metadata.sphereMode === 'multiply') value *= sphereSample[channel];
-        if (spherePixels && metadata.sphereMode === 'add') value += sphereSample[channel] * 2;
-        if (spherePixels && metadata.sphereMode === 'subTexture') value = sphereSample[channel];
-        accumulated[offset + channel] += Math.max(0, Math.min(1, value));
-      }
-      if (samples[pixel] < 65535) samples[pixel] += 1;
-    });
+    this.rasterizeMmdUv(
+      mesh,
+      materialIndex,
+      width,
+      height,
+      toon.map?.flipY ?? false,
+      (x, y, normal) => {
+        const u = width === 1 ? 0 : x / (width - 1);
+        const v = height === 1 ? 0 : y / (height - 1);
+        const base = this.sampleTexture(basePixels, u, v);
+        const toonSample = this.sampleTexture(
+          toonPixels,
+          0,
+          Math.max(0, Math.min(1, normal.dot(MMD_BAKE_LIGHT) * 0.5 + 0.45)),
+        );
+        const sphereSample = this.sampleTexture(
+          spherePixels,
+          normal.x * 0.5 + 0.5,
+          normal.y * 0.5 + 0.5,
+        );
+        const pixel = y * width + x;
+        const offset = pixel * 3;
+        for (let channel = 0; channel < 3; channel += 1) {
+          let value = lit[channel] * base[channel] * toonSample[channel];
+          if (spherePixels && metadata.sphereMode === 'multiply') value *= sphereSample[channel];
+          if (spherePixels && metadata.sphereMode === 'add') value += sphereSample[channel] * 2;
+          if (spherePixels && metadata.sphereMode === 'subTexture') value = sphereSample[channel];
+          accumulated[offset + channel] += Math.max(0, Math.min(1, value));
+        }
+        if (samples[pixel] < 65535) samples[pixel] += 1;
+      },
+    );
     for (let y = 0; y < height; y += 1) {
       for (let x = 0; x < width; x += 1) {
         const pixel = y * width + x;
@@ -1383,8 +1529,16 @@ export class BrowserModel3dEngine implements ConversionEngine {
         const y2 = toY(uv.getY(ic));
         const denominator = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2);
         if (Math.abs(denominator) < 1e-8) continue;
-        for (let y = Math.max(0, Math.floor(Math.min(y0, y1, y2))); y <= Math.min(height - 1, Math.ceil(Math.max(y0, y1, y2))); y += 1) {
-          for (let x = Math.max(0, Math.floor(Math.min(x0, x1, x2))); x <= Math.min(width - 1, Math.ceil(Math.max(x0, x1, x2))); x += 1) {
+        for (
+          let y = Math.max(0, Math.floor(Math.min(y0, y1, y2)));
+          y <= Math.min(height - 1, Math.ceil(Math.max(y0, y1, y2)));
+          y += 1
+        ) {
+          for (
+            let x = Math.max(0, Math.floor(Math.min(x0, x1, x2)));
+            x <= Math.min(width - 1, Math.ceil(Math.max(x0, x1, x2)));
+            x += 1
+          ) {
             const a = ((y1 - y2) * (x + 0.5 - x2) + (x2 - x1) * (y + 0.5 - y2)) / denominator;
             const b = ((y2 - y0) * (x + 0.5 - x2) + (x0 - x2) * (y + 0.5 - y2)) / denominator;
             const c = 1 - a - b;
@@ -1722,11 +1876,19 @@ export class BrowserModel3dEngine implements ConversionEngine {
   }
 
   private safeOutputName(name: string): string {
-    return name.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '-').replace(/^-+|-+$/g, '') || 'animation';
+    return (
+      name
+        .replace(/[\\/:*?"<>|]+/g, '-')
+        .replace(/\s+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'animation'
+    );
   }
 
   private vrmExpressionName(sourceName: string): { preset?: string; custom?: string } {
-    const compact = sourceName.normalize('NFKC').toLowerCase().replace(/[\s_.-]/g, '');
+    const compact = sourceName
+      .normalize('NFKC')
+      .toLowerCase()
+      .replace(/[\s_.-]/g, '');
     const normalized = compact.replace(/[^a-z0-9]/g, '');
     const presets: Record<string, string> = {
       aa: 'aa',
@@ -1818,10 +1980,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     const expressionTargets = new Map(
       sourceNodes
         .filter((node) => node.name.startsWith('VRMAExpression'))
-        .flatMap((node) => [
-          [node.name, node] as const,
-          [node.uuid, node] as const,
-        ]),
+        .flatMap((node) => [[node.name, node] as const, [node.uuid, node] as const]),
     );
     const hipsNode = sourceHumanBones.hips ? sourceNodes[sourceHumanBones.hips.node] : undefined;
     const hipsTargets = new Set([hipsNode?.name, hipsNode?.uuid]);
@@ -1831,8 +1990,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       if (parsed.propertyName !== 'morphTargetInfluences') return;
       const target = parsed.objectIndex ?? parsed.nodeName;
       const mesh = sourceNodes.find((node) => node.name === target || node.uuid === target) as
-        | Mesh
-        | undefined;
+        Mesh | undefined;
       if (!mesh?.morphTargetDictionary || !track.times.length) return;
       const stride = track.values.length / track.times.length;
       Object.entries(mesh.morphTargetDictionary).forEach(([morphName, morphIndex]) => {
@@ -1870,7 +2028,9 @@ export class BrowserModel3dEngine implements ConversionEngine {
     });
     portableClip.tracks.push(...generatedExpressions.values());
     if (!portableClip.tracks.length) {
-      throw new Error(`Animation "${clip.name}" has no humanoid tracks that can be exported to VRMA.`);
+      throw new Error(
+        `Animation "${clip.name}" has no humanoid tracks that can be exported to VRMA.`,
+      );
     }
     const cloneHierarchy = (source: Object3D): Object3D => {
       const clone = new Object3D();
@@ -2005,9 +2165,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     });
     if (exported instanceof ArrayBuffer) {
       const output =
-        format === 'vrm'
-          ? this.addVrmExtension(exported, sourceName, sourceFormat)
-          : exported;
+        format === 'vrm' ? this.addVrmExtension(exported, sourceName, sourceFormat) : exported;
       return new Blob([output], { type: getMimeType(format) });
     }
     return new Blob([JSON.stringify(exported)], { type: getMimeType(format) });
@@ -2127,11 +2285,17 @@ export class BrowserModel3dEngine implements ConversionEngine {
     | {
         preset: Record<
           string,
-          { isBinary: boolean; morphTargetBinds: Array<{ node: number; index: number; weight: number }> }
+          {
+            isBinary: boolean;
+            morphTargetBinds: Array<{ node: number; index: number; weight: number }>;
+          }
         >;
         custom: Record<
           string,
-          { isBinary: boolean; morphTargetBinds: Array<{ node: number; index: number; weight: number }> }
+          {
+            isBinary: boolean;
+            morphTargetBinds: Array<{ node: number; index: number; weight: number }>;
+          }
         >;
       }
     | undefined {
@@ -2149,7 +2313,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       const targetCount = Math.max(
         targetNames.length,
         mesh.weights?.length ?? 0,
-        ...((mesh.primitives ?? []).map((primitive) => primitive.targets?.length ?? 0)),
+        ...(mesh.primitives ?? []).map((primitive) => primitive.targets?.length ?? 0),
       );
       for (let targetIndex = 0; targetIndex < targetCount; targetIndex += 1) {
         const sourceName = targetNames[targetIndex]?.trim() || `morph-${targetIndex + 1}`;
@@ -2161,7 +2325,9 @@ export class BrowserModel3dEngine implements ConversionEngine {
         collection[name] = expression;
       }
     });
-    return Object.keys(preset).length || Object.keys(custom).length ? { preset, custom } : undefined;
+    return Object.keys(preset).length || Object.keys(custom).length
+      ? { preset, custom }
+      : undefined;
   }
 
   private validateVrmHumanoidHierarchy(
@@ -2229,7 +2395,13 @@ export class BrowserModel3dEngine implements ConversionEngine {
       if (node.scale) {
         const [x = 1, y = 1, z = 1] = node.scale;
         const tolerance = Math.max(x, y, z) * 1e-4;
-        if (x <= 0 || y <= 0 || z <= 0 || Math.abs(x - y) > tolerance || Math.abs(y - z) > tolerance) {
+        if (
+          x <= 0 ||
+          y <= 0 ||
+          z <= 0 ||
+          Math.abs(x - y) > tolerance ||
+          Math.abs(y - z) > tolerance
+        ) {
           throw new Error(`VRM humanoid bone ${boneName} must have a positive uniform scale.`);
         }
       }
@@ -2283,33 +2455,122 @@ export class BrowserModel3dEngine implements ConversionEngine {
   }
 
   private mapVrmHumanBones(
-    nodes: Array<{ name?: string; children?: number[] }>,
+    nodes: Array<{ name?: string; aliases?: string[]; children?: number[] }>,
   ): Record<string, { node: number }> {
     const aliases: Record<string, string[]> = {
-      hips: ['vrmhips', 'hips', 'pelvis', 'mixamorighips', '腰', '下半身', 'センター'],
-      spine: ['spine', 'mixamorigspine', '上半身'],
-      chest: ['chest', 'spine1', 'mixamorigspine1', '上半身2'],
-      upperChest: ['upperchest', 'spine2', 'mixamorigspine2', '上半身3'],
-      neck: ['neck', 'mixamorigneck', '首'],
-      head: ['head', 'mixamorighead', '頭'],
-      leftUpperLeg: ['leftupleg', 'leftupperleg', 'mixamorigleftupleg', '左足', '左腿'],
-      leftLowerLeg: ['leftleg', 'leftlowerleg', 'mixamorigleftleg', '左ひざ', '左膝'],
-      leftFoot: ['leftfoot', 'mixamorigleftfoot', '左足首'],
-      leftToes: ['lefttoe', 'lefttoebase', 'mixamoriglefttoebase', '左つま先'],
-      rightUpperLeg: ['rightupleg', 'rightupperleg', 'mixamorigrightupleg', '右足', '右腿'],
-      rightLowerLeg: ['rightleg', 'rightlowerleg', 'mixamorigrightleg', '右ひざ', '右膝'],
-      rightFoot: ['rightfoot', 'mixamorigrightfoot', '右足首'],
-      rightToes: ['righttoe', 'righttoebase', 'mixamorigrighttoebase', '右つま先'],
-      leftShoulder: ['leftshoulder', 'mixamorigleftshoulder', '左肩'],
-      leftUpperArm: ['leftarm', 'leftupperarm', 'mixamorigleftarm', '左腕'],
-      leftLowerArm: ['leftforearm', 'leftlowerarm', 'mixamorigleftforearm', '左ひじ', '左肘'],
-      leftHand: ['lefthand', 'mixamoriglefthand', '左手首'],
-      rightShoulder: ['rightshoulder', 'mixamorigrightshoulder', '右肩'],
-      rightUpperArm: ['rightarm', 'rightupperarm', 'mixamorigrightarm', '右腕'],
-      rightLowerArm: ['rightforearm', 'rightlowerarm', 'mixamorigrightforearm', '右ひじ', '右肘'],
-      rightHand: ['righthand', 'mixamorigrighthand', '右手首'],
-      leftEye: ['lefteye', '左目'],
-      rightEye: ['righteye', '右目'],
+      hips: ['vrmhips', 'hips', 'pelvis', 'mixamorighips', 'jbipchips', '腰', '下半身', 'センター'],
+      spine: ['spine', 'mixamorigspine', 'upperbody', 'jbipcspine2', '上半身'],
+      chest: ['chest', 'spine1', 'mixamorigspine1', 'upperbody2', 'jbipcchest', '上半身2'],
+      upperChest: [
+        'upperchest',
+        'spine2',
+        'mixamorigspine2',
+        'upperbody3',
+        'jbipcupperchest',
+        '上半身3',
+      ],
+      neck: ['neck', 'mixamorigneck', 'jbipcneck', '首'],
+      head: ['head', 'mixamorighead', 'jbipchead', '頭'],
+      leftUpperLeg: [
+        'leftupleg',
+        'leftupperleg',
+        'mixamorigleftupleg',
+        'legl',
+        'jbiplupperleg',
+        '左足',
+        '左腿',
+      ],
+      leftLowerLeg: [
+        'leftleg',
+        'leftlowerleg',
+        'mixamorigleftleg',
+        'kneel',
+        'jbipllowerleg',
+        '左ひざ',
+        '左膝',
+      ],
+      leftFoot: ['leftfoot', 'mixamorigleftfoot', 'anklel', 'jbiplfoot', '左足首'],
+      leftToes: [
+        'lefttoe',
+        'lefttoebase',
+        'mixamoriglefttoebase',
+        'toel',
+        'jbipltoebase',
+        '左つま先',
+      ],
+      rightUpperLeg: [
+        'rightupleg',
+        'rightupperleg',
+        'mixamorigrightupleg',
+        'legr',
+        'jbiprupperleg',
+        '右足',
+        '右腿',
+      ],
+      rightLowerLeg: [
+        'rightleg',
+        'rightlowerleg',
+        'mixamorigrightleg',
+        'kneer',
+        'jbiprlowerleg',
+        '右ひざ',
+        '右膝',
+      ],
+      rightFoot: ['rightfoot', 'mixamorigrightfoot', 'ankler', 'jbiprfoot', '右足首'],
+      rightToes: [
+        'righttoe',
+        'righttoebase',
+        'mixamorigrighttoebase',
+        'toer',
+        'jbiprtoebase',
+        '右つま先',
+      ],
+      leftShoulder: ['leftshoulder', 'mixamorigleftshoulder', 'shoulderl', 'jbiplshoulder', '左肩'],
+      leftUpperArm: [
+        'leftarm',
+        'leftupperarm',
+        'mixamorigleftarm',
+        'arml',
+        'jbiplupperarm',
+        '左腕',
+      ],
+      leftLowerArm: [
+        'leftforearm',
+        'leftlowerarm',
+        'mixamorigleftforearm',
+        'elbowl',
+        'jbipllowerarm',
+        '左ひじ',
+        '左肘',
+      ],
+      leftHand: ['lefthand', 'mixamoriglefthand', 'wristl', 'jbiplhand', '左手首'],
+      rightShoulder: [
+        'rightshoulder',
+        'mixamorigrightshoulder',
+        'shoulderr',
+        'jbiprshoulder',
+        '右肩',
+      ],
+      rightUpperArm: [
+        'rightarm',
+        'rightupperarm',
+        'mixamorigrightarm',
+        'armr',
+        'jbiprupperarm',
+        '右腕',
+      ],
+      rightLowerArm: [
+        'rightforearm',
+        'rightlowerarm',
+        'mixamorigrightforearm',
+        'elbowr',
+        'jbiprlowerarm',
+        '右ひじ',
+        '右肘',
+      ],
+      rightHand: ['righthand', 'mixamorigrighthand', 'wristr', 'jbiprhand', '右手首'],
+      leftEye: ['lefteye', 'eyel', 'jbipclefteye', '左目'],
+      rightEye: ['righteye', 'eyer', 'jbipcrighteye', '右目'],
       jaw: ['jaw', 'あご', '顎'],
     };
     const normalize = (name: string) =>
@@ -2322,7 +2583,9 @@ export class BrowserModel3dEngine implements ConversionEngine {
         .replace(/[^a-z0-9\u3040-\u30ff\u3400-\u9fff]/g, '');
     const normalizedNodes = nodes.map((node, index) => ({
       index,
-      name: normalize(node.name ?? ''),
+      names: [node.name, ...(node.aliases ?? [])]
+        .map((name) => normalize(name ?? ''))
+        .filter(Boolean),
     }));
     const parents = new Map<number, number>();
     nodes.forEach((node, parentIndex) => {
@@ -2368,26 +2631,28 @@ export class BrowserModel3dEngine implements ConversionEngine {
     const mapped: Record<string, { node: number }> = {};
     const usedNodes = new Set<number>();
     for (const [humanBone, names] of Object.entries(aliases)) {
-      const normalizedAliases = names.map(normalize);
+      const normalizedAliases = [`VRM_${humanBone}`, ...names].map(normalize);
       const parentCandidates = (expectedParents[humanBone] ?? [])
         .map((bone) => mapped[bone]?.node)
         .filter((index): index is number => index !== undefined);
       let best: { index: number; score: number } | undefined;
       for (const candidate of normalizedNodes) {
-        if (!candidate.name || usedNodes.has(candidate.index)) continue;
+        if (!candidate.names.length || usedNodes.has(candidate.index)) continue;
         let score = 0;
-        normalizedAliases.forEach((alias, aliasIndex) => {
-          if (candidate.name === alias) score = Math.max(score, 240 - aliasIndex * 3);
-          else if (candidate.name.endsWith(alias) || candidate.name.startsWith(alias)) {
-            score = Math.max(score, 125 - aliasIndex);
-          }
-        });
+        for (const candidateName of candidate.names) {
+          normalizedAliases.forEach((alias, aliasIndex) => {
+            if (candidateName === alias) score = Math.max(score, 240 - aliasIndex * 3);
+            else if (candidateName.endsWith(alias) || candidateName.startsWith(alias)) {
+              score = Math.max(score, 125 - aliasIndex);
+            }
+          });
+        }
         if (!score) continue;
-        if (helperBonePattern.test(candidate.name)) score -= 180;
+        if (candidate.names.some((name) => helperBonePattern.test(name))) score -= 180;
         const isLeftBone = humanBone.startsWith('left');
         const isRightBone = humanBone.startsWith('right');
-        if (isLeftBone && /(右|right)/.test(candidate.name)) score -= 300;
-        if (isRightBone && /(左|left)/.test(candidate.name)) score -= 300;
+        if (isLeftBone && candidate.names.some((name) => /(右|right)/.test(name))) score -= 300;
+        if (isRightBone && candidate.names.some((name) => /(左|left)/.test(name))) score -= 300;
         if (parentCandidates.length) {
           if (parentCandidates.some((parent) => isDescendantOf(candidate.index, parent))) {
             score += 80;
