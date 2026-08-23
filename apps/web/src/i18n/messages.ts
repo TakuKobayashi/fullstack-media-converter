@@ -231,6 +231,8 @@ export const messages = {
       cancelPreview: 'Cancel',
       applyTransparency: 'Apply to this file',
       resetTransparency: 'Reset to defaults',
+      transparencySettings: 'Transparency settings',
+      transparencyScrollHint: 'Scroll down to view all transparency settings.',
       defaultTransparency: 'Default values',
       currentTransparency:
         'Alpha {{transparent}}–{{opaque}} · MASK {{cutout}}% · ZWrite {{zwrite}}%',
@@ -518,6 +520,8 @@ export const messages = {
       cancelPreview: 'キャンセル',
       applyTransparency: 'このファイルに適用',
       resetTransparency: '初期値に戻す',
+      transparencySettings: '透過設定',
+      transparencyScrollHint: '下にスクロールして、すべての透過設定を確認できます。',
       defaultTransparency: '初期値',
       currentTransparency: 'Alpha {{transparent}}–{{opaque}}・MASK {{cutout}}%・ZWrite {{zwrite}}%',
       currentTransparencyPortable: 'Alpha {{transparent}}–{{opaque}}・MASK {{cutout}}%',

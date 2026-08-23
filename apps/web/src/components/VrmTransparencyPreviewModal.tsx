@@ -351,7 +351,7 @@ export default function VrmTransparencyPreviewModal({
               </div>
             )}
             {openList === 'bones' && (
-              <div className={s.previewInspectionPanel}>
+              <div className={`${s.previewInspectionPanel} ${s.previewInspectionPanelFill}`}>
                 {bones.length ? (
                   <div className={s.previewBoneList}>
                     {bones.map((name) => (
@@ -453,32 +453,42 @@ export default function VrmTransparencyPreviewModal({
                 )}
               </div>
             )}
-            {isMmd &&
-              controls
-                .filter(({ key }) => job.outputFormat === 'vrm' || !VRM_ONLY_SETTING_KEYS.has(key))
-                .map(({ key, min, max, step }) => (
-                  <label className={s.previewControl} key={key}>
-                    <span>{t(`model3d.transparency.${key}`)}</span>
-                    <div>
-                      <input
-                        type="range"
-                        min={min}
-                        max={max}
-                        step={step}
-                        value={draft[key]}
-                        onChange={(event) => update(key, Number(event.target.value))}
-                      />
-                      <input
-                        type="number"
-                        min={min}
-                        max={max}
-                        step={step}
-                        value={draft[key]}
-                        onChange={(event) => update(key, Number(event.target.value))}
-                      />
-                    </div>
-                  </label>
-                ))}
+            {isMmd && (
+              <details className={s.previewTransparencyPanel}>
+                <summary>{t('model3d.transparencySettings')}</summary>
+                <div className={s.previewTransparencyControls}>
+                  <p className={s.previewScrollHint}>{t('model3d.transparencyScrollHint')}</p>
+                  {controls
+                    .filter(
+                      ({ key }) =>
+                        job.outputFormat === 'vrm' || !VRM_ONLY_SETTING_KEYS.has(key),
+                    )
+                    .map(({ key, min, max, step }) => (
+                      <label className={s.previewControl} key={key}>
+                        <span>{t(`model3d.transparency.${key}`)}</span>
+                        <div>
+                          <input
+                            type="range"
+                            min={min}
+                            max={max}
+                            step={step}
+                            value={draft[key]}
+                            onChange={(event) => update(key, Number(event.target.value))}
+                          />
+                          <input
+                            type="number"
+                            min={min}
+                            max={max}
+                            step={step}
+                            value={draft[key]}
+                            onChange={(event) => update(key, Number(event.target.value))}
+                          />
+                        </div>
+                      </label>
+                    ))}
+                </div>
+              </details>
+            )}
           </div>
         </div>
         <footer className={s.previewFooter}>

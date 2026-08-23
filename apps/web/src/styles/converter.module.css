@@ -354,13 +354,16 @@
   backdrop-filter: blur(8px);
 }
 .previewModal {
+  display: flex;
   width: min(1120px, 100%);
+  height: min(760px, calc(100vh - 40px));
   max-height: calc(100vh - 40px);
-  overflow: auto;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   background: var(--navy-2);
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
+  flex-direction: column;
 }
 .previewHeader,
 .previewFooter {
@@ -389,11 +392,12 @@
 .previewBody {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
-  min-height: 560px;
+  min-height: 0;
+  flex: 1;
 }
 .previewStage {
   position: relative;
-  min-height: 480px;
+  min-height: 0;
   overflow: hidden;
 }
 .previewCanvasHost {
@@ -420,9 +424,12 @@
   color: var(--coral);
 }
 .previewSettings {
+  display: flex;
+  min-height: 0;
   padding: 18px;
-  overflow: auto;
+  overflow: hidden;
   border-left: 1px solid var(--border);
+  flex-direction: column;
 }
 
 .previewInspectionTabs {
@@ -452,6 +459,12 @@
   padding-bottom: 18px;
   border-bottom: 1px solid var(--border);
 }
+.previewInspectionPanelFill {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
 .previewInspectionPanel > p {
   margin-bottom: 10px;
   color: var(--muted);
@@ -476,7 +489,9 @@
   overflow: auto;
 }
 .previewBoneList {
-  max-height: 320px;
+  max-height: none;
+  min-height: 0;
+  flex: 1;
   flex-direction: column;
   flex-wrap: nowrap;
 }
@@ -506,6 +521,38 @@
   margin-bottom: 17px;
   color: var(--cream);
   font-size: 0.78rem;
+}
+.previewTransparencyPanel {
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.previewTransparencyPanel summary {
+  padding: 11px 12px;
+  color: var(--cream);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.previewTransparencyControls {
+  max-height: 280px;
+  padding: 8px 12px 0;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  border-top: 1px solid var(--border);
+  scrollbar-gutter: stable;
+}
+.previewScrollHint {
+  position: sticky;
+  z-index: 1;
+  top: -8px;
+  margin: -8px -12px 12px;
+  padding: 8px 12px;
+  color: var(--muted);
+  background: var(--navy-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.72rem;
 }
 .previewControl > span {
   display: block;
@@ -680,13 +727,19 @@
 }
 
 @media (max-width: 640px) {
+  .previewModal {
+    height: auto;
+    overflow: auto;
+  }
   .previewBody {
     grid-template-columns: 1fr;
+    flex: none;
   }
   .previewStage {
     min-height: 360px;
   }
   .previewSettings {
+    overflow: visible;
     border-left: 0;
     border-top: 1px solid var(--border);
   }
