@@ -42,6 +42,7 @@ import { TGALoader } from 'three/examples/jsm/loaders/TGALoader.js';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
+import { VRMLoaderPlugin, VRMUtils, type VRM } from '@pixiv/three-vrm';
 import JSZip from 'jszip';
 import {
   FallbackCore,
@@ -198,6 +199,8 @@ export interface Model3dSourceInspection {
 }
 
 export class BrowserModel3dEngine implements ConversionEngine {
+  private readonly loadedVrms = new WeakMap<Object3D, VRM>();
+
   private readonly textureAlphaHistogramCache = new WeakMap<Texture, Uint32Array>();
 
   canConvert(inputFormat: InputFormat, outputFormat: OutputFormat): boolean {
@@ -357,6 +360,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       objectUrls.forEach((url) => URL.revokeObjectURL(url));
       throw error;
     }
+    const loadedVrm = this.loadedVrms.get(root);
     // Preview animations come exclusively from the separately listed animation assets.
     root.animations = [];
     const loadedAnimationRoots = new Map<File, Object3D>();
@@ -492,6 +496,8 @@ export class BrowserModel3dEngine implements ConversionEngine {
       initialExpressionNodeX.forEach((weight, node) => {
         node.position.x = weight;
       });
+      loadedVrm?.expressionManager?.resetValues();
+      loadedVrm?.expressionManager?.update();
     };
     const outputFormat = job.outputFormat as Model3dOutputFormat;
     const previewAnimations = model3dOutputSupportsAnimations(outputFormat);
@@ -613,7 +619,13 @@ export class BrowserModel3dEngine implements ConversionEngine {
       boneOverlay,
       animations: previewAnimations ? [...animationClips.keys()] : [],
       expressions: previewExpressions
-        ? [...new Set([...expressionTargets.keys(), ...expressionNodes.keys()])]
+        ? [
+            ...new Set([
+              ...Object.keys(loadedVrm?.expressionManager?.expressionMap ?? {}),
+              ...expressionTargets.keys(),
+              ...expressionNodes.keys(),
+            ]),
+          ]
         : [],
       bones: previewBones ? [...boneObjects.keys()] : [],
       vrmHumanBones,
@@ -639,6 +651,8 @@ export class BrowserModel3dEngine implements ConversionEngine {
       },
       selectExpression: (name) => {
         resetExpressions();
+        loadedVrm?.expressionManager?.setValue(name, 1);
+        loadedVrm?.expressionManager?.update();
         for (const { mesh, index } of expressionTargets.get(name) ?? []) {
           if (mesh.morphTargetInfluences) mesh.morphTargetInfluences[index] = 1;
         }
@@ -663,6 +677,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       },
       update: (deltaSeconds) => {
         mixer.update(deltaSeconds);
+        loadedVrm?.update(deltaSeconds);
         updateBoneOverlay();
       },
       updateTransparency,
@@ -1126,6 +1141,15 @@ export class BrowserModel3dEngine implements ConversionEngine {
   private describeVrmHumanBones(
     root: Object3D,
   ): Partial<Record<VrmRequiredHumanBone, string>> {
+    const loadedVrm = this.loadedVrms.get(root);
+    if (loadedVrm) {
+      return Object.fromEntries(
+        VRM_REQUIRED_HUMAN_BONES.flatMap((humanBone) => {
+          const node = loadedVrm.humanoid.getRawBoneNode(humanBone);
+          return node ? [[humanBone, node.name]] : [];
+        }),
+      );
+    }
     const objects: Object3D[] = [];
     root.traverse((object) => objects.push(object));
     const indices = new Map(objects.map((object, index) => [object, index]));
@@ -1201,6 +1225,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       case 'vrm':
       case 'vrma': {
         const loader = new GLTFLoader(manager);
+        if (format === 'vrm') loader.register((parser) => new VRMLoaderPlugin(parser));
         const ktx2Handler = manager.getHandler('texture.ktx2');
         if (ktx2Handler instanceof KTX2Loader) loader.setKTX2Loader(ktx2Handler);
         return new Promise((resolve, reject) =>
@@ -1208,8 +1233,14 @@ export class BrowserModel3dEngine implements ConversionEngine {
             format === 'gltf' ? text() : buffer,
             '',
             (gltf) => {
-              gltf.scene.animations = gltf.animations;
-              resolve(gltf.scene);
+              const vrm = format === 'vrm' ? (gltf.userData.vrm as VRM | undefined) : undefined;
+              const scene = vrm?.scene ?? gltf.scene;
+              if (vrm) {
+                VRMUtils.rotateVRM0(vrm);
+                this.loadedVrms.set(scene, vrm);
+              }
+              scene.animations = gltf.animations;
+              resolve(scene);
             },
             reject,
           ),

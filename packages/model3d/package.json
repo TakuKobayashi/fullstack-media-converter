@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@convertmate/shared": "workspace:*",
+    "@pixiv/three-vrm": "^3.5.5",
     "@yohawing/three-mmd-loader": "^0.8.2",
     "ag-psd": "^31.0.2",
     "jszip": "^3.10.1",
