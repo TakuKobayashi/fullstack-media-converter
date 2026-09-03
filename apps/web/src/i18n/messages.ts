@@ -171,7 +171,8 @@ export const messages = {
       suffix: 'Converter',
       subtitle: 'Convert {{inputs}} models to {{outputs}} without uploading them.',
       drop: 'Drop models and related files here',
-      dropSub: '{{formats}} · Include MTL, BIN, and texture files together',
+      dropSub:
+        '{{formats}} · Drop a folder to find models, MTL, BIN, animations, and textures recursively',
       auxiliary: '{{count}} related file(s) detected',
       relatedTitle: 'Related files accepted for the selected input:',
       addRelated: 'Add related files',
@@ -461,7 +462,8 @@ export const messages = {
       suffix: '変換',
       subtitle: '{{inputs}}を{{outputs}}へ、アップロードせずに変換できます。',
       drop: '3Dモデルと関連ファイルをここにドロップ',
-      dropSub: '{{formats}}・MTL、BIN、テクスチャも一緒に追加してください',
+      dropSub:
+        '{{formats}}・フォルダをドロップするとモデル、MTL、BIN、アニメーション、テクスチャを再帰探索します',
       auxiliary: '関連ファイルを{{count}}件検出しました',
       relatedTitle: '選択した入力形式で追加できる関連ファイル：',
       addRelated: '関連ファイルを追加',

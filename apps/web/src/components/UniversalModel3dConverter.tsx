@@ -73,16 +73,88 @@ function relatedStem(path: string): string {
   );
 }
 
-function matchReferencedFiles(referencedPaths: string[], files: File[]): File[] {
-  const references = new Set(referencedPaths.map(normalizeRelatedPath));
-  const basenames = new Set([...references].map(relatedBasename));
-  const stems = new Set([...references].map(relatedStem));
-  return files.filter((file) => {
-    const path = normalizeRelatedPath(file.webkitRelativePath || file.name);
-    return (
-      references.has(path) || basenames.has(relatedBasename(path)) || stems.has(relatedStem(path))
+function matchReferencedFiles(
+  source: File | undefined,
+  referencedPaths: string[],
+  files: File[],
+): File[] {
+  const sourcePath = normalizeRelatedPath(source?.webkitRelativePath || source?.name || '');
+  const sourceDirectory = sourcePath.includes('/')
+    ? sourcePath.slice(0, sourcePath.lastIndexOf('/'))
+    : '';
+  const selected = new Set<File>();
+  for (const referencedPath of referencedPaths) {
+    const reference = normalizeRelatedPath(referencedPath);
+    const expectedPath = sourceDirectory ? `${sourceDirectory}/${reference}` : reference;
+    const exact = files.filter((file) => {
+      const path = normalizeRelatedPath(file.webkitRelativePath || file.name);
+      return path === expectedPath || path.endsWith(`/${expectedPath}`);
+    });
+    if (exact.length) {
+      exact.forEach((file) => selected.add(file));
+      continue;
+    }
+    const basename = relatedBasename(reference);
+    const stem = relatedStem(reference);
+    files.forEach((file) => {
+      const path = normalizeRelatedPath(file.webkitRelativePath || file.name);
+      if (path === reference || path.endsWith(`/${reference}`)) selected.add(file);
+      else if (relatedBasename(path) === basename || relatedStem(path) === stem) selected.add(file);
+    });
+  }
+  return [...selected];
+}
+
+interface DroppedFileEntry {
+  isFile: boolean;
+  isDirectory: boolean;
+  name: string;
+  file?: (success: (file: File) => void, error?: (error: DOMException) => void) => void;
+  createReader?: () => {
+    readEntries: (
+      success: (entries: DroppedFileEntry[]) => void,
+      error?: (error: DOMException) => void,
+    ) => void;
+  };
+}
+
+function withRelativePath(file: File, path: string): File {
+  if (file.webkitRelativePath) return file;
+  Object.defineProperty(file, 'webkitRelativePath', { configurable: true, value: path });
+  return file;
+}
+
+async function readDroppedEntry(entry: DroppedFileEntry, parentPath = ''): Promise<File[]> {
+  const path = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+  if (entry.isFile && entry.file) {
+    return new Promise((resolve, reject) =>
+      entry.file!((file) => resolve([withRelativePath(file, path)]), reject),
     );
-  });
+  }
+  if (!entry.isDirectory || !entry.createReader) return [];
+  const reader = entry.createReader();
+  const children: DroppedFileEntry[] = [];
+  while (true) {
+    const batch = await new Promise<DroppedFileEntry[]>((resolve, reject) =>
+      reader.readEntries(resolve, reject),
+    );
+    if (!batch.length) break;
+    children.push(...batch);
+  }
+  return (await Promise.all(children.map((child) => readDroppedEntry(child, path)))).flat();
+}
+
+async function filesFromDrop(dataTransfer: DataTransfer): Promise<File[]> {
+  const entries = Array.from(dataTransfer.items)
+    .map((item) =>
+      (
+        item as unknown as { webkitGetAsEntry?: () => DroppedFileEntry | null }
+      ).webkitGetAsEntry?.(),
+    )
+    .filter((entry): entry is DroppedFileEntry => Boolean(entry));
+  return entries.length
+    ? (await Promise.all(entries.map((entry) => readDroppedEntry(entry)))).flat()
+    : Array.from(dataTransfer.files);
 }
 
 function relatedExtensionsFor(format: InputFormat): readonly string[] {
@@ -282,7 +354,11 @@ export default function UniversalModel3dConverter() {
         jobs.map((job) => [
           job.id,
           relatedExtensionsFor(job.inputFormat).length > 0
-            ? matchReferencedFiles(textureReferences[job.id] ?? [], auxiliaryFiles)
+            ? matchReferencedFiles(
+                job.file.source instanceof File ? job.file.source : undefined,
+                textureReferences[job.id] ?? [],
+                auxiliaryFiles,
+              )
             : [],
         ]),
       ) as Record<string, File[]>,
@@ -366,6 +442,18 @@ export default function UniversalModel3dConverter() {
       setInspectingFiles(false);
     },
     [addRelatedFiles, targetFormat],
+  );
+
+  const addDroppedFiles = useCallback(
+    async (dataTransfer: DataTransfer) => {
+      setInspectingFiles(true);
+      try {
+        await addFiles(await filesFromDrop(dataTransfer));
+      } finally {
+        setInspectingFiles(false);
+      }
+    },
+    [addFiles],
   );
 
   useEffect(() => {
@@ -720,7 +808,7 @@ export default function UniversalModel3dConverter() {
           onDrop={(event) => {
             event.preventDefault();
             setDragging(false);
-            addFiles(event.dataTransfer.files);
+            void addDroppedFiles(event.dataTransfer);
           }}
           onClick={() => inputRef.current?.click()}
           role="button"
