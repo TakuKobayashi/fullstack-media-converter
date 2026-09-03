@@ -2,14 +2,12 @@
 import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
 import BatchConverter from '@/components/BatchConverter';
-import { BrowserImageEngine } from '@convertmate/image';
 import s from '@/styles/converter.module.css';
 
 // For EXIF export we use a pass-through "engine" that reads exif and returns JSON
 import type {
   ConversionEngine,
   ConversionJob,
-  ConversionOptions,
   InputFormat,
   OutputFormat,
 } from '@convertmate/shared';

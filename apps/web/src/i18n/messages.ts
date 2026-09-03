@@ -6,15 +6,12 @@ export const messages = {
       video: 'Video Converter',
       audio: 'Audio Converter',
       model3d: '3D Model Converter',
-      exif: 'EXIF',
-      beta: 'Beta',
     },
     footer: {
       image: 'Image Converter',
       video: 'Video Converter',
       audio: 'Audio Converter',
       model3d: '3D Model Converter',
-      exif: 'Export EXIF',
       privacy: 'All processing happens in your browser · No uploads',
     },
     home: {
@@ -27,7 +24,6 @@ export const messages = {
       videoCta: 'Convert videos',
       audioCta: 'Convert audio',
       model3dCta: 'Convert 3D models',
-      beta: 'Beta',
       sectionEyebrow: 'Choose a workspace',
       sectionTitle: 'Choose the right converter for your files',
       sectionIntro:
@@ -71,7 +67,6 @@ export const messages = {
       exifLink: 'Open EXIF Export',
     },
     common: {
-      ad: 'Advertisement',
       quality: 'Quality',
       threads: 'Threads',
       converting: 'Converting…',
@@ -173,8 +168,6 @@ export const messages = {
       drop: 'Drop models and related files here',
       dropSub:
         '{{formats}} · Drop a folder to find models, MTL, BIN, animations, and textures recursively',
-      auxiliary: '{{count}} related file(s) detected',
-      relatedTitle: 'Related files accepted for the selected input:',
       addRelated: 'Add related files',
       linkedTextures: 'Imported related files referenced by this model',
       linkedTextureCount: '{{count}} file(s)',
@@ -286,14 +279,6 @@ export const messages = {
         'Fully private — processed in your browser',
       ],
     },
-    titles: {
-      home: 'Fullstack Media Converter — Private Media Converter',
-      image: 'Universal Image Converter | Fullstack Media Converter',
-      video: 'Universal Video Converter | Fullstack Media Converter',
-      audio: 'Universal Audio Converter | Fullstack Media Converter',
-      model3d: '3D Model Converter | Fullstack Media Converter',
-      exif: 'EXIF Export | Fullstack Media Converter',
-    },
   },
   ja: {
     nav: {
@@ -302,15 +287,12 @@ export const messages = {
       video: '動画変換',
       audio: '音声変換',
       model3d: '3Dモデル変換',
-      exif: 'EXIF',
-      beta: 'ベータ',
     },
     footer: {
       image: '画像変換',
       video: '動画変換',
       audio: '音声変換',
       model3d: '3Dモデル変換',
-      exif: 'EXIF書き出し',
       privacy: 'すべてブラウザ内で処理・アップロード不要',
     },
     home: {
@@ -323,7 +305,6 @@ export const messages = {
       videoCta: '動画を変換する',
       audioCta: '音声を変換する',
       model3dCta: '3Dモデルを変換する',
-      beta: 'ベータ',
       sectionEyebrow: '変換ツールを選択',
       sectionTitle: '用途に合わせて選べる変換ツール',
       sectionIntro:
@@ -366,7 +347,6 @@ export const messages = {
       exifLink: 'EXIF書き出しを開く',
     },
     common: {
-      ad: '広告',
       quality: '画質',
       threads: '同時処理数',
       converting: '変換中…',
@@ -464,8 +444,6 @@ export const messages = {
       drop: '3Dモデルと関連ファイルをここにドロップ',
       dropSub:
         '{{formats}}・フォルダをドロップするとモデル、MTL、BIN、アニメーション、テクスチャを再帰探索します',
-      auxiliary: '関連ファイルを{{count}}件検出しました',
-      relatedTitle: '選択した入力形式で追加できる関連ファイル：',
       addRelated: '関連ファイルを追加',
       linkedTextures: 'このモデルが参照している取り込み済み関連ファイル',
       linkedTextureCount: '{{count}}件',
@@ -573,14 +551,6 @@ export const messages = {
         'GPS、撮影日時、カメラ情報などに対応',
         'アップロードせずブラウザ内で安全に処理',
       ],
-    },
-    titles: {
-      home: 'Fullstack Media Converter — 画像・動画・音声をブラウザで一括変換',
-      image: '画像変換ツール — 一括・アップロード不要 | Fullstack Media Converter',
-      video: '動画変換ツール | Fullstack Media Converter',
-      audio: '音声変換ツール | Fullstack Media Converter',
-      model3d: '3Dモデル変換ツール | Fullstack Media Converter',
-      exif: 'EXIF情報の確認・一括書き出し | Fullstack Media Converter',
     },
   },
 } as const;

@@ -1,4 +1,4 @@
-import { ConversionJob, ConversionEngine, ConversionOptions, JobStatus } from '@convertmate/shared';
+import { ConversionJob, ConversionEngine, ConversionOptions } from '@convertmate/shared';
 
 export type QueueEventType = 'job:start' | 'job:progress' | 'job:done' | 'job:error' | 'queue:done';
 export type QueueListener = (event: { type: QueueEventType; job?: ConversionJob }) => void;
