@@ -1075,7 +1075,13 @@ export class BrowserModel3dEngine implements ConversionEngine {
     root.traverse((object) => objects.push(object));
     const find = (...aliases: string[]) => {
       const names = aliases.map(normalize);
-      return objects.find((object) => names.includes(normalize(object.name)));
+      return objects.find((object) =>
+        [
+          object.name,
+          object.userData.mmdBoneName as string | undefined,
+          object.userData.mmdEnglishBoneName as string | undefined,
+        ].some((name) => name && names.includes(normalize(name))),
+      );
     };
     const center = find('センター', 'center');
     const anatomicalHips = find('腰', 'waist', 'hips', 'pelvis', 'J_Bip_C_Hips');
@@ -3121,6 +3127,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       leftUpperLeg: [
         'leftupleg',
         'leftupperleg',
+        'uplegl',
         'mixamorigleftupleg',
         'upperlegl',
         'thighl',
@@ -3161,6 +3168,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       rightUpperLeg: [
         'rightupleg',
         'rightupperleg',
+        'uplegr',
         'mixamorigrightupleg',
         'upperlegr',
         'thighr',
