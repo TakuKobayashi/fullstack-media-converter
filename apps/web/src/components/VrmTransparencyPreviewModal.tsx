@@ -289,7 +289,7 @@ export default function VrmTransparencyPreviewModal({
             </div>
             {openList === 'animations' && (
               <div className={s.previewInspectionPanel}>
-                {animations.length ? (
+                {animations.length > 0 ? (
                   <>
                     <select
                       value={selectedAnimation}
@@ -320,7 +320,7 @@ export default function VrmTransparencyPreviewModal({
                 ) : (
                   <p>
                     {t(
-                      animationSources.length
+                      animationSources.length > 0
                         ? 'model3d.noCompatibleAnimations'
                         : 'model3d.noAnimations',
                     )}
@@ -330,7 +330,7 @@ export default function VrmTransparencyPreviewModal({
             )}
             {openList === 'expressions' && (
               <div className={s.previewInspectionPanel}>
-                {expressions.length ? (
+                {expressions.length > 0 ? (
                   <div className={s.previewExpressionList}>
                     {expressions.map((name) => (
                       <button
@@ -363,7 +363,7 @@ export default function VrmTransparencyPreviewModal({
             )}
             {openList === 'bones' && (
               <div className={`${s.previewInspectionPanel} ${s.previewInspectionPanelFill}`}>
-                {bones.length ? (
+                {bones.length > 0 ? (
                   <div className={s.previewBoneList}>
                     {bones.map((name) => (
                       <div
@@ -453,7 +453,7 @@ export default function VrmTransparencyPreviewModal({
                         setVrmHumanBones(next);
                         setBoneDraft({});
                         setBoneAssignmentWarning(
-                          remaining.length ? t('model3d.assignRemainingVrmParts') : '',
+                          remaining.length > 0 ? t('model3d.assignRemainingVrmParts') : '',
                         );
                         onHumanoidAssignmentsApply(assignments, remaining);
                       }}

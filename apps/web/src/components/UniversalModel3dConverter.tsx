@@ -90,7 +90,7 @@ function matchReferencedFiles(
       const path = normalizeRelatedPath(file.webkitRelativePath || file.name);
       return path === expectedPath || path.endsWith(`/${expectedPath}`);
     });
-    if (exact.length) {
+    if (exact.length > 0) {
       exact.forEach((file) => selected.add(file));
       continue;
     }
@@ -138,7 +138,7 @@ async function readDroppedEntry(entry: DroppedFileEntry, parentPath = ''): Promi
     const batch = await new Promise<DroppedFileEntry[]>((resolve, reject) =>
       reader.readEntries(resolve, reject),
     );
-    if (!batch.length) break;
+    if (batch.length === 0) break;
     children.push(...batch);
   }
   return (await Promise.all(children.map((child) => readDroppedEntry(child, path)))).flat();
@@ -152,7 +152,7 @@ async function filesFromDrop(dataTransfer: DataTransfer): Promise<File[]> {
       ).webkitGetAsEntry?.(),
     )
     .filter((entry): entry is DroppedFileEntry => Boolean(entry));
-  return entries.length
+  return entries.length > 0
     ? (await Promise.all(entries.map((entry) => readDroppedEntry(entry)))).flat()
     : Array.from(dataTransfer.files);
 }
@@ -370,6 +370,7 @@ export default function UniversalModel3dConverter() {
       const extension = `.${file.name.split('.').pop()?.toLowerCase() ?? ''}`;
       return (MODEL3D_AUXILIARY_EXTENSIONS as readonly string[]).includes(extension);
     });
+    if (related.length === 0) return;
     setAuxiliaryFiles((current) => {
       const merged = new Map(
         [...current, ...related].map((file) => [file.webkitRelativePath || file.name, file]),
@@ -381,6 +382,7 @@ export default function UniversalModel3dConverter() {
   const addFiles = useCallback(
     async (list: FileList | File[]) => {
       const files = Array.from(list);
+      if (files.length === 0) return;
       const primary = files.filter((file) => {
         const extension = `.${file.name.split('.').pop()?.toLowerCase() ?? ''}`;
         return (MODEL3D_INPUT_EXTENSIONS as readonly string[]).includes(extension);
@@ -390,6 +392,7 @@ export default function UniversalModel3dConverter() {
         return (MODEL3D_AUXILIARY_EXTENSIONS as readonly string[]).includes(extension);
       });
       addRelatedFiles(auxiliary);
+      if (primary.length === 0) return;
       setInspectingFiles(true);
       const inspected = await Promise.all(
         primary.map(async (file) => {
@@ -444,16 +447,6 @@ export default function UniversalModel3dConverter() {
     [addRelatedFiles, targetFormat],
   );
 
-  const addModelRelatedFiles = useCallback(
-    (list: FileList | File[]) => {
-      const files = Array.from(list);
-      addRelatedFiles(files);
-      const animations = files.filter((file) => /\.(?:vmd|vrma)$/i.test(file.name));
-      if (animations.length) void addFiles(animations);
-    },
-    [addFiles, addRelatedFiles],
-  );
-
   const addDroppedFiles = useCallback(
     async (dataTransfer: DataTransfer) => {
       setInspectingFiles(true);
@@ -469,7 +462,7 @@ export default function UniversalModel3dConverter() {
   useEffect(() => {
     let cancelled = false;
     const candidates = jobs.filter((job) => relatedExtensionsFor(job.inputFormat).length > 0);
-    if (!candidates.length) return;
+    if (candidates.length === 0) return;
     void Promise.all(
       candidates.map(async (job) => {
         try {
@@ -591,7 +584,7 @@ export default function UniversalModel3dConverter() {
       if (vrmValidationsRef.current[job.id]?.signature === signature) return [];
       return [{ job, signature, jobAuxiliaryFiles }];
     });
-    if (!pendingChecks.length) return;
+    if (pendingChecks.length === 0) return;
     setVrmValidations((current) => {
       const next = { ...current };
       for (const { job, signature } of pendingChecks) {
@@ -643,7 +636,7 @@ export default function UniversalModel3dConverter() {
         canConvert(job.inputFormat, targetFormat) &&
         (targetFormat !== 'vrm' || vrmValidations[job.id]?.status === 'valid'),
     );
-    if (!pending.length) return;
+    if (pending.length === 0) return;
     setPreviewJob(undefined);
     setModelRunning(true);
     const transparencyByFileName = Object.fromEntries(
@@ -716,7 +709,7 @@ export default function UniversalModel3dConverter() {
 
   const convertAnimations = useCallback(async () => {
     const pendingAnimations = animationItems.filter((item) => item.status === 'pending');
-    if (!pendingAnimations.length) return;
+    if (pendingAnimations.length === 0) return;
     setAnimationRunning(true);
     for (const item of pendingAnimations) {
       setAnimationItems((current) =>
@@ -763,7 +756,7 @@ export default function UniversalModel3dConverter() {
     if (modelRunning) queueRef.current?.abort();
     jobs.forEach(revokeJobOutputs);
     setJobs([]);
-    if (!animationItems.length) setAuxiliaryFiles([]);
+    if (animationItems.length === 0) setAuxiliaryFiles([]);
     setPreviewFailures({});
     setAppliedTransparencySettings({});
     setVrmValidations({});
@@ -778,7 +771,7 @@ export default function UniversalModel3dConverter() {
       item.outputs?.forEach((output) => URL.revokeObjectURL(output.url)),
     );
     setAnimationItems([]);
-    if (!jobs.length) setAuxiliaryFiles([]);
+    if (jobs.length === 0) setAuxiliaryFiles([]);
     setPreviewJob(undefined);
   };
 
@@ -838,7 +831,7 @@ export default function UniversalModel3dConverter() {
             onChange={(event) => {
               const files = Array.from(event.target.files ?? []);
               event.target.value = '';
-              if (files.length) void addFiles(files);
+              addFiles(files);
             }}
           />
         </div>
@@ -1035,7 +1028,7 @@ export default function UniversalModel3dConverter() {
                     />
                   </div>
                   {job.status === 'done' &&
-                    (job.outputs?.length
+                    (job.outputs && job.outputs.length > 0
                       ? job.outputs
                       : job.resultUrl
                         ? [
@@ -1098,7 +1091,7 @@ export default function UniversalModel3dConverter() {
                       onDrop={(event) => {
                         event.preventDefault();
                         setRelatedDraggingJobId(undefined);
-                        addModelRelatedFiles(event.dataTransfer.files);
+                        addFiles(event.dataTransfer.files);
                       }}
                     >
                       <span>{t('model3d.dropRelatedForModel')}</span>
@@ -1112,8 +1105,9 @@ export default function UniversalModel3dConverter() {
                         hidden
                         disabled={modelRunning}
                         onChange={(event) => {
-                          if (event.target.files) addModelRelatedFiles(event.target.files);
+                          const files = Array.from(event.target.files ?? []);
                           event.target.value = '';
+                          addFiles(files);
                         }}
                       />
                     </label>
@@ -1147,7 +1141,7 @@ export default function UniversalModel3dConverter() {
                       {t('model3d.vrmPreviewIncompatible', {
                         error: vrmValidations[job.id]?.error ?? '',
                       })}
-                      {humanoidOverrides[job.id]?.missing.length
+                      {(humanoidOverrides[job.id]?.missing.length ?? 0) > 0
                         ? ` ${t('model3d.missingVrmParts', { parts: humanoidOverrides[job.id].missing.map((part) => t(`model3d.vrmBone.${part}`)).join(', ') })}`
                         : ''}
                     </p>
@@ -1274,7 +1268,7 @@ export default function UniversalModel3dConverter() {
                 ...current,
                 [previewJob.id]: { assignments, missing },
               }));
-              if (!missing.length) {
+              if (missing.length === 0) {
                 setVrmValidations((current) => ({
                   ...current,
                   [previewJob.id]: {

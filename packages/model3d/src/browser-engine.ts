@@ -307,7 +307,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
           blobs.push({ name: `${baseName}.${job.outputFormat}`, blob });
         }
       }
-      if (!blobs.length) throw new Error('No model or animation data was found to export.');
+      if (blobs.length === 0) throw new Error('No model or animation data was found to export.');
       options.onProgress?.(95);
       const outputs = blobs.map(({ name, blob }) => ({
         name,
@@ -401,7 +401,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       if (clip) {
         const previewClip = this.retargetPreviewClip(animationRoot, root, clip);
         previewClip.name = animationSource.clipName;
-        if (previewClip.tracks.length) root.animations.push(previewClip);
+        if (previewClip.tracks.length > 0) root.animations.push(previewClip);
       }
     }
     const isMmd = job.inputFormat === 'pmx' || job.inputFormat === 'pmd';
@@ -844,7 +844,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     const objectUrlByFile = new Map<File, string>();
     const decodedPsdUrlByFile = new Map<File, string>();
     const psdFiles = files.filter((file) => file.name.toLowerCase().endsWith('.psd'));
-    if (psdFiles.length) {
+    if (psdFiles.length > 0) {
       const { readPsd } = await import('ag-psd');
       for (const file of psdFiles) {
         try {
@@ -1574,7 +1574,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       aliases.map((alias) => animation.boneTracks[alias]).find(Boolean);
     definitions.forEach((definition) => {
       const sourceTrack = findTrack(definition.aliases);
-      if (!sourceTrack?.frames.length) return;
+      if (!sourceTrack || sourceTrack.frames.length === 0) return;
       const frameCount = animation.metadata.maxFrame + 1;
       const times = new Float32Array(frameCount);
       const rotations = new Float32Array(frameCount * 4);
@@ -1589,7 +1589,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       tracks.push(new QuaternionKeyframeTrack(`${definition.name}.quaternion`, times, rotations));
     });
     const centerTrack = findTrack(['センター', '全ての親', 'hips']);
-    if (centerTrack?.frames.length) {
+    if (centerTrack && centerTrack.frames.length > 0) {
       const frameCount = animation.metadata.maxFrame + 1;
       const times = new Float32Array(frameCount);
       const values = new Float32Array(frameCount * 3);
@@ -1612,7 +1612,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       笑い: 'happy',
     };
     Object.entries(animation.morphTracks).forEach(([morphName, morphTrack]) => {
-      if (!morphTrack.frames.length) return;
+      if (morphTrack.frames.length === 0) return;
       const mapped: { preset?: string; custom?: string } = presetExpressions[morphName]
         ? { preset: presetExpressions[morphName] }
         : this.vrmExpressionName(morphName);
@@ -1999,11 +1999,12 @@ export class BrowserModel3dEngine implements ConversionEngine {
     if (!uv || !normal) return;
     const indices = geometry.getIndex();
     const groups = geometry.groups.filter((group) => (group.materialIndex ?? 0) === materialIndex);
-    const ranges = groups.length
-      ? groups.map(({ start, count }) => ({ start, count }))
-      : materialIndex === 0
-        ? [{ start: 0, count: indices?.count ?? uv.count }]
-        : [];
+    const ranges =
+      groups.length > 0
+        ? groups.map(({ start, count }) => ({ start, count }))
+        : materialIndex === 0
+          ? [{ start: 0, count: indices?.count ?? uv.count }]
+          : [];
     const vertexNormal = new Vector3();
     const interpolated = new Vector3();
     for (const range of ranges) {
@@ -2482,7 +2483,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       const target = parsed.objectIndex ?? parsed.nodeName;
       const mesh = sourceNodes.find((node) => node.name === target || node.uuid === target) as
         Mesh | undefined;
-      if (!mesh?.morphTargetDictionary || !track.times.length) return;
+      if (!mesh?.morphTargetDictionary || track.times.length === 0) return;
       const stride = track.values.length / track.times.length;
       Object.entries(mesh.morphTargetDictionary).forEach(([morphName, morphIndex]) => {
         if (morphIndex >= stride) return;
@@ -2518,7 +2519,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       return [portableTrack];
     });
     portableClip.tracks.push(...generatedExpressions.values());
-    if (!portableClip.tracks.length) {
+    if (portableClip.tracks.length === 0) {
       throw new Error(
         `Animation "${clip.name}" has no humanoid tracks that can be exported to VRMA.`,
       );
@@ -2589,7 +2590,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       'rightHand',
     ];
     const missing = required.filter((name) => !humanBones[name]);
-    if (missing.length) {
+    if (missing.length > 0) {
       throw new Error(`Required VRMA humanoid bones were not identified: ${missing.join(', ')}`);
     }
     json.extensionsUsed = [...new Set([...(json.extensionsUsed ?? []), 'VRMC_vrm_animation'])];
@@ -2605,7 +2606,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       if (custom) customExpressions[custom] = { node: index };
     });
     const expressions =
-      Object.keys(presetExpressions).length || Object.keys(customExpressions).length
+      Object.keys(presetExpressions).length > 0 || Object.keys(customExpressions).length > 0
         ? { preset: presetExpressions, custom: customExpressions }
         : undefined;
     json.extensions = {
@@ -2810,9 +2811,10 @@ export class BrowserModel3dEngine implements ConversionEngine {
         }
       }
       const elementCount = indices?.count ?? positions.count;
-      const groups = geometry.groups.length
-        ? geometry.groups
-        : [{ start: 0, count: elementCount, materialIndex: 0 }];
+      const groups =
+        geometry.groups.length > 0
+          ? geometry.groups
+          : [{ start: 0, count: elementCount, materialIndex: 0 }];
       let activeMaterial = -1;
       for (let offset = 0; offset + 2 < elementCount; offset += 3) {
         const group = groups.find(({ start, count }) => offset >= start && offset < start + count);
@@ -2932,7 +2934,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     };
     const humanBones = this.mapVrmHumanBones(json.nodes ?? []);
     const missing = VRM_REQUIRED_HUMAN_BONES.filter((bone) => !humanBones[bone]);
-    if (missing.length) {
+    if (missing.length > 0) {
       throw new Error(`Required VRM humanoid bones were not identified: ${missing.join(', ')}`);
     }
     if (sourceFormat === 'pmx' || sourceFormat === 'pmd') {
@@ -3024,7 +3026,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
         collection[name] = expression;
       }
     });
-    return Object.keys(preset).length || Object.keys(custom).length
+    return Object.keys(preset).length > 0 || Object.keys(custom).length > 0
       ? { preset, custom }
       : undefined;
   }
@@ -3075,7 +3077,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       const parent = humanBones[parentName]?.node;
       return child === undefined || parent === undefined || !isDescendantOf(child, parent);
     });
-    if (invalidRelationships.length) {
+    if (invalidRelationships.length > 0) {
       throw new Error(
         `Invalid VRM humanoid hierarchy: ${invalidRelationships
           .map(([child, parent]) => `${child} must descend from ${parent}`)
@@ -3146,7 +3148,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
         VRMC_materials_mtoon: mtoon,
       };
       delete material.extras?.vrmMToon;
-      if (material.extras && !Object.keys(material.extras).length) delete material.extras;
+      if (material.extras && Object.keys(material.extras).length === 0) delete material.extras;
     }
     if (hasMToon) {
       json.extensionsUsed = [...new Set([...(json.extensionsUsed ?? []), 'VRMC_materials_mtoon'])];
@@ -3384,7 +3386,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
         .filter((index): index is number => index !== undefined);
       let best: { index: number; score: number } | undefined;
       for (const candidate of normalizedNodes) {
-        if (!candidate.names.length || usedNodes.has(candidate.index)) continue;
+        if (candidate.names.length === 0 || usedNodes.has(candidate.index)) continue;
         let score = 0;
         for (const candidateName of candidate.names) {
           normalizedAliases.forEach((alias, aliasIndex) => {
@@ -3400,7 +3402,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
         const isRightBone = humanBone.startsWith('right');
         if (isLeftBone && candidate.names.some((name) => /(右|right)/.test(name))) score -= 300;
         if (isRightBone && candidate.names.some((name) => /(左|left)/.test(name))) score -= 300;
-        if (parentCandidates.length) {
+        if (parentCandidates.length > 0) {
           if (parentCandidates.some((parent) => isDescendantOf(candidate.index, parent))) {
             score += 80;
           } else {

@@ -9,7 +9,10 @@ export function useBatchDownload(jobs: ConversionJob[], archivePrefix: string) {
   const [packageProgress, setPackageProgress] = useState(0);
   const [packageError, setPackageError] = useState<string | null>(null);
   const completed = useMemo(
-    () => jobs.filter((job) => job.status === 'done' && (job.outputs?.length || job.resultUrl)),
+    () =>
+      jobs.filter(
+        (job) => job.status === 'done' && ((job.outputs?.length ?? 0) > 0 || job.resultUrl),
+      ),
     [jobs],
   );
   const hasUnfinishedJobs = jobs.some(
@@ -23,7 +26,7 @@ export function useBatchDownload(jobs: ConversionJob[], archivePrefix: string) {
   const downloadAll = useCallback(async () => {
     if (!isAllComplete || isPackaging) return;
     const outputs = completed.flatMap((job) =>
-      job.outputs?.length
+      job.outputs && job.outputs.length > 0
         ? job.outputs
         : job.resultUrl
           ? [

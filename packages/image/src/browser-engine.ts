@@ -89,7 +89,7 @@ export class BrowserImageEngine implements ConversionEngine {
     const UTIF = await import('utif');
     const buffer = await this.sourceToArrayBuffer(source);
     const pages = UTIF.decode(buffer);
-    if (!pages.length) throw new Error('No image was found in this TIFF file.');
+    if (pages.length === 0) throw new Error('No image was found in this TIFF file.');
     UTIF.decodeImage(buffer, pages[0]);
     const rgba = UTIF.toRGBA8(pages[0]);
     return new ImageData(new Uint8ClampedArray(rgba), pages[0].width, pages[0].height);

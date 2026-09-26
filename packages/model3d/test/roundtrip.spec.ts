@@ -126,7 +126,7 @@ async function convert(outputFormat: Model3dOutputFormat) {
     model3d: { auxiliaryFiles: [mtl], auxiliaryFilesByJobId: { [sourceJob.id]: [mtl] } },
   });
   expect(result.status, result.error).toBe('done');
-  expect(result.outputs?.length).toBeTruthy();
+  expect(result.outputs?.length ?? 0).toBeGreaterThan(0);
   return result;
 }
 

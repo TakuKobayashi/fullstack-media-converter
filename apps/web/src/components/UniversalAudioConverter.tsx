@@ -95,7 +95,7 @@ export default function UniversalAudioConverter() {
     const pending = jobs.filter(
       (job) => job.status === 'pending' && canConvert(job.inputFormat, targetFormat),
     );
-    if (!pending.length) return;
+    if (pending.length === 0) return;
     setRunning(true);
     const queue = new ConversionQueue(engine, 1, { audio: { bitrate } });
     queueRef.current = queue;
