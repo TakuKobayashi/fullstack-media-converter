@@ -56,7 +56,6 @@ import {
   canConvert,
   getMimeType,
   model3dFormatMayContainBones,
-  model3dOutputSupportsAnimations,
   model3dOutputSupportsBones,
   model3dOutputSupportsExpressions,
   type ConversionEngine,
@@ -402,7 +401,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
       if (clip) {
         const previewClip = this.retargetPreviewClip(animationRoot, root, clip);
         previewClip.name = animationSource.clipName;
-        root.animations.push(previewClip);
+        if (previewClip.tracks.length) root.animations.push(previewClip);
       }
     }
     const isMmd = job.inputFormat === 'pmx' || job.inputFormat === 'pmd';
@@ -523,7 +522,6 @@ export class BrowserModel3dEngine implements ConversionEngine {
       loadedVrm?.expressionManager?.update();
     };
     const outputFormat = job.outputFormat as Model3dOutputFormat;
-    const previewAnimations = model3dOutputSupportsAnimations(outputFormat);
     const previewExpressions = model3dOutputSupportsExpressions(outputFormat);
     const previewBones = model3dOutputSupportsBones(outputFormat);
     const boneOverlay = new Group();
@@ -640,7 +638,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
     return {
       root,
       boneOverlay,
-      animations: previewAnimations ? [...animationClips.keys()] : [],
+      animations: [...animationClips.keys()],
       expressions: previewExpressions
         ? [
             ...new Set([
@@ -757,25 +755,46 @@ export class BrowserModel3dEngine implements ConversionEngine {
     const source = describe(sourceRoot);
     const target = describe(targetRoot);
     const sourceNameToHumanBone = new Map<string, string>();
+    const vrmaBones = sourceRoot.userData.vrmaHumanBones as
+      Record<string, { name: string; uuid: string }> | undefined;
+    Object.entries(vrmaBones ?? {}).forEach(([humanBone, node]) => {
+      sourceNameToHumanBone.set(node.name, humanBone);
+      sourceNameToHumanBone.set(node.uuid, humanBone);
+    });
     Object.entries(source.humanBones).forEach(([humanBone, binding]) => {
       const node = source.nodes[binding.node];
-      if (node) sourceNameToHumanBone.set(node.name, humanBone);
+      if (node && !sourceNameToHumanBone.has(node.name)) {
+        sourceNameToHumanBone.set(node.name, humanBone);
+        sourceNameToHumanBone.set(node.uuid, humanBone);
+      }
     });
     const targetNameByHumanBone = new Map<string, string>();
+    const targetVrm = this.loadedVrms.get(targetRoot);
+    for (const humanBone of new Set([
+      ...Object.keys(source.humanBones),
+      ...Object.keys(vrmaBones ?? {}),
+    ])) {
+      // VRM.update() copies normalized humanoid poses onto the raw skeleton.
+      // Animating raw bones is immediately overwritten during the render loop.
+      const node = targetVrm?.humanoid.getNormalizedBoneNode(humanBone as VrmRequiredHumanBone);
+      if (node) targetNameByHumanBone.set(humanBone, node.name);
+    }
     Object.entries(target.humanBones).forEach(([humanBone, binding]) => {
       const node = target.nodes[binding.node];
-      if (node) targetNameByHumanBone.set(humanBone, node.name);
+      if (node && !targetNameByHumanBone.has(humanBone)) {
+        targetNameByHumanBone.set(humanBone, node.name);
+      }
     });
     const result = clip.clone();
-    result.tracks = result.tracks.map((track) => {
+    result.tracks = result.tracks.flatMap((track) => {
       const parsed = PropertyBinding.parseTrackName(track.name);
       const sourceName = parsed.nodeName;
       const humanBone = sourceNameToHumanBone.get(sourceName);
       const targetName = humanBone ? targetNameByHumanBone.get(humanBone) : undefined;
-      if (!targetName || targetName === sourceName) return track;
-      const retargeted = track.clone();
-      retargeted.name = `${targetName}.${parsed.propertyName}`;
-      return retargeted;
+      const retargeted = targetName && targetName !== sourceName ? track.clone() : track;
+      if (retargeted !== track) retargeted.name = `${targetName}.${parsed.propertyName}`;
+      const targetNodeName = PropertyBinding.parseTrackName(retargeted.name).nodeName;
+      return PropertyBinding.findNode(targetRoot, targetNodeName) ? [retargeted] : [];
     });
     return result;
   }
@@ -1260,6 +1279,31 @@ export class BrowserModel3dEngine implements ConversionEngine {
             (gltf) => {
               const vrm = format === 'vrm' ? (gltf.userData.vrm as VRM | undefined) : undefined;
               const scene = vrm?.scene ?? gltf.scene;
+              if (format === 'vrma') {
+                const parser = gltf.parser as typeof gltf.parser & {
+                  json: {
+                    extensions?: {
+                      VRMC_vrm_animation?: {
+                        humanoid?: { humanBones?: Record<string, { node: number }> };
+                      };
+                    };
+                  };
+                  associations: Map<Object3D, { nodes?: number }>;
+                };
+                const boneIndices = parser.json.extensions?.VRMC_vrm_animation?.humanoid
+                  ?.humanBones as Record<string, { node: number }> | undefined;
+                const nodesByIndex = new Map<number, Object3D>();
+                scene.traverse((node) => {
+                  const index = parser.associations.get(node)?.nodes;
+                  if (index !== undefined) nodesByIndex.set(index, node);
+                });
+                scene.userData.vrmaHumanBones = Object.fromEntries(
+                  Object.entries(boneIndices ?? {}).flatMap(([bone, { node }]) => {
+                    const object = nodesByIndex.get(node);
+                    return object ? [[bone, { name: object.name, uuid: object.uuid }]] : [];
+                  }),
+                );
+              }
               if (vrm) {
                 VRMUtils.rotateVRM0(vrm);
                 this.loadedVrms.set(scene, vrm);

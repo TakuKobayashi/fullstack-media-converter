@@ -318,7 +318,13 @@ export default function VrmTransparencyPreviewModal({
                     </div>
                   </>
                 ) : (
-                  <p>{t('model3d.noAnimations')}</p>
+                  <p>
+                    {t(
+                      animationSources.length
+                        ? 'model3d.noCompatibleAnimations'
+                        : 'model3d.noAnimations',
+                    )}
+                  </p>
                 )}
               </div>
             )}
@@ -465,8 +471,7 @@ export default function VrmTransparencyPreviewModal({
                   <p className={s.previewScrollHint}>{t('model3d.transparencyScrollHint')}</p>
                   {controls
                     .filter(
-                      ({ key }) =>
-                        job.outputFormat === 'vrm' || !VRM_ONLY_SETTING_KEYS.has(key),
+                      ({ key }) => job.outputFormat === 'vrm' || !VRM_ONLY_SETTING_KEYS.has(key),
                     )
                     .map(({ key, min, max, step }) => (
                       <label className={s.previewControl} key={key}>

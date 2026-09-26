@@ -444,6 +444,16 @@ export default function UniversalModel3dConverter() {
     [addRelatedFiles, targetFormat],
   );
 
+  const addModelRelatedFiles = useCallback(
+    (list: FileList | File[]) => {
+      const files = Array.from(list);
+      addRelatedFiles(files);
+      const animations = files.filter((file) => /\.(?:vmd|vrma)$/i.test(file.name));
+      if (animations.length) void addFiles(animations);
+    },
+    [addFiles, addRelatedFiles],
+  );
+
   const addDroppedFiles = useCallback(
     async (dataTransfer: DataTransfer) => {
       setInspectingFiles(true);
@@ -825,7 +835,11 @@ export default function UniversalModel3dConverter() {
             multiple
             accept={[...MODEL3D_INPUT_EXTENSIONS, ...MODEL3D_AUXILIARY_EXTENSIONS].join(',')}
             hidden
-            onChange={(event) => event.target.files && addFiles(event.target.files)}
+            onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
+              event.target.value = '';
+              if (files.length) void addFiles(files);
+            }}
           />
         </div>
 
@@ -1084,7 +1098,7 @@ export default function UniversalModel3dConverter() {
                       onDrop={(event) => {
                         event.preventDefault();
                         setRelatedDraggingJobId(undefined);
-                        addRelatedFiles(event.dataTransfer.files);
+                        addModelRelatedFiles(event.dataTransfer.files);
                       }}
                     >
                       <span>{t('model3d.dropRelatedForModel')}</span>
@@ -1092,11 +1106,13 @@ export default function UniversalModel3dConverter() {
                       <input
                         type="file"
                         multiple
-                        accept={relatedExtensionsFor(job.inputFormat).join(',')}
+                        accept={[...relatedExtensionsFor(job.inputFormat), '.vmd', '.vrma'].join(
+                          ',',
+                        )}
                         hidden
                         disabled={modelRunning}
                         onChange={(event) => {
-                          if (event.target.files) addRelatedFiles(event.target.files);
+                          if (event.target.files) addModelRelatedFiles(event.target.files);
                           event.target.value = '';
                         }}
                       />
@@ -1149,7 +1165,7 @@ export default function UniversalModel3dConverter() {
                       fileName={job.file.name}
                       outputFormat={job.outputFormat as Model3dOutputFormat}
                       onPreview={() => openPreview(job)}
-                      disabled={modelRunning}
+                      disabled={modelRunning || inspectingFiles}
                     />
                   )}
                 {((job.inputFormat !== 'pmx' && job.inputFormat !== 'pmd') ||
@@ -1158,7 +1174,11 @@ export default function UniversalModel3dConverter() {
                   !modelRunning && (
                     <div className={s.vrmSettingsSummary}>
                       <span>{t('model3d.previewHelp')}</span>
-                      <button type="button" onClick={() => openPreview(job)}>
+                      <button
+                        type="button"
+                        onClick={() => openPreview(job)}
+                        disabled={inspectingFiles}
+                      >
                         {t('model3d.previewAdjust')}
                       </button>
                     </div>
@@ -1238,7 +1258,7 @@ export default function UniversalModel3dConverter() {
             key={`${previewJob.id}:${(relatedFilesByJobId[previewJob.id] ?? [])
               .map((file) => `${file.name}:${file.size}:${file.lastModified}`)
               .sort()
-              .join('|')}`}
+              .join('|')}:${animationItems.map((item) => item.id).join('|')}`}
             job={previewJob}
             auxiliaryFiles={relatedFilesByJobId[previewJob.id] ?? []}
             animationSources={animationItems}

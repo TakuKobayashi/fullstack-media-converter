@@ -182,6 +182,8 @@ export const messages = {
       expressionList: 'Expressions',
       boneList: 'Bones',
       noAnimations: 'No animation clips were found.',
+      noCompatibleAnimations:
+        'The loaded motion has no compatible targets in this model. Use a rigged model and a matching motion.',
       noExpressions: 'No morph expressions were found.',
       noBones: 'No bones were found.',
       selectVrmPart: 'Select a VRM part',
@@ -458,6 +460,8 @@ export const messages = {
       expressionList: '表情一覧',
       boneList: 'ボーン一覧',
       noAnimations: 'アニメーションは見つかりませんでした。',
+      noCompatibleAnimations:
+        '読み込んだモーションに、このモデルで動かせる対象がありません。骨付きモデルと対応するモーションを使用してください。',
       noExpressions: '表情モーフは見つかりませんでした。',
       noBones: 'ボーンは見つかりませんでした。',
       selectVrmPart: 'VRMパーツを選択',
