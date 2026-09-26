@@ -10,6 +10,7 @@ import {
   Mesh,
   PerspectiveCamera,
   Scene,
+  SRGBColorSpace,
   Vector3,
   WebGLRenderer,
 } from 'three';
@@ -99,14 +100,18 @@ export default function VrmTransparencyPreviewModal({
     scene.background = new Color(0x111722);
     const camera = new PerspectiveCamera(35, 1, 0.01, 1000);
     const renderer = new WebGLRenderer({ antialias: true, alpha: false });
+    renderer.outputColorSpace = SRGBColorSpace;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     host.replaceChildren(renderer.domElement);
-    scene.add(new AmbientLight(0xffffff, 1.8));
-    const light = new DirectionalLight(0xffffff, 2.2);
+    scene.add(new AmbientLight(0xffffff, 1.6));
+    const light = new DirectionalLight(0xffffff, 1.2);
     // ThreeMmdLoader has already converted MMD into the glTF/VRM-facing basis.
     const previewFrontZ = 1;
-    light.position.set(2, 3, 4 * previewFrontZ);
+    light.position.set(1, 1, previewFrontZ).normalize();
     scene.add(light);
+    const fillLight = new DirectionalLight(0xffffff, 0.4);
+    fillLight.position.set(-1, 0.5, 2 * previewFrontZ).normalize();
+    scene.add(fillLight);
     const controls3d = new OrbitControls(camera, renderer.domElement);
     controls3d.enableDamping = true;
     let disposed = false;

@@ -988,9 +988,11 @@ export class BrowserModel3dEngine implements ConversionEngine {
           map.colorSpace = SRGBColorSpace;
           map.needsUpdate = true;
         }
-        const material = new MeshBasicMaterial({
+        const material = new MeshStandardMaterial({
           color: 0xffffff,
           map,
+          roughness: 1,
+          metalness: 0,
           // FBX source textures frequently carry an alpha channel intended
           // for a DCC shader rather than surface opacity. Ignore it in the
           // inspection preview so it cannot erase the entire avatar.
@@ -1000,7 +1002,7 @@ export class BrowserModel3dEngine implements ConversionEngine {
           transparent: false,
           side: DoubleSide,
           // FBX vertex colors are often exported as black masks for the
-          // original DCC shader. MeshBasicMaterial multiplies them into both
+          // original DCC shader. The preview material multiplies them into both
           // the white fallback and the added texture, producing a black model.
           vertexColors: false,
           depthTest: true,
